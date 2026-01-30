@@ -82,13 +82,6 @@ export default function DashboardPage() {
       color: 'purple',
       badge: 'NEW',
     },
-    {
-      title: 'Add Garment',
-      description: 'Create new garment product',
-      href: '/dashboard/garments/master',
-      icon: '➕',
-      color: 'indigo',
-    },
   ];
 
   return (
