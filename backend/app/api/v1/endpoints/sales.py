@@ -30,9 +30,32 @@ class SaleCreate(SaleBase):
 class SaleSchema(SaleBase):
     id: int
     created_at: datetime
+    sku: str | None = None
+    sale_date: date | None = None
 
     class Config:
         from_attributes = True
+        
+    @classmethod
+    def from_orm(cls, obj):
+        # Map transaction_date to sale_date
+        data = {
+            "id": obj.id,
+            "transaction_date": obj.transaction_date,
+            "sale_date": obj.transaction_date,  # Add sale_date alias
+            "garment_id": obj.garment_id,
+            "panel_id": obj.panel_id,
+            "size": obj.size,
+            "quantity": obj.quantity,
+            "unit_price": obj.unit_price,
+            "discount_percentage": obj.discount_percentage,
+            "total_amount": obj.total_amount,
+            "is_return": obj.is_return,
+            "invoice_number": obj.invoice_number,
+            "created_at": obj.created_at,
+            "sku": obj.garment.style_sku if obj.garment else None  # Add SKU from garment
+        }
+        return cls(**data)
 
 
 @router.post("/", response_model=SaleSchema, status_code=status.HTTP_201_CREATED)
@@ -64,7 +87,7 @@ def list_sales(
     db: Session = Depends(get_db)
 ):
     """List all sales with optional filtering."""
-    query = db.query(Sale)
+    query = db.query(Sale).join(Garment)  # Join garment to get SKU
     if start_date:
         query = query.filter(Sale.transaction_date >= start_date)
     if end_date:
@@ -73,11 +96,11 @@ def list_sales(
         query = query.filter(Sale.panel_id == panel_id)
     
     sales = query.order_by(Sale.transaction_date.desc()).offset(skip).limit(limit).all()
-    return sales
+    return [SaleSchema.from_orm(sale) for sale in sales]
 
 
 @router.get("/daily/{transaction_date}", response_model=List[SaleSchema])
 def get_daily_sales(transaction_date: date, db: Session = Depends(get_db)):
     """Get sales for a specific date."""
-    sales = db.query(Sale).filter(Sale.transaction_date == transaction_date).all()
-    return sales
+    sales = db.query(Sale).join(Garment).filter(Sale.transaction_date == transaction_date).all()
+    return [SaleSchema.from_orm(sale) for sale in sales]
