@@ -19,12 +19,6 @@ const reportCategories = [
         description: 'AI-powered demand forecasting for yarn',
         href: '/dashboard/reports/raw-materials/yarn-forecasting',
       },
-      {
-        title: 'Purchase Raise for Yarn',
-        description: 'Automated purchase recommendations',
-        href: '/dashboard/reports/raw-materials/purchase-raise',
-        badge: 'NEW',
-      },
     ],
   },
   {
