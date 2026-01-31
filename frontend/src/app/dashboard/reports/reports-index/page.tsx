@@ -5,40 +5,6 @@ import { PageHeader } from '@/components/ui/Common';
 
 const reportCategories = [
   {
-    category: 'Raw Materials & Processing',
-    icon: '📦',
-    color: 'blue',
-    reports: [
-      {
-        title: 'Stock Analysis',
-        description: 'Monitor inventory levels and stock status',
-        href: '/dashboard/reports/raw-materials/stock-analysis',
-      },
-      {
-        title: 'Yarn Forecasting',
-        description: 'AI-powered demand forecasting for yarn',
-        href: '/dashboard/reports/raw-materials/yarn-forecasting',
-      },
-    ],
-  },
-  {
-    category: 'Production & Quality',
-    icon: '🏭',
-    color: 'green',
-    reports: [
-      {
-        title: 'Production Tracking',
-        description: 'Track garment production progress',
-        href: '/dashboard/reports/production',
-      },
-      {
-        title: 'Quality Metrics',
-        description: 'Quality control analysis',
-        href: '/dashboard/reports/production',
-      },
-    ],
-  },
-  {
     category: 'Sales & Discounts',
     icon: '💰',
     color: 'yellow',
@@ -92,24 +58,19 @@ const reportCategories = [
     ],
   },
   {
-    category: 'Labour & HR',
-    icon: '👥',
-    color: 'red',
+    category: 'Raw Materials & Processing',
+    icon: '📦',
+    color: 'blue',
     reports: [
       {
-        title: 'Attendance Report',
-        description: 'Track employee attendance',
-        href: '/dashboard/reports/labour',
+        title: 'Stock Analysis',
+        description: 'Monitor inventory levels and stock status',
+        href: '/dashboard/reports/raw-materials/stock-analysis',
       },
       {
-        title: 'Productivity Analysis',
-        description: 'Measure labour productivity',
-        href: '/dashboard/reports/labour',
-      },
-      {
-        title: 'Labour Cost Report',
-        description: 'Analyze labour costs',
-        href: '/dashboard/reports/labour',
+        title: 'Yarn Forecasting',
+        description: 'AI-powered demand forecasting for yarn',
+        href: '/dashboard/reports/raw-materials/yarn-forecasting',
       },
     ],
   },
