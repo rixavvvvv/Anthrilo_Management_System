@@ -54,6 +54,17 @@ export default function SalesTransactionsPage() {
     retry: 2,
   });
 
+  // Fetch Unicommerce sales data (last 30 days)
+  const { data: unicommerce30Days, isLoading: unicommerce30DaysLoading } = useQuery({
+    queryKey: ['unicommerce-last-30-days'],
+    queryFn: async () => {
+      const response = await unicommerceApi.getLast30Days();
+      return response.data;
+    },
+    refetchInterval: 300000, // Refetch every 5 minutes
+    retry: 2,
+  });
+
   // Filter sales based on criteria
   const filteredSales = useMemo(() => {
     if (!sales) return [];
@@ -229,8 +240,31 @@ export default function SalesTransactionsPage() {
         <div className="card bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-l-4 border-purple-500">
           <p className="text-sm font-medium text-purple-600 dark:text-purple-400 mb-1">This Month</p>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-            {salesLoading ? '...' : monthSales.length}
+            {unicommerce30DaysLoading ? (
+              <span className="animate-pulse">...</span>
+            ) : unicommerce30Days?.summary?.total_orders ? (
+              unicommerce30Days.summary.total_orders
+            ) : (
+              monthSales.length
+            )}
           </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {unicommerce30DaysLoading ? (
+              'Loading Unicommerce data...'
+            ) : unicommerce30Days?.summary ? (
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                From Unicommerce (Last 30 days)
+              </span>
+            ) : (
+              'From Local Database'
+            )}
+          </p>
+          {unicommerce30Days?.summary?.total_revenue && (
+            <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mt-2">
+              Revenue: ₹{unicommerce30Days.summary.total_revenue.toLocaleString('en-IN')}
+            </p>
+          )}
         </div>
         <div className="card bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 border-l-4 border-emerald-500">
           <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 mb-1">Total Revenue</p>
