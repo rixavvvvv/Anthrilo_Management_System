@@ -41,12 +41,6 @@ export default function RawMaterialsPage() {
       icon: '🔮',
       href: '/dashboard/reports/raw-materials/yarn-forecasting',
     },
-    {
-      title: 'Purchase Raise',
-      description: 'Automated procurement recommendations',
-      icon: '🛒',
-      href: '/dashboard/reports/raw-materials/purchase-raise',
-    },
   ];
 
   return (
