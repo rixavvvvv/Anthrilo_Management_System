@@ -11,11 +11,16 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     
-    # Database
+    # Supabase Configuration
+    SUPABASE_URL: str
+    SUPABASE_KEY: str
+    SUPABASE_SERVICE_KEY: str = ""
+    
+    # Database (Supabase PostgreSQL)
     DATABASE_URL: str
     
     # Redis
-    REDIS_URL: str
+    REDIS_URL: str = "redis://localhost:6379/0"
     
     # Security
     SECRET_KEY: str
