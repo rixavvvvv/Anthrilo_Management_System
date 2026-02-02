@@ -99,46 +99,6 @@ class UnicommerceService:
                     "message": f"Unexpected error: {type(e).__name__}"
                 }
 
-    async def get_today_sales_summary(self) -> Dict[str, Any]:
-        """
-        Get today's sales summary from Unicommerce
-
-        Returns:
-            Dict containing today's sales summary
-        """
-        now = datetime.utcnow()
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-        result = await self.search_sale_orders(
-            from_date=today_start,
-            to_date=now,
-            display_start=0,
-            display_length=1000  # Fetch more records for full day data
-        )
-
-        if not result.get("successful", False):
-            return result
-
-        # Calculate summary statistics
-        sale_orders = result.get("elements", [])
-
-        total_orders = len(sale_orders)
-        total_revenue = sum(
-            float(order.get("total", 0))
-            for order in sale_orders
-        )
-
-        return {
-            "success": True,
-            "date": today_start.isoformat(),
-            "summary": {
-                "total_orders": total_orders,
-                "total_revenue": total_revenue,
-                "currency": "INR"
-            },
-            "orders": sale_orders
-        }
-
     async def get_last_24_hours_sales(self) -> Dict[str, Any]:
         """
         Get sales from last 24 hours from Unicommerce
@@ -168,7 +128,8 @@ class UnicommerceService:
             display_length=1000
         )
 
-        if not result.get("successful", False):
+        # Check if there was an error in our service layer OR Unicommerce API
+        if result.get("success") == False or not result.get("successful", False):
             # Return a structure that won't break the frontend
             return {
                 "success": False,
@@ -188,7 +149,8 @@ class UnicommerceService:
         # Calculate summary statistics
         sale_orders = result.get("elements", [])
 
-        total_orders = len(sale_orders)
+        # Use totalRecords from API for accurate count (we only fetch first 1000)
+        total_orders = result.get("totalRecords", len(sale_orders))
         total_revenue = sum(
             float(order.get("total", 0))
             for order in sale_orders
@@ -197,6 +159,76 @@ class UnicommerceService:
         return {
             "success": True,
             "period": "last_24_hours",
+            "from_date": from_date.isoformat(),
+            "to_date": to_date.isoformat(),
+            "summary": {
+                "total_orders": total_orders,
+                "total_revenue": total_revenue,
+                "currency": "INR"
+            },
+            "orders": sale_orders
+        }
+
+    async def get_last_7_days_sales(self) -> Dict[str, Any]:
+        """
+        Get sales from last 7 days from Unicommerce
+
+        Returns:
+            Dict containing last 7 days sales data
+        """
+        # Check if we have valid credentials
+        if not self.access_code or self.access_code == "":
+            return {
+                "success": False,
+                "message": "Unicommerce access code not configured",
+                "summary": {
+                    "total_orders": 0,
+                    "total_revenue": 0,
+                    "currency": "INR"
+                }
+            }
+
+        to_date = datetime.utcnow()
+        from_date = to_date - timedelta(days=7)  # 7 days ago
+
+        result = await self.search_sale_orders(
+            from_date=from_date,
+            to_date=to_date,
+            display_start=0,
+            display_length=1000  # Fetch up to 1000 records
+        )
+
+        # Check if there was an error in our service layer OR Unicommerce API
+        if result.get("success") == False or not result.get("successful", False):
+            # Return a structure that won't break the frontend
+            return {
+                "success": False,
+                "message": result.get("message", "Failed to fetch from Unicommerce"),
+                "period": "last_7_days",
+                "from_date": from_date.isoformat(),
+                "to_date": to_date.isoformat(),
+                "summary": {
+                    "total_orders": 0,
+                    "total_revenue": 0,
+                    "currency": "INR"
+                },
+                "orders": [],
+                "error_details": result.get("error", "Unknown error")
+            }
+
+        # Calculate summary statistics
+        sale_orders = result.get("elements", [])
+
+        # Use totalRecords from API for accurate count (we only fetch first 1000)
+        total_orders = result.get("totalRecords", len(sale_orders))
+        total_revenue = sum(
+            float(order.get("total", 0))
+            for order in sale_orders
+        )
+
+        return {
+            "success": True,
+            "period": "last_7_days",
             "from_date": from_date.isoformat(),
             "to_date": to_date.isoformat(),
             "summary": {
