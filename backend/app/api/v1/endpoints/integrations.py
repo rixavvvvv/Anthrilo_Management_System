@@ -23,6 +23,15 @@ async def get_last_24_hours():
 
         logger.info(
             f"Unicommerce response success: {result.get('success', True)}")
+        
+        # Log sample order for debugging revenue field
+        if result.get('orders') and len(result.get('orders', [])) > 0:
+            sample_order = result['orders'][0]
+            logger.info(f"Sample order fields: {list(sample_order.keys())}")
+            logger.info(f"Sample order revenue-related fields: total={sample_order.get('total')}, "
+                       f"orderAmount={sample_order.get('orderAmount')}, "
+                       f"totalAmount={sample_order.get('totalAmount')}, "
+                       f"totalPrice={sample_order.get('totalPrice')}")
 
         # Return result even if unsuccessful, let frontend handle it
         return result
