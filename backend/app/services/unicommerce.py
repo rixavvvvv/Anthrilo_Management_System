@@ -238,3 +238,73 @@ class UnicommerceService:
             },
             "orders": sale_orders
         }
+
+    async def get_last_30_days_sales(self) -> Dict[str, Any]:
+        """
+        Get sales from last 30 days from Unicommerce
+
+        Returns:
+            Dict containing last 30 days sales data
+        """
+        # Check if we have valid credentials
+        if not self.access_code or self.access_code == "":
+            return {
+                "success": False,
+                "message": "Unicommerce access code not configured",
+                "summary": {
+                    "total_orders": 0,
+                    "total_revenue": 0,
+                    "currency": "INR"
+                }
+            }
+
+        to_date = datetime.utcnow()
+        from_date = to_date - timedelta(days=30)  # 30 days ago
+
+        result = await self.search_sale_orders(
+            from_date=from_date,
+            to_date=to_date,
+            display_start=0,
+            display_length=1000  # Fetch up to 1000 records
+        )
+
+        # Check if there was an error in our service layer OR Unicommerce API
+        if result.get("success") == False or not result.get("successful", False):
+            # Return a structure that won't break the frontend
+            return {
+                "success": False,
+                "message": result.get("message", "Failed to fetch from Unicommerce"),
+                "period": "last_30_days",
+                "from_date": from_date.isoformat(),
+                "to_date": to_date.isoformat(),
+                "summary": {
+                    "total_orders": 0,
+                    "total_revenue": 0,
+                    "currency": "INR"
+                },
+                "orders": [],
+                "error_details": result.get("error", "Unknown error")
+            }
+
+        # Calculate summary statistics
+        sale_orders = result.get("elements", [])
+
+        # Use totalRecords from API for accurate count (we only fetch first 1000)
+        total_orders = result.get("totalRecords", len(sale_orders))
+        total_revenue = sum(
+            float(order.get("total", 0))
+            for order in sale_orders
+        )
+
+        return {
+            "success": True,
+            "period": "last_30_days",
+            "from_date": from_date.isoformat(),
+            "to_date": to_date.isoformat(),
+            "summary": {
+                "total_orders": total_orders,
+                "total_revenue": total_revenue,
+                "currency": "INR"
+            },
+            "orders": sale_orders
+        }
