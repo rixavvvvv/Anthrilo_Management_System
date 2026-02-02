@@ -21,7 +21,6 @@ export default function DashboardLayout({
         { name: 'All Reports', href: '/dashboard/reports/reports-index' },
         { name: 'Stock Analysis', href: '/dashboard/reports/raw-materials/stock-analysis' },
         { name: 'Yarn Forecasting', href: '/dashboard/reports/raw-materials/yarn-forecasting' },
-        { name: 'Purchase Raise', href: '/dashboard/reports/raw-materials/purchase-raise' },
         { name: 'Bundle SKU Sales', href: '/dashboard/reports/sales/bundle-sku' },
         { name: 'Discount Reports', href: '/dashboard/reports/sales/discount-general' },
         { name: 'Panel Settlement', href: '/dashboard/reports/panels/settlement' },
