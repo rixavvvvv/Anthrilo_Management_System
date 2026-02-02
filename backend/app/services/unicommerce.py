@@ -102,6 +102,8 @@ class UnicommerceService:
     async def get_last_24_hours_sales(self) -> Dict[str, Any]:
         """
         Get sales from last 24 hours from Unicommerce
+        Note: Revenue calculation is estimated based on order count
+        For accurate revenue, use Unicommerce reporting APIs
 
         Returns:
             Dict containing last 24 hours sales data
@@ -151,10 +153,12 @@ class UnicommerceService:
 
         # Use totalRecords from API for accurate count (we only fetch first 1000)
         total_orders = result.get("totalRecords", len(sale_orders))
-        total_revenue = sum(
-            float(order.get("total", 0))
-            for order in sale_orders
-        )
+        
+        # Estimate average revenue per order (₹500) since Unicommerce search API 
+        # doesn't return financial details. For accurate revenue, their reporting API is needed.
+        # This is a placeholder - you can adjust this value based on your average order value
+        ESTIMATED_AVG_ORDER_VALUE = 500.0
+        total_revenue = total_orders * ESTIMATED_AVG_ORDER_VALUE
 
         return {
             "success": True,
@@ -164,7 +168,8 @@ class UnicommerceService:
             "summary": {
                 "total_orders": total_orders,
                 "total_revenue": total_revenue,
-                "currency": "INR"
+                "currency": "INR",
+                "note": "Revenue is estimated (avg ₹500/order). Use Unicommerce Reporting API for exact values."
             },
             "orders": sale_orders
         }
@@ -221,10 +226,10 @@ class UnicommerceService:
 
         # Use totalRecords from API for accurate count (we only fetch first 1000)
         total_orders = result.get("totalRecords", len(sale_orders))
-        total_revenue = sum(
-            float(order.get("total", 0))
-            for order in sale_orders
-        )
+        
+        # Estimate average revenue per order since Unicommerce search API doesn't return financial details
+        ESTIMATED_AVG_ORDER_VALUE = 500.0
+        total_revenue = total_orders * ESTIMATED_AVG_ORDER_VALUE
 
         return {
             "success": True,
@@ -234,7 +239,8 @@ class UnicommerceService:
             "summary": {
                 "total_orders": total_orders,
                 "total_revenue": total_revenue,
-                "currency": "INR"
+                "currency": "INR",
+                "note": "Revenue is estimated (avg ₹500/order). Use Unicommerce Reporting API for exact values."
             },
             "orders": sale_orders
         }
@@ -291,10 +297,10 @@ class UnicommerceService:
 
         # Use totalRecords from API for accurate count (we only fetch first 1000)
         total_orders = result.get("totalRecords", len(sale_orders))
-        total_revenue = sum(
-            float(order.get("total", 0))
-            for order in sale_orders
-        )
+        
+        # Estimate average revenue per order since Unicommerce search API doesn't return financial details
+        ESTIMATED_AVG_ORDER_VALUE = 500.0
+        total_revenue = total_orders * ESTIMATED_AVG_ORDER_VALUE
 
         return {
             "success": True,
@@ -304,7 +310,8 @@ class UnicommerceService:
             "summary": {
                 "total_orders": total_orders,
                 "total_revenue": total_revenue,
-                "currency": "INR"
+                "currency": "INR",
+                "note": "Revenue is estimated (avg ₹500/order). Use Unicommerce Reporting API for exact values."
             },
             "orders": sale_orders
         }
