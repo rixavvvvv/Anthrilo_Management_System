@@ -269,7 +269,25 @@ export default function SalesTransactionsPage() {
         <div className="card bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 border-l-4 border-emerald-500">
           <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 mb-1">Total Revenue</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {salesLoading ? '...' : `₹${totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+            {unicommerce30DaysLoading ? (
+              <span className="animate-pulse">...</span>
+            ) : unicommerce30Days?.summary?.total_revenue ? (
+              `₹${unicommerce30Days.summary.total_revenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+            ) : (
+              `₹${totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+            )}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {unicommerce30DaysLoading ? (
+              'Loading Unicommerce data...'
+            ) : unicommerce30Days?.summary ? (
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                From Unicommerce (Last 30 days)
+              </span>
+            ) : (
+              'From Local Database'
+            )}
           </p>
         </div>
       </div>
