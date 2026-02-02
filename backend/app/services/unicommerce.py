@@ -128,7 +128,8 @@ class UnicommerceService:
             display_length=1000
         )
 
-        if not result.get("successful", False):
+        # Check if there was an error in our service layer OR Unicommerce API
+        if result.get("success") == False or not result.get("successful", False):
             # Return a structure that won't break the frontend
             return {
                 "success": False,
@@ -148,7 +149,8 @@ class UnicommerceService:
         # Calculate summary statistics
         sale_orders = result.get("elements", [])
 
-        total_orders = len(sale_orders)
+        # Use totalRecords from API for accurate count (we only fetch first 1000)
+        total_orders = result.get("totalRecords", len(sale_orders))
         total_revenue = sum(
             float(order.get("total", 0))
             for order in sale_orders
@@ -193,10 +195,11 @@ class UnicommerceService:
             from_date=from_date,
             to_date=to_date,
             display_start=0,
-            display_length=5000  # Fetch more records for 7 days
+            display_length=1000  # Fetch up to 1000 records
         )
 
-        if not result.get("successful", False):
+        # Check if there was an error in our service layer OR Unicommerce API
+        if result.get("success") == False or not result.get("successful", False):
             # Return a structure that won't break the frontend
             return {
                 "success": False,
@@ -216,7 +219,8 @@ class UnicommerceService:
         # Calculate summary statistics
         sale_orders = result.get("elements", [])
 
-        total_orders = len(sale_orders)
+        # Use totalRecords from API for accurate count (we only fetch first 1000)
+        total_orders = result.get("totalRecords", len(sale_orders))
         total_revenue = sum(
             float(order.get("total", 0))
             for order in sale_orders

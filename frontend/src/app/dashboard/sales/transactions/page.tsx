@@ -33,17 +33,22 @@ export default function SalesTransactionsPage() {
   });
 
   // Fetch Unicommerce sales data (last 24 hours)
-  const { data: unicommerceSales, isLoading: unicommerceLoading, error: unicommerceError } = useQuery({
+  const { data: unicommerceSales, isLoading: unicommerceLoading } = useQuery({
     queryKey: ['unicommerce-last-24-hours'],
     queryFn: async () => {
-      try {
-        const response = await unicommerceApi.getLast24Hours();
-        console.log('📊 Unicommerce Response:', response.data);
-        return response.data;
-      } catch (error) {
-        console.error('❌ Failed to fetch Unicommerce data:', error);
-        return null;
-      }
+      const response = await unicommerceApi.getLast24Hours();
+      return response.data;
+    },
+    refetchInterval: 300000, // Refetch every 5 minutes
+    retry: 2,
+  });
+
+  // Fetch Unicommerce sales data (last 7 days)
+  const { data: unicommerce7Days, isLoading: unicommerce7DaysLoading } = useQuery({
+    queryKey: ['unicommerce-last-7-days'],
+    queryFn: async () => {
+      const response = await unicommerceApi.getLast7Days();
+      return response.data;
     },
     refetchInterval: 300000, // Refetch every 5 minutes
     retry: 2,
@@ -195,8 +200,31 @@ export default function SalesTransactionsPage() {
         <div className="card bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-l-4 border-green-500">
           <p className="text-sm font-medium text-green-600 dark:text-green-400 mb-1">This Week</p>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-            {salesLoading ? '...' : weekSales.length}
+            {unicommerce7DaysLoading ? (
+              <span className="animate-pulse">...</span>
+            ) : unicommerce7Days?.summary?.total_orders ? (
+              unicommerce7Days.summary.total_orders
+            ) : (
+              weekSales.length
+            )}
           </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {unicommerce7DaysLoading ? (
+              'Loading Unicommerce data...'
+            ) : unicommerce7Days?.summary ? (
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                From Unicommerce (Last 7 days)
+              </span>
+            ) : (
+              'From Local Database'
+            )}
+          </p>
+          {unicommerce7Days?.summary?.total_revenue && (
+            <p className="text-xs font-semibold text-green-700 dark:text-green-300 mt-2">
+              Revenue: ₹{unicommerce7Days.summary.total_revenue.toLocaleString('en-IN')}
+            </p>
+          )}
         </div>
         <div className="card bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-l-4 border-purple-500">
           <p className="text-sm font-medium text-purple-600 dark:text-purple-400 mb-1">This Month</p>
@@ -407,8 +435,8 @@ export default function SalesTransactionsPage() {
                       </td>
                       <td className="py-3 px-4 text-center">
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${isReturn
-                            ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
-                            : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                          ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                          : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
                           }`}>
                           {isReturn ? 'Return' : 'Sale'}
                         </span>
