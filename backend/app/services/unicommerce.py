@@ -1,0 +1,208 @@
+"""
+Unicommerce API Integration Service
+Provides secure proxy methods for Unicommerce API calls
+"""
+
+import httpx
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional
+from app.core.config import settings
+
+
+class UnicommerceService:
+    """Service for integrating with Unicommerce OMS API"""
+
+    def __init__(self):
+        self.base_url = settings.UNICOMMERCE_BASE_URL.format(
+            tenant=settings.UNICOMMERCE_TENANT
+        )
+        self.access_code = settings.UNICOMMERCE_ACCESS_CODE
+        self.timeout = httpx.Timeout(30.0)
+
+    def _get_headers(self) -> Dict[str, str]:
+        """Get common headers for Unicommerce API requests"""
+        return {
+            "Authorization": f"Bearer {self.access_code}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+
+    async def search_sale_orders(
+        self,
+        from_date: Optional[datetime] = None,
+        to_date: Optional[datetime] = None,
+        display_start: int = 0,
+        display_length: int = 100
+    ) -> Dict[str, Any]:
+        """
+        Search sale orders from Unicommerce
+
+        Args:
+            from_date: Start date for order search (defaults to 24 hours ago)
+            to_date: End date for order search (defaults to now)
+            display_start: Pagination start index
+            display_length: Number of records to fetch
+
+        Returns:
+            Dict containing sale orders data from Unicommerce
+        """
+        # Default to last 24 hours if dates not provided
+        if to_date is None:
+            to_date = datetime.utcnow()
+        if from_date is None:
+            from_date = to_date - timedelta(hours=24)
+
+        # Format dates for Unicommerce API
+        payload = {
+            "fromDate": from_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+            "toDate": to_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+            "searchOptions": {
+                "displayStart": display_start,
+                "displayLength": display_length
+            }
+        }
+
+        url = f"{self.base_url}/oms/saleOrder/search"
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.post(
+                    url,
+                    json=payload,
+                    headers=self._get_headers()
+                )
+                response.raise_for_status()
+                data = response.json()
+                # Ensure we return the full Unicommerce response
+                return data
+            except httpx.HTTPStatusError as e:
+                # HTTP error response from Unicommerce
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "status_code": e.response.status_code,
+                    "response_text": e.response.text,
+                    "message": f"Unicommerce API error: {e.response.status_code}"
+                }
+            except httpx.RequestError as e:
+                # Connection error or timeout
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "message": "Failed to connect to Unicommerce API"
+                }
+            except Exception as e:
+                # Any other error
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "message": f"Unexpected error: {type(e).__name__}"
+                }
+
+    async def get_today_sales_summary(self) -> Dict[str, Any]:
+        """
+        Get today's sales summary from Unicommerce
+
+        Returns:
+            Dict containing today's sales summary
+        """
+        now = datetime.utcnow()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        result = await self.search_sale_orders(
+            from_date=today_start,
+            to_date=now,
+            display_start=0,
+            display_length=1000  # Fetch more records for full day data
+        )
+
+        if not result.get("successful", False):
+            return result
+
+        # Calculate summary statistics
+        sale_orders = result.get("elements", [])
+
+        total_orders = len(sale_orders)
+        total_revenue = sum(
+            float(order.get("total", 0))
+            for order in sale_orders
+        )
+
+        return {
+            "success": True,
+            "date": today_start.isoformat(),
+            "summary": {
+                "total_orders": total_orders,
+                "total_revenue": total_revenue,
+                "currency": "INR"
+            },
+            "orders": sale_orders
+        }
+
+    async def get_last_24_hours_sales(self) -> Dict[str, Any]:
+        """
+        Get sales from last 24 hours from Unicommerce
+
+        Returns:
+            Dict containing last 24 hours sales data
+        """
+        # Check if we have valid credentials
+        if not self.access_code or self.access_code == "":
+            return {
+                "success": False,
+                "message": "Unicommerce access code not configured",
+                "summary": {
+                    "total_orders": 0,
+                    "total_revenue": 0,
+                    "currency": "INR"
+                }
+            }
+
+        to_date = datetime.utcnow()
+        from_date = to_date - timedelta(hours=24)
+
+        result = await self.search_sale_orders(
+            from_date=from_date,
+            to_date=to_date,
+            display_start=0,
+            display_length=1000
+        )
+
+        if not result.get("successful", False):
+            # Return a structure that won't break the frontend
+            return {
+                "success": False,
+                "message": result.get("message", "Failed to fetch from Unicommerce"),
+                "period": "last_24_hours",
+                "from_date": from_date.isoformat(),
+                "to_date": to_date.isoformat(),
+                "summary": {
+                    "total_orders": 0,
+                    "total_revenue": 0,
+                    "currency": "INR"
+                },
+                "orders": [],
+                "error_details": result.get("error", "Unknown error")
+            }
+
+        # Calculate summary statistics
+        sale_orders = result.get("elements", [])
+
+        total_orders = len(sale_orders)
+        total_revenue = sum(
+            float(order.get("total", 0))
+            for order in sale_orders
+        )
+
+        return {
+            "success": True,
+            "period": "last_24_hours",
+            "from_date": from_date.isoformat(),
+            "to_date": to_date.isoformat(),
+            "summary": {
+                "total_orders": total_orders,
+                "total_revenue": total_revenue,
+                "currency": "INR"
+            },
+            "orders": sale_orders
+        }

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { salesApi, panelApi } from '@/lib/api';
+import { salesApi, panelApi, unicommerceApi } from '@/lib/api';
 
 export default function SalesTransactionsPage() {
   const [filters, setFilters] = useState({
@@ -30,6 +30,23 @@ export default function SalesTransactionsPage() {
       const response = await panelApi.getAll();
       return response.data;
     },
+  });
+
+  // Fetch Unicommerce sales data (last 24 hours)
+  const { data: unicommerceSales, isLoading: unicommerceLoading, error: unicommerceError } = useQuery({
+    queryKey: ['unicommerce-last-24-hours'],
+    queryFn: async () => {
+      try {
+        const response = await unicommerceApi.getLast24Hours();
+        console.log('📊 Unicommerce Response:', response.data);
+        return response.data;
+      } catch (error) {
+        console.error('❌ Failed to fetch Unicommerce data:', error);
+        return null;
+      }
+    },
+    refetchInterval: 300000, // Refetch every 5 minutes
+    retry: 2,
   });
 
   // Filter sales based on criteria
@@ -90,26 +107,26 @@ export default function SalesTransactionsPage() {
   // Calculate statistics
   const today = new Date().toDateString();
   const todaySales = filteredSales.filter((s: any) => {
-    const saleDate = s.sale_date && !isNaN(new Date(s.sale_date).getTime()) 
-      ? new Date(s.sale_date).toDateString() 
+    const saleDate = s.sale_date && !isNaN(new Date(s.sale_date).getTime())
+      ? new Date(s.sale_date).toDateString()
       : null;
     return saleDate === today;
   });
-  
+
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
   const weekSales = filteredSales.filter((s: any) => {
     if (!s.sale_date || isNaN(new Date(s.sale_date).getTime())) return false;
     return new Date(s.sale_date) >= weekAgo;
   });
-  
+
   const monthAgo = new Date();
   monthAgo.setMonth(monthAgo.getMonth() - 1);
   const monthSales = filteredSales.filter((s: any) => {
     if (!s.sale_date || isNaN(new Date(s.sale_date).getTime())) return false;
     return new Date(s.sale_date) >= monthAgo;
   });
-  
+
   const totalRevenue = filteredSales.reduce((sum: number, s: any) => {
     const quantity = parseInt(s.quantity);
     const price = parseFloat(s.unit_price);
@@ -149,8 +166,31 @@ export default function SalesTransactionsPage() {
         <div className="card bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-l-4 border-blue-500">
           <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">Today's Sales</p>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-            {salesLoading ? '...' : todaySales.length}
+            {unicommerceLoading ? (
+              <span className="animate-pulse">...</span>
+            ) : unicommerceSales?.summary?.total_orders ? (
+              unicommerceSales.summary.total_orders
+            ) : (
+              todaySales.length
+            )}
           </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {unicommerceLoading ? (
+              'Loading Unicommerce data...'
+            ) : unicommerceSales?.summary ? (
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                From Unicommerce (Last 24hrs)
+              </span>
+            ) : (
+              'From Local Database'
+            )}
+          </p>
+          {unicommerceSales?.summary?.total_revenue && (
+            <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mt-2">
+              Revenue: ₹{unicommerceSales.summary.total_revenue.toLocaleString('en-IN')}
+            </p>
+          )}
         </div>
         <div className="card bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-l-4 border-green-500">
           <p className="text-sm font-medium text-green-600 dark:text-green-400 mb-1">This Week</p>
@@ -185,7 +225,7 @@ export default function SalesTransactionsPage() {
             </button>
           )}
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Search */}
           <div>
@@ -309,7 +349,7 @@ export default function SalesTransactionsPage() {
             Transactions ({filteredSales.length})
           </h2>
         </div>
-        
+
         {salesLoading ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">Loading...</div>
         ) : filteredSales.length === 0 ? (
@@ -342,7 +382,7 @@ export default function SalesTransactionsPage() {
                   return (
                     <tr key={index} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                       <td className="py-3 px-4 text-gray-900 dark:text-gray-100">
-                        {sale.sale_date && !isNaN(new Date(sale.sale_date).getTime()) 
+                        {sale.sale_date && !isNaN(new Date(sale.sale_date).getTime())
                           ? new Date(sale.sale_date).toLocaleDateString('en-IN')
                           : 'N/A'
                         }
@@ -366,11 +406,10 @@ export default function SalesTransactionsPage() {
                         ₹{total.toFixed(2)}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          isReturn 
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${isReturn
                             ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
                             : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                        }`}>
+                          }`}>
                           {isReturn ? 'Return' : 'Sale'}
                         </span>
                       </td>
