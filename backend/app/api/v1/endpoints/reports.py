@@ -155,19 +155,6 @@ def get_summary_report(db: Session = Depends(get_db)):
     }
 
 
-# ==================== YARN REPORTS ====================
-
-@router.get("/yarn/purchase-raise")
-def get_purchase_raise_report(
-    min_stock_threshold: float = Query(100.0, description="Minimum stock threshold"),
-    days_forecast: int = Query(30, description="Days to forecast demand"),
-    db: Session = Depends(get_db)
-):
-    """Generate purchase raise report for yarn based on stock levels"""
-    service = ReportsService(db)
-    return service.purchase_raise_for_yarn_report(min_stock_threshold, days_forecast)
-
-
 # ==================== BUNDLE SKU REPORTS ====================
 
 @router.get("/sales/bundle-sku")
