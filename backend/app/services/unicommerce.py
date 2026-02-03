@@ -22,6 +22,9 @@ class UnicommerceService:
         self.access_code = settings.UNICOMMERCE_ACCESS_CODE
         self.timeout = httpx.Timeout(30.0)
         
+        # Connection pooling for parallel requests (20x faster)
+        self.limits = httpx.Limits(max_keepalive_connections=50, max_connections=100)
+        
         # Get token manager for automated auth
         self.token_manager = get_token_manager()
 
@@ -104,52 +107,63 @@ class UnicommerceService:
                     "message": f"Unexpected error: {type(e).__name__}"
                 }
 
-    async def get_order_details(self, order_code: str) -> Dict[str, Any]:
+    async def get_order_details(self, order_code: str, client: httpx.AsyncClient = None, headers: Dict[str, str] = None) -> Dict[str, Any]:
         """
         Get detailed information for a single order including financial data
         
         Args:
             order_code: Sale order code
+            client: Shared HTTP client (for connection pooling)
+            headers: Pre-fetched headers (to avoid repeated auth calls)
             
         Returns:
             Dict containing order details with financial information
         """
         url = f"{self.base_url}/oms/saleorder/get"
         
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            try:
+        # Use shared client or create new one
+        if client is None:
+            async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as new_client:
+                return await self._fetch_order_details(new_client, url, order_code, headers)
+        else:
+            return await self._fetch_order_details(client, url, order_code, headers)
+    
+    async def _fetch_order_details(self, client: httpx.AsyncClient, url: str, order_code: str, headers: Dict[str, str] = None) -> Dict[str, Any]:
+        """Internal method to fetch order details"""
+        try:
+            if headers is None:
                 headers = await self._get_headers()
+            
+            response = await client.post(
+                url,
+                json={"code": order_code},
+                headers=headers
+            )
+            
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get("successful") and data.get("saleOrderDTO"):
+                order = data["saleOrderDTO"]
                 
-                response = await client.post(
-                    url,
-                    json={"code": order_code},
-                    headers=headers
-                )
+                # Calculate total from sale order items
+                total_amount = 0
+                if "saleOrderItems" in order:
+                    for item in order["saleOrderItems"]:
+                        total_amount += item.get("totalPrice", 0)
                 
-                response.raise_for_status()
-                data = response.json()
-                
-                if data.get("successful") and data.get("saleOrderDTO"):
-                    order = data["saleOrderDTO"]
-                    
-                    # Calculate total from sale order items
-                    total_amount = 0
-                    if "saleOrderItems" in order:
-                        for item in order["saleOrderItems"]:
-                            total_amount += item.get("totalPrice", 0)
-                    
-                    return {
-                        "code": order.get("code"),
-                        "total_amount": total_amount,
-                        "status": order.get("status"),
-                        "channel": order.get("channel")
-                    }
-                
-                return None
-                
-            except Exception as e:
-                print(f"Error fetching order details for {order_code}: {e}")
-                return None
+                return {
+                    "code": order.get("code"),
+                    "total_amount": total_amount,
+                    "status": order.get("status"),
+                    "channel": order.get("channel")
+                }
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error fetching order details for {order_code}: {e}")
+            return None
 
     async def get_last_24_hours_sales(self) -> Dict[str, Any]:
         """
@@ -211,26 +225,31 @@ class UnicommerceService:
         sample_size = min(50, len(sale_orders))  # Sample first 50 orders
         
         if sample_size > 0:
-            # ⚡ PARALLEL EXECUTION: Fetch all order details concurrently (20x faster)
-            tasks = [
-                self.get_order_details(order.get("code"))
-                for order in sale_orders[:sample_size]
-            ]
-            
-            # Execute all API calls simultaneously
-            order_details_list = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Calculate total revenue from results
-            successful_fetches = 0
-            for order_details in order_details_list:
-                if order_details and not isinstance(order_details, Exception):
-                    total_revenue += order_details.get("total_amount", 0)
-                    successful_fetches += 1
-            
-            # Extrapolate to total orders if we have a sample
-            if successful_fetches > 0 and sample_size < total_orders:
-                avg_order_value = total_revenue / successful_fetches
-                total_revenue = avg_order_value * total_orders
+            # ⚡ PARALLEL EXECUTION: Fetch all order details concurrently with shared client
+            async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
+                # Fetch headers once (not 50 times!)
+                headers = await self._get_headers()
+                
+                # Create tasks with shared client and headers
+                tasks = [
+                    self.get_order_details(order.get("code"), client=client, headers=headers)
+                    for order in sale_orders[:sample_size]
+                ]
+                
+                # Execute all API calls simultaneously
+                order_details_list = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Calculate total revenue from results
+                successful_fetches = 0
+                for order_details in order_details_list:
+                    if order_details and not isinstance(order_details, Exception):
+                        total_revenue += order_details.get("total_amount", 0)
+                        successful_fetches += 1
+                
+                # Extrapolate to total orders if we have a sample
+                if successful_fetches > 0 and sample_size < total_orders:
+                    avg_order_value = total_revenue / successful_fetches
+                    total_revenue = avg_order_value * total_orders
 
         return {
             "success": True,
@@ -305,26 +324,31 @@ class UnicommerceService:
         sample_size = min(50, len(sale_orders))  # Sample first 50 orders
         
         if sample_size > 0:
-            # ⚡ PARALLEL EXECUTION: Fetch all order details concurrently (20x faster)
-            tasks = [
-                self.get_order_details(order.get("code"))
-                for order in sale_orders[:sample_size]
-            ]
-            
-            # Execute all API calls simultaneously
-            order_details_list = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Calculate total revenue from results
-            successful_fetches = 0
-            for order_details in order_details_list:
-                if order_details and not isinstance(order_details, Exception):
-                    total_revenue += order_details.get("total_amount", 0)
-                    successful_fetches += 1
-            
-            # Extrapolate to total orders if we have a sample
-            if successful_fetches > 0 and sample_size < total_orders:
-                avg_order_value = total_revenue / successful_fetches
-                total_revenue = avg_order_value * total_orders
+            # ⚡ PARALLEL EXECUTION: Fetch all order details concurrently with shared client
+            async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
+                # Fetch headers once (not 50 times!)
+                headers = await self._get_headers()
+                
+                # Create tasks with shared client and headers
+                tasks = [
+                    self.get_order_details(order.get("code"), client=client, headers=headers)
+                    for order in sale_orders[:sample_size]
+                ]
+                
+                # Execute all API calls simultaneously
+                order_details_list = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Calculate total revenue from results
+                successful_fetches = 0
+                for order_details in order_details_list:
+                    if order_details and not isinstance(order_details, Exception):
+                        total_revenue += order_details.get("total_amount", 0)
+                        successful_fetches += 1
+                
+                # Extrapolate to total orders if we have a sample
+                if successful_fetches > 0 and sample_size < total_orders:
+                    avg_order_value = total_revenue / successful_fetches
+                    total_revenue = avg_order_value * total_orders
 
         return {
             "success": True,
@@ -399,26 +423,31 @@ class UnicommerceService:
         sample_size = min(50, len(sale_orders))  # Sample first 50 orders
         
         if sample_size > 0:
-            # ⚡ PARALLEL EXECUTION: Fetch all order details concurrently (20x faster)
-            tasks = [
-                self.get_order_details(order.get("code"))
-                for order in sale_orders[:sample_size]
-            ]
-            
-            # Execute all API calls simultaneously
-            order_details_list = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Calculate total revenue from results
-            successful_fetches = 0
-            for order_details in order_details_list:
-                if order_details and not isinstance(order_details, Exception):
-                    total_revenue += order_details.get("total_amount", 0)
-                    successful_fetches += 1
-            
-            # Extrapolate to total orders if we have a sample
-            if successful_fetches > 0 and sample_size < total_orders:
-                avg_order_value = total_revenue / successful_fetches
-                total_revenue = avg_order_value * total_orders
+            # ⚡ PARALLEL EXECUTION: Fetch all order details concurrently with shared client
+            async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
+                # Fetch headers once (not 50 times!)
+                headers = await self._get_headers()
+                
+                # Create tasks with shared client and headers
+                tasks = [
+                    self.get_order_details(order.get("code"), client=client, headers=headers)
+                    for order in sale_orders[:sample_size]
+                ]
+                
+                # Execute all API calls simultaneously
+                order_details_list = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Calculate total revenue from results
+                successful_fetches = 0
+                for order_details in order_details_list:
+                    if order_details and not isinstance(order_details, Exception):
+                        total_revenue += order_details.get("total_amount", 0)
+                        successful_fetches += 1
+                
+                # Extrapolate to total orders if we have a sample
+                if successful_fetches > 0 and sample_size < total_orders:
+                    avg_order_value = total_revenue / successful_fetches
+                    total_revenue = avg_order_value * total_orders
 
         return {
             "success": True,
