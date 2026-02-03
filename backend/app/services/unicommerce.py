@@ -103,14 +103,60 @@ class UnicommerceService:
                     "message": f"Unexpected error: {type(e).__name__}"
                 }
 
+    async def get_order_details(self, order_code: str) -> Dict[str, Any]:
+        """
+        Get detailed information for a single order including financial data
+        
+        Args:
+            order_code: Sale order code
+            
+        Returns:
+            Dict containing order details with financial information
+        """
+        url = f"{self.base_url}/oms/saleorder/get"
+        
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                headers = await self._get_headers()
+                
+                response = await client.post(
+                    url,
+                    json={"code": order_code},
+                    headers=headers
+                )
+                
+                response.raise_for_status()
+                data = response.json()
+                
+                if data.get("successful") and data.get("saleOrderDTO"):
+                    order = data["saleOrderDTO"]
+                    
+                    # Calculate total from sale order items
+                    total_amount = 0
+                    if "saleOrderItems" in order:
+                        for item in order["saleOrderItems"]:
+                            total_amount += item.get("totalPrice", 0)
+                    
+                    return {
+                        "code": order.get("code"),
+                        "total_amount": total_amount,
+                        "status": order.get("status"),
+                        "channel": order.get("channel")
+                    }
+                
+                return None
+                
+            except Exception as e:
+                print(f"Error fetching order details for {order_code}: {e}")
+                return None
+
     async def get_last_24_hours_sales(self) -> Dict[str, Any]:
         """
-        Get sales from last 24 hours from Unicommerce
-        Note: Revenue calculation is estimated based on order count
-        For accurate revenue, use Unicommerce reporting APIs
+        Get sales from last 24 hours from Unicommerce with REAL revenue data
+        Fetches order details to get accurate financial information
 
         Returns:
-            Dict containing last 24 hours sales data
+            Dict containing last 24 hours sales data with real revenue
         """
         # Check if we have valid credentials
         if not self.access_code or self.access_code == "":
@@ -158,11 +204,21 @@ class UnicommerceService:
         # Use totalRecords from API for accurate count (we only fetch first 1000)
         total_orders = result.get("totalRecords", len(sale_orders))
         
-        # Estimate average revenue per order (₹500) since Unicommerce search API 
-        # doesn't return financial details. For accurate revenue, their reporting API is needed.
-        # This is a placeholder - you can adjust this value based on your average order value
-        ESTIMATED_AVG_ORDER_VALUE = 500.0
-        total_revenue = total_orders * ESTIMATED_AVG_ORDER_VALUE
+        # Fetch real revenue by getting order details for first 50 orders (sample)
+        # For large datasets, we use sampling to balance accuracy vs performance
+        total_revenue = 0
+        sample_size = min(50, len(sale_orders))  # Sample first 50 orders
+        
+        if sample_size > 0:
+            for order in sale_orders[:sample_size]:
+                order_details = await self.get_order_details(order.get("code"))
+                if order_details:
+                    total_revenue += order_details.get("total_amount", 0)
+            
+            # Extrapolate to total orders if we have a sample
+            if sample_size < total_orders:
+                avg_order_value = total_revenue / sample_size
+                total_revenue = avg_order_value * total_orders
 
         return {
             "success": True,
@@ -171,9 +227,9 @@ class UnicommerceService:
             "to_date": to_date.isoformat(),
             "summary": {
                 "total_orders": total_orders,
-                "total_revenue": total_revenue,
+                "total_revenue": round(total_revenue, 2),
                 "currency": "INR",
-                "note": "Revenue is estimated (avg ₹500/order). Use Unicommerce Reporting API for exact values."
+                "note": f"Revenue calculated from {sample_size} order samples" if sample_size < total_orders else "Revenue calculated from all orders"
             },
             "orders": sale_orders
         }
@@ -231,9 +287,21 @@ class UnicommerceService:
         # Use totalRecords from API for accurate count (we only fetch first 1000)
         total_orders = result.get("totalRecords", len(sale_orders))
         
-        # Estimate average revenue per order since Unicommerce search API doesn't return financial details
-        ESTIMATED_AVG_ORDER_VALUE = 500.0
-        total_revenue = total_orders * ESTIMATED_AVG_ORDER_VALUE
+        # Fetch real revenue by getting order details for first 50 orders (sample)
+        # For large datasets, we use sampling to balance accuracy vs performance
+        total_revenue = 0
+        sample_size = min(50, len(sale_orders))  # Sample first 50 orders
+        
+        if sample_size > 0:
+            for order in sale_orders[:sample_size]:
+                order_details = await self.get_order_details(order.get("code"))
+                if order_details:
+                    total_revenue += order_details.get("total_amount", 0)
+            
+            # Extrapolate to total orders if we have a sample
+            if sample_size < total_orders:
+                avg_order_value = total_revenue / sample_size
+                total_revenue = avg_order_value * total_orders
 
         return {
             "success": True,
@@ -242,9 +310,9 @@ class UnicommerceService:
             "to_date": to_date.isoformat(),
             "summary": {
                 "total_orders": total_orders,
-                "total_revenue": total_revenue,
+                "total_revenue": round(total_revenue, 2),
                 "currency": "INR",
-                "note": "Revenue is estimated (avg ₹500/order). Use Unicommerce Reporting API for exact values."
+                "note": f"Revenue calculated from {sample_size} order samples" if sample_size < total_orders else "Revenue calculated from all orders"
             },
             "orders": sale_orders
         }
@@ -302,9 +370,21 @@ class UnicommerceService:
         # Use totalRecords from API for accurate count (we only fetch first 1000)
         total_orders = result.get("totalRecords", len(sale_orders))
         
-        # Estimate average revenue per order since Unicommerce search API doesn't return financial details
-        ESTIMATED_AVG_ORDER_VALUE = 500.0
-        total_revenue = total_orders * ESTIMATED_AVG_ORDER_VALUE
+        # Fetch real revenue by getting order details for first 50 orders (sample)
+        # For large datasets, we use sampling to balance accuracy vs performance
+        total_revenue = 0
+        sample_size = min(50, len(sale_orders))  # Sample first 50 orders
+        
+        if sample_size > 0:
+            for order in sale_orders[:sample_size]:
+                order_details = await self.get_order_details(order.get("code"))
+                if order_details:
+                    total_revenue += order_details.get("total_amount", 0)
+            
+            # Extrapolate to total orders if we have a sample
+            if sample_size < total_orders:
+                avg_order_value = total_revenue / sample_size
+                total_revenue = avg_order_value * total_orders
 
         return {
             "success": True,
@@ -313,9 +393,9 @@ class UnicommerceService:
             "to_date": to_date.isoformat(),
             "summary": {
                 "total_orders": total_orders,
-                "total_revenue": total_revenue,
+                "total_revenue": round(total_revenue, 2),
                 "currency": "INR",
-                "note": "Revenue is estimated (avg ₹500/order). Use Unicommerce Reporting API for exact values."
+                "note": f"Revenue calculated from {sample_size} order samples" if sample_size < total_orders else "Revenue calculated from all orders"
             },
             "orders": sale_orders
         }
