@@ -38,7 +38,10 @@ class Settings(BaseSettings):
     # Unicommerce API Configuration
     UNICOMMERCE_TENANT: str = ""
     UNICOMMERCE_ACCESS_CODE: str = ""
+    UNICOMMERCE_USERNAME: str = ""
+    UNICOMMERCE_PASSWORD: str = ""
     UNICOMMERCE_ACCESS_TOKEN: str = ""
+    UNICOMMERCE_REFRESH_TOKEN: str = ""
     UNICOMMERCE_BASE_URL: str = "https://{tenant}.unicommerce.com/services/rest/v1"
 
     class Config:

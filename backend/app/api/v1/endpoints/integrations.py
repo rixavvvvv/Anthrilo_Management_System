@@ -6,6 +6,7 @@ Handles secure proxy endpoints for external services like Unicommerce
 from fastapi import APIRouter
 import logging
 from app.services.unicommerce import UnicommerceService
+from app.core.token_manager import get_token_manager
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -98,4 +99,58 @@ async def get_last_30_days():
             "error": str(e),
             "error_type": type(e).__name__,
             "message": "Failed to fetch last 30 days sales from Unicommerce"
+        }
+
+
+@router.get("/unicommerce/auth/status")
+async def get_auth_status():
+    """
+    Get Unicommerce authentication status
+    Shows token health and expiry times
+    """
+    try:
+        token_manager = get_token_manager()
+        status = token_manager.get_token_status()
+        
+        return {
+            "success": True,
+            "authentication_status": status,
+            "message": "Token lifecycle is being automatically managed"
+        }
+    except Exception as e:
+        logger.error(f"Error getting auth status: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to get authentication status"
+        }
+
+
+@router.post("/unicommerce/auth/refresh")
+async def force_refresh_token():
+    """
+    Manually trigger token refresh (for testing)
+    The system normally handles this automatically
+    """
+    try:
+        token_manager = get_token_manager()
+        token = await token_manager.get_valid_token()
+        
+        if token:
+            return {
+                "success": True,
+                "message": "Token refreshed successfully",
+                "status": token_manager.get_token_status()
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Failed to refresh token"
+            }
+    except Exception as e:
+        logger.error(f"Error refreshing token: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to refresh token"
         }

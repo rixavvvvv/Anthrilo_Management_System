@@ -1,12 +1,14 @@
 """
 Unicommerce API Integration Service
 Provides secure proxy methods for Unicommerce API calls
+With automated token lifecycle management
 """
 
 import httpx
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from app.core.config import settings
+from app.core.token_manager import get_token_manager
 
 
 class UnicommerceService:
@@ -18,14 +20,13 @@ class UnicommerceService:
         )
         self.access_code = settings.UNICOMMERCE_ACCESS_CODE
         self.timeout = httpx.Timeout(30.0)
+        
+        # Get token manager for automated auth
+        self.token_manager = get_token_manager()
 
-    def _get_headers(self) -> Dict[str, str]:
-        """Get common headers for Unicommerce API requests"""
-        return {
-            "Authorization": f"Bearer {self.access_code}",
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
+    async def _get_headers(self) -> Dict[str, str]:
+        """Get authenticated headers with auto-refreshing token"""
+        return await self.token_manager.get_headers()
 
     async def search_sale_orders(
         self,
@@ -66,10 +67,13 @@ class UnicommerceService:
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
+                # Get fresh authenticated headers
+                headers = await self._get_headers()
+                
                 response = await client.post(
                     url,
                     json=payload,
-                    headers=self._get_headers()
+                    headers=headers
                 )
                 response.raise_for_status()
                 data = response.json()
