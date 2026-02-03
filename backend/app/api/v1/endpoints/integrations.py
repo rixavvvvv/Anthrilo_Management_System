@@ -154,3 +154,54 @@ async def force_refresh_token():
             "error": str(e),
             "message": "Failed to refresh token"
         }
+
+
+@router.get("/unicommerce/sales-report")
+async def get_detailed_sales_report(
+    from_date: str = None,
+    to_date: str = None
+):
+    """
+    Get comprehensive sales report from Unicommerce
+    
+    Args:
+        from_date: Start date (YYYY-MM-DD format, defaults to today)
+        to_date: End date (YYYY-MM-DD format, defaults to today)
+    """
+    from datetime import datetime
+    
+    try:
+        logger.info(f"Fetching detailed sales report: {from_date} to {to_date}")
+        
+        # Parse dates
+        parsed_from = None
+        parsed_to = None
+        
+        if from_date:
+            parsed_from = datetime.strptime(from_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0)
+        if to_date:
+            parsed_to = datetime.strptime(to_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+        
+        service = UnicommerceService()
+        result = await service.get_detailed_sales_report(
+            from_date=parsed_from,
+            to_date=parsed_to
+        )
+        
+        logger.info(f"Sales report generated: {result.get('success', False)}")
+        return result
+        
+    except ValueError as e:
+        logger.error(f"Invalid date format: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Invalid date format. Use YYYY-MM-DD"
+        }
+    except Exception as e:
+        logger.error(f"Error generating sales report: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to generate sales report"
+        }
