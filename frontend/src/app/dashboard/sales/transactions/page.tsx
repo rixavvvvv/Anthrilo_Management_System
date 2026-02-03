@@ -16,12 +16,19 @@ export default function SalesTransactionsPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Auto-fetch when mandatory filters are filled
+  const shouldFetchData = filters.dateFrom.trim() !== '' &&
+    filters.dateTo.trim() !== '' &&
+    filters.transactionType !== '' &&
+    filters.panelId.trim() !== '';
+
   const { data: sales, isLoading: salesLoading } = useQuery({
-    queryKey: ['sales'],
+    queryKey: ['sales', filters],
     queryFn: async () => {
       const response = await salesApi.getAll();
       return response.data;
     },
+    enabled: shouldFetchData,
   });
 
   const { data: panels } = useQuery({
@@ -65,8 +72,60 @@ export default function SalesTransactionsPage() {
     retry: 2,
   });
 
-  // Filter sales based on criteria
+  // Filter sales based on criteria - handle both local sales and Unicommerce orders
   const filteredSales = useMemo(() => {
+    // Check if a channel is selected (not a numeric panel ID)
+    const isChannelSelected = filters.panelId && isNaN(parseInt(filters.panelId));
+
+    if (isChannelSelected) {
+      // Filter Unicommerce data
+      let allOrders: any[] = [];
+
+      // Combine orders from all Unicommerce data sources
+      if (unicommerceSales?.orders) allOrders = [...allOrders, ...unicommerceSales.orders];
+      if (unicommerce7Days?.orders) allOrders = [...allOrders, ...unicommerce7Days.orders];
+      if (unicommerce30Days?.orders) allOrders = [...allOrders, ...unicommerce30Days.orders];
+
+      // Remove duplicates by order code
+      const uniqueOrders = allOrders.reduce((acc, order) => {
+        if (!acc.find((o: any) => o.code === order.code)) {
+          acc.push(order);
+        }
+        return acc;
+      }, []);
+
+      return uniqueOrders.filter((order: any) => {
+        // Date range filter
+        if (filters.dateFrom) {
+          const orderDate = new Date(order.displayOrderDateTime);
+          const fromDate = new Date(filters.dateFrom);
+          if (orderDate < fromDate) return false;
+        }
+        if (filters.dateTo) {
+          const orderDate = new Date(order.displayOrderDateTime);
+          const toDate = new Date(filters.dateTo);
+          toDate.setHours(23, 59, 59);
+          if (orderDate > toDate) return false;
+        }
+
+        // Channel filter
+        if (filters.panelId !== 'all' && order.channel !== filters.panelId) {
+          return false;
+        }
+
+        // Search term
+        if (searchTerm) {
+          const term = searchTerm.toLowerCase();
+          const matchesCode = order.code?.toLowerCase().includes(term) || false;
+          const matchesChannel = order.channel?.toLowerCase().includes(term) || false;
+          if (!matchesCode && !matchesChannel) return false;
+        }
+
+        return true;
+      });
+    }
+
+    // Filter local sales data
     if (!sales) return [];
 
     return sales.filter((sale: any) => {
@@ -96,7 +155,7 @@ export default function SalesTransactionsPage() {
       }
 
       // Panel filter
-      if (filters.panelId && sale.panel_id !== parseInt(filters.panelId)) {
+      if (filters.panelId && filters.panelId !== 'all' && sale.panel_id !== parseInt(filters.panelId)) {
         return false;
       }
 
@@ -118,7 +177,7 @@ export default function SalesTransactionsPage() {
 
       return true;
     });
-  }, [sales, filters, searchTerm, panels]);
+  }, [sales, filters, searchTerm, panels, unicommerceSales, unicommerce7Days, unicommerce30Days]);
 
   // Calculate statistics
   const today = new Date().toDateString();
@@ -164,6 +223,30 @@ export default function SalesTransactionsPage() {
   };
 
   const hasActiveFilters = Object.values(filters).some(v => v && v !== 'all') || searchTerm;
+
+  // Extract unique channels from Unicommerce data to merge with panels
+  const uniqueChannels = useMemo(() => {
+    const channels = new Set<string>();
+
+    // Add from 24 hours data
+    unicommerceSales?.orders?.forEach((order: any) => {
+      if (order.channel) channels.add(order.channel);
+    });
+
+    // Add from 7 days data
+    unicommerce7Days?.orders?.forEach((order: any) => {
+      if (order.channel) channels.add(order.channel);
+    });
+
+    // Add from 30 days data
+    unicommerce30Days?.orders?.forEach((order: any) => {
+      if (order.channel) channels.add(order.channel);
+    });
+
+    return Array.from(channels).sort();
+  }, [unicommerceSales, unicommerce7Days, unicommerce30Days]);
+
+  // Data fetches automatically when mandatory filters are filled
 
   return (
     <div className="space-y-6">
@@ -324,38 +407,43 @@ export default function SalesTransactionsPage() {
           {/* Date From */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Date From
+              Date From <span className="text-red-500">*</span>
             </label>
             <input
               type="date"
               value={filters.dateFrom}
               onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="dd-mm-yyyy"
+              required
             />
           </div>
 
           {/* Date To */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Date To
+              Date To <span className="text-red-500">*</span>
             </label>
             <input
               type="date"
               value={filters.dateTo}
               onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="dd-mm-yyyy"
+              required
             />
           </div>
 
           {/* Transaction Type */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Transaction Type
+              Transaction Type <span className="text-red-500">*</span>
             </label>
             <select
               value={filters.transactionType}
               onChange={(e) => setFilters({ ...filters, transactionType: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              required
             >
               <option value="all">All Transactions</option>
               <option value="sale">Sales Only</option>
@@ -394,26 +482,39 @@ export default function SalesTransactionsPage() {
             </select>
           </div>
 
-          {/* Panel Filter */}
+          {/* Panel / Channel Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Panel
+              Panel / Channel <span className="text-red-500">*</span>
             </label>
             <select
               value={filters.panelId}
               onChange={(e) => setFilters({ ...filters, panelId: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              required
             >
-              <option value="">All Panels</option>
-              {panels?.map((panel: any) => (
-                <option key={panel.id} value={panel.id}>{panel.panel_name}</option>
-              ))}
+              <option value="">Select Panel or Channel</option>
+              <option value="all">All Channels</option>
+              {panels && panels.length > 0 && (
+                <optgroup label="Panels">
+                  {panels.map((panel: any) => (
+                    <option key={`panel-${panel.id}`} value={panel.id}>{panel.panel_name}</option>
+                  ))}
+                </optgroup>
+              )}
+              {uniqueChannels && uniqueChannels.length > 0 && (
+                <optgroup label="Channels">
+                  {uniqueChannels.map((channel) => (
+                    <option key={`channel-${channel}`} value={channel}>{channel}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
         </div>
 
         {/* Active Filters Summary */}
-        {hasActiveFilters && (
+        {shouldFetchData && hasActiveFilters && (
           <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Showing <span className="font-semibold text-primary-600 dark:text-primary-400">{filteredSales.length}</span> of {sales?.length || 0} transactions
@@ -430,7 +531,11 @@ export default function SalesTransactionsPage() {
           </h2>
         </div>
 
-        {salesLoading ? (
+        {!shouldFetchData ? (
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            Please select all required filters to view transactions
+          </div>
+        ) : salesLoading ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">Loading...</div>
         ) : filteredSales.length === 0 ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -442,59 +547,104 @@ export default function SalesTransactionsPage() {
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700">
                   <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">Date</th>
-                  <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">SKU</th>
-                  <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">Size</th>
-                  <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">Panel</th>
-                  <th className="text-right py-3 px-4 text-gray-700 dark:text-gray-300">Quantity</th>
-                  <th className="text-right py-3 px-4 text-gray-700 dark:text-gray-300">Unit Price</th>
-                  <th className="text-right py-3 px-4 text-gray-700 dark:text-gray-300">Total</th>
-                  <th className="text-center py-3 px-4 text-gray-700 dark:text-gray-300">Type</th>
+                  <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">Order Code</th>
+                  <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">Channel</th>
+                  <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">Source</th>
+                  <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">Status</th>
+                  <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">Order Category</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredSales.map((sale: any, index: number) => {
-                  const quantity = parseInt(sale.quantity);
-                  const unitPrice = parseFloat(sale.unit_price);
-                  const total = quantity * unitPrice;
-                  const isReturn = quantity < 0;
-                  const panel = panels?.find((p: any) => p.id === sale.panel_id);
+                {filteredSales.map((item: any, index: number) => {
+                  // Check if this is a Unicommerce order or local sale
+                  const isUnicommerceOrder = !!item.channel;
 
-                  return (
-                    <tr key={index} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                      <td className="py-3 px-4 text-gray-900 dark:text-gray-100">
-                        {sale.sale_date && !isNaN(new Date(sale.sale_date).getTime())
-                          ? new Date(sale.sale_date).toLocaleDateString('en-IN')
-                          : 'N/A'
-                        }
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-sm font-mono font-semibold">
-                          {sale.sku}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-gray-900 dark:text-gray-100">{sale.size}</td>
-                      <td className="py-3 px-4 text-gray-900 dark:text-gray-100">
-                        {panel?.panel_name || `Panel ${sale.panel_id}`}
-                      </td>
-                      <td className={`py-3 px-4 text-right font-semibold ${isReturn ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}>
-                        {quantity}
-                      </td>
-                      <td className="py-3 px-4 text-right text-gray-900 dark:text-gray-100">
-                        ₹{unitPrice.toFixed(2)}
-                      </td>
-                      <td className={`py-3 px-4 text-right font-semibold ${isReturn ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                        ₹{total.toFixed(2)}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${isReturn
-                          ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
-                          : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                          }`}>
-                          {isReturn ? 'Return' : 'Sale'}
-                        </span>
-                      </td>
-                    </tr>
-                  );
+                  if (isUnicommerceOrder) {
+                    // Render Unicommerce order
+                    return (
+                      <tr key={index} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        <td className="py-3 px-4 text-gray-900 dark:text-gray-100">
+                          {item.displayOrderDateTime
+                            ? new Date(item.displayOrderDateTime).toLocaleDateString('en-IN', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })
+                            : 'N/A'
+                          }
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 rounded text-sm font-mono font-semibold">
+                            {item.displayOrderCode || item.code}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-sm font-semibold">
+                            {item.channel}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-gray-900 dark:text-gray-100">
+                          <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded text-sm">
+                            {item.source}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${item.status === 'COMPLETE'
+                              ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                              : item.status === 'PROCESSING'
+                                ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
+                                : item.status === 'CANCELLED'
+                                  ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                                  : item.status === 'CREATED'
+                                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200'
+                                    : 'bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200'
+                            }`}>
+                            {item.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-gray-900 dark:text-gray-100 text-sm">
+                          {item.orderCategory || '-'}
+                        </td>
+                      </tr>
+                    );
+                  } else {
+                    // Render local sale
+                    const quantity = parseInt(item.quantity);
+                    const unitPrice = parseFloat(item.unit_price);
+                    const total = quantity * unitPrice;
+                    const isReturn = quantity < 0;
+                    const panel = panels?.find((p: any) => p.id === item.panel_id);
+
+                    return (
+                      <tr key={index} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        <td className="py-3 px-4 text-gray-900 dark:text-gray-100">
+                          {item.sale_date && !isNaN(new Date(item.sale_date).getTime())
+                            ? new Date(item.sale_date).toLocaleDateString('en-IN')
+                            : 'N/A'
+                          }
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-sm font-mono font-semibold">
+                            {item.sku}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-gray-900 dark:text-gray-100">{item.size}</td>
+                        <td className="py-3 px-4 text-gray-900 dark:text-gray-100">
+                          {panel?.panel_name || `Panel ${item.panel_id}`}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${isReturn
+                            ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                            : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                            }`}>
+                            {isReturn ? 'Return' : 'Sale'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  }
                 })}
               </tbody>
             </table>
