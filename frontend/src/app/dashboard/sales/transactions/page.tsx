@@ -94,12 +94,16 @@ export default function SalesTransactionsPage() {
 
   // Fetch Unicommerce sales data (last 24 hours, 7 days, 30 days) for stats - REAL-TIME with parallel calls
   const { data: unicommerceSales, isLoading: loadingSales } = useQuery({
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     queryKey: ['unicommerce-last-24-hours'],
     queryFn: async () => {
       const response = await unicommerceApi.getLast24Hours();
       return response.data;
     },
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
     refetchInterval: 300000, // Refetch every 5 minutes
     retry: 2,
@@ -115,11 +119,20 @@ export default function SalesTransactionsPage() {
 
   const { data: unicommerce7Days, isLoading: loading7Days } = useQuery({
 >>>>>>> Stashed changes
+=======
+    refetchInterval: 60000, // Refresh every 1 minute for real-time data
+    staleTime: 30000, // Consider stale after 30s
+    retry: 2,
+  });
+
+  const { data: unicommerce7Days, isLoading: loading7Days } = useQuery({
+>>>>>>> Stashed changes
     queryKey: ['unicommerce-last-7-days'],
     queryFn: async () => {
       const response = await unicommerceApi.getLast7Days();
       return response.data;
     },
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
     refetchInterval: 300000, // Refetch every 5 minutes
     retry: 2,
@@ -135,13 +148,26 @@ export default function SalesTransactionsPage() {
 
   const { data: unicommerce30Days, isLoading: loading30Days } = useQuery({
 >>>>>>> Stashed changes
+=======
+    refetchInterval: 60000, // Refresh every 1 minute
+    staleTime: 30000,
+    retry: 2,
+  });
+
+  const { data: unicommerce30Days, isLoading: loading30Days } = useQuery({
+>>>>>>> Stashed changes
     queryKey: ['unicommerce-last-30-days'],
     queryFn: async () => {
       const response = await unicommerceApi.getLast30Days();
       return response.data;
     },
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     refetchInterval: 300000, // Refetch every 5 minutes
+=======
+    refetchInterval: 60000, // Refresh every 1 minute
+    staleTime: 30000,
+>>>>>>> Stashed changes
 =======
     refetchInterval: 60000, // Refresh every 1 minute
     staleTime: 30000,
@@ -343,6 +369,7 @@ export default function SalesTransactionsPage() {
           <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">Today's Sales</p>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             {unicommerceLoading ? (
               <span className="animate-pulse">...</span>
             ) : unicommerceSales?.summary?.total_orders ? (
@@ -366,6 +393,11 @@ export default function SalesTransactionsPage() {
             {loadingSales ? '...' : (unicommerceSales?.summary?.total_orders || 0)}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+=======
+            {loadingSales ? '...' : (unicommerceSales?.summary?.total_orders || 0)}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+>>>>>>> Stashed changes
             <span className="flex items-center gap-1">
               <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
               Real-time Unicommerce (Last 24hrs)
@@ -373,12 +405,16 @@ export default function SalesTransactionsPage() {
           </p>
           <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mt-2">
             Revenue: {loadingSales ? '...' : `₹${(unicommerceSales?.summary?.total_revenue || 0).toLocaleString('en-IN')}`}
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
           </p>
         </div>
         <div className="card bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-l-4 border-green-500">
           <p className="text-sm font-medium text-green-600 dark:text-green-400 mb-1">This Week</p>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
             {unicommerce7DaysLoading ? (
               <span className="animate-pulse">...</span>
@@ -403,6 +439,11 @@ export default function SalesTransactionsPage() {
             {loading7Days ? '...' : (unicommerce7Days?.summary?.total_orders || 0)}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+=======
+            {loading7Days ? '...' : (unicommerce7Days?.summary?.total_orders || 0)}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+>>>>>>> Stashed changes
             <span className="flex items-center gap-1">
               <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
               Real-time Unicommerce (Last 7 days)
@@ -410,12 +451,16 @@ export default function SalesTransactionsPage() {
           </p>
           <p className="text-xs font-semibold text-green-700 dark:text-green-300 mt-2">
             Revenue: {loading7Days ? '...' : `₹${(unicommerce7Days?.summary?.total_revenue || 0).toLocaleString('en-IN')}`}
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
           </p>
         </div>
         <div className="card bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-l-4 border-purple-500">
           <p className="text-sm font-medium text-purple-600 dark:text-purple-400 mb-1">This Month</p>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
             {unicommerce30DaysLoading ? (
               <span className="animate-pulse">...</span>
@@ -440,6 +485,11 @@ export default function SalesTransactionsPage() {
             {loading30Days ? '...' : (unicommerce30Days?.summary?.total_orders || 0)}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+=======
+            {loading30Days ? '...' : (unicommerce30Days?.summary?.total_orders || 0)}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+>>>>>>> Stashed changes
             <span className="flex items-center gap-1">
               <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
               Real-time Unicommerce (Last 30 days)
@@ -447,12 +497,16 @@ export default function SalesTransactionsPage() {
           </p>
           <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mt-2">
             Revenue: {loading30Days ? '...' : `₹${(unicommerce30Days?.summary?.total_revenue || 0).toLocaleString('en-IN')}`}
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
           </p>
         </div>
         <div className="card bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 border-l-4 border-emerald-500">
           <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 mb-1">Total Revenue</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
             {unicommerce30DaysLoading ? (
               <span className="animate-pulse">...</span>
@@ -477,10 +531,18 @@ export default function SalesTransactionsPage() {
             {loading30Days ? '...' : `₹${(unicommerce30Days?.summary?.total_revenue || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+=======
+            {loading30Days ? '...' : `₹${(unicommerce30Days?.summary?.total_revenue || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+>>>>>>> Stashed changes
             <span className="flex items-center gap-1">
               <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
               Real-time Unicommerce (Last 30 days)
             </span>
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
           </p>
         </div>
