@@ -529,11 +529,8 @@ class UnicommerceService:
             print(f"📊 Processed {len(basic_processed_orders)} orders, {valid_orders_count} valid for revenue")
             
             # REAL DATA: Fetch detailed order information in parallel for accurate financial data
-<<<<<<< Updated upstream
             sample_size = min(50, valid_orders_count)
-=======
             sample_size = min(100, valid_orders_count)
->>>>>>> Stashed changes
             sample_orders = valid_basic_orders[:sample_size] if sample_size > 0 else []
             
             total_gross_sales = 0.0
@@ -544,7 +541,6 @@ class UnicommerceService:
             
             if sample_orders:
                 print(f"🔄 Fetching REAL financial data for {sample_size} sample orders in parallel...")
-<<<<<<< Updated upstream
                 semaphore = asyncio.Semaphore(10)
                 
                 async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
@@ -561,7 +557,6 @@ class UnicommerceService:
                                 print(f"Error fetching {order_code}: {e}")
                             return None
 
-=======
                 semaphore = asyncio.Semaphore(20)
                 
                 async def fetch_order_detail_safe(order):
@@ -576,7 +571,6 @@ class UnicommerceService:
                         return None
                 
                 async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
->>>>>>> Stashed changes
                     tasks = [fetch_order_detail_safe(order) for order in sample_orders]
                     detailed_orders = await asyncio.gather(*tasks, return_exceptions=True)
                     
@@ -616,7 +610,6 @@ class UnicommerceService:
                         data_accuracy = "extrapolated"
                     else:
                         data_accuracy = "complete"
-<<<<<<< Updated upstream
                     
                     if successful_count == 0 and valid_orders_count > 0:
                         total_gross_sales = basic_total_gross
@@ -632,10 +625,6 @@ class UnicommerceService:
                 total_tax = basic_total_tax
                 channel_breakdown = channel_breakdown_basic
                 data_accuracy = "basic" if valid_orders_count > 0 else "no_data"
-=======
-            else:
-                data_accuracy = "no_data"
->>>>>>> Stashed changes
             
             processed_orders = basic_processed_orders[:50]
             
@@ -747,11 +736,8 @@ class UnicommerceService:
 
             valid_orders_count = len(valid_basic_orders)
 
-<<<<<<< Updated upstream
             sample_size = min(50, valid_orders_count)
-=======
             sample_size = min(100, valid_orders_count)
->>>>>>> Stashed changes
             sample_orders = valid_basic_orders[:sample_size] if sample_size > 0 else []
 
             total_gross_sales = 0.0
@@ -761,7 +747,6 @@ class UnicommerceService:
             channel_breakdown = {}
 
             if sample_orders:
-<<<<<<< Updated upstream
                 semaphore = asyncio.Semaphore(10)
 
                 async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
@@ -778,7 +763,6 @@ class UnicommerceService:
                                 print(f"Error fetching {order_code}: {e}")
                             return None
 
-=======
                 semaphore = asyncio.Semaphore(20)
 
                 async def fetch_order_detail_safe(order):
@@ -793,7 +777,6 @@ class UnicommerceService:
                         return None
 
                 async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
->>>>>>> Stashed changes
                     tasks = [fetch_order_detail_safe(order) for order in sample_orders]
                     detailed_orders = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -833,7 +816,6 @@ class UnicommerceService:
                         data_accuracy = "extrapolated"
                     else:
                         data_accuracy = "complete"
-<<<<<<< Updated upstream
                     
                     if successful_count == 0 and valid_orders_count > 0:
                         total_gross_sales = basic_total_gross
@@ -849,10 +831,6 @@ class UnicommerceService:
                 total_tax = basic_total_tax
                 channel_breakdown = channel_breakdown_basic
                 data_accuracy = "basic" if valid_orders_count > 0 else "no_data"
-=======
-            else:
-                data_accuracy = "no_data"
->>>>>>> Stashed changes
 
             processed_orders = basic_processed_orders[:50]
 
@@ -956,11 +934,8 @@ class UnicommerceService:
 
             valid_orders_count = len(valid_basic_orders)
 
-<<<<<<< Updated upstream
             sample_size = min(50, valid_orders_count)
-=======
             sample_size = min(100, valid_orders_count)
->>>>>>> Stashed changes
             sample_orders = valid_basic_orders[:sample_size] if sample_size > 0 else []
 
             total_gross_sales = 0.0
@@ -970,7 +945,6 @@ class UnicommerceService:
             channel_breakdown = {}
 
             if sample_orders:
-<<<<<<< Updated upstream
                 semaphore = asyncio.Semaphore(10)
 
                 async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
@@ -987,7 +961,6 @@ class UnicommerceService:
                                 print(f"Error fetching {order_code}: {e}")
                             return None
 
-=======
                 semaphore = asyncio.Semaphore(20)
 
                 async def fetch_order_detail_safe(order):
@@ -1002,7 +975,6 @@ class UnicommerceService:
                         return None
 
                 async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
->>>>>>> Stashed changes
                     tasks = [fetch_order_detail_safe(order) for order in sample_orders]
                     detailed_orders = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -1042,7 +1014,6 @@ class UnicommerceService:
                         data_accuracy = "extrapolated"
                     else:
                         data_accuracy = "complete"
-<<<<<<< Updated upstream
                     
                     if successful_count == 0 and valid_orders_count > 0:
                         total_gross_sales = basic_total_gross
@@ -1058,10 +1029,6 @@ class UnicommerceService:
                 total_tax = basic_total_tax
                 channel_breakdown = channel_breakdown_basic
                 data_accuracy = "basic" if valid_orders_count > 0 else "no_data"
-=======
-            else:
-                data_accuracy = "no_data"
->>>>>>> Stashed changes
 
             processed_orders = basic_processed_orders[:50]
 
