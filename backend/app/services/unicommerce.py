@@ -286,17 +286,44 @@ class UnicommerceService:
         for item in items:
             item_price = safe_float(item.get("totalPrice", 0))
             gross_sales += item_price
+        
+        # Fallback: if items are missing in list responses, use order-level totals
+        if gross_sales == 0.0 and not items:
+            gross_sales = safe_float(
+                order.get("totalAmount")
+                or order.get("orderAmount")
+                or order.get("total")
+                or order.get("totalPrice")
+                or order.get("grandTotal")
+                or order.get("orderTotal")
+                or order.get("amount")
+            )
             
         # Extract discounts and fees
-        discount = safe_float(order.get("totalDiscount", 0))
+        discount = safe_float(
+            order.get("totalDiscount")
+            or order.get("discount")
+            or order.get("discountAmount")
+            or 0
+        )
         cash_on_delivery = safe_float(order.get("cashOnDelivery", 0))
         prepaid_amount = safe_float(order.get("prepaidAmount", 0))
         
         # Extract tax information
-        tax_amount = safe_float(order.get("taxAmount", 0))
+        tax_amount = safe_float(
+            order.get("taxAmount")
+            or order.get("totalTax")
+            or order.get("tax")
+            or 0
+        )
         
         # Extract shipping information
-        shipping_charges = safe_float(order.get("shippingCharges", 0))
+        shipping_charges = safe_float(
+            order.get("shippingCharges")
+            or order.get("shipping")
+            or order.get("shippingAmount")
+            or 0
+        )
         gift_wrap_charges = safe_float(order.get("giftWrapCharges", 0))
         
         # Calculate net sales
@@ -361,25 +388,22 @@ class UnicommerceService:
             
             if data.get("successful") and data.get("saleOrderDTO"):
                 order = data["saleOrderDTO"]
-                
-                # Calculate total from sale order items
-                total_amount = 0
-                if "saleOrderItems" in order:
-                    for item in order["saleOrderItems"]:
-                        total_amount += item.get("totalPrice", 0)
-                
                 return {
-                    "code": order.get("code"),
-                    "total_amount": total_amount,
-                    "status": order.get("status"),
-                    "channel": order.get("channel")
+                    "successful": True,
+                    "order": order
                 }
             
-            return None
+            return {
+                "successful": False,
+                "error": data.get("message", "Unknown error")
+            }
             
         except Exception as e:
             print(f"Error fetching order details for {order_code}: {e}")
-            return None
+            return {
+                "successful": False,
+                "error": str(e)
+            }
 
     async def get_last_24_hours_sales(self) -> Dict[str, Any]:
         """
@@ -439,6 +463,21 @@ class UnicommerceService:
             # Phase 1: Process basic order data for counts and statuses
             basic_processed_orders = []
             valid_basic_orders = []
+            basic_total_gross = 0.0
+            basic_total_net = 0.0
+            basic_total_discount = 0.0
+            basic_total_tax = 0.0
+            channel_breakdown_basic = {}
+            basic_total_gross = 0.0
+            basic_total_net = 0.0
+            basic_total_discount = 0.0
+            basic_total_tax = 0.0
+            channel_breakdown_basic = {}
+            basic_total_gross = 0.0
+            basic_total_net = 0.0
+            basic_total_discount = 0.0
+            basic_total_tax = 0.0
+            channel_breakdown_basic = {}
             
             for order in sale_orders:
                 financials = self.extract_order_financials(order)
@@ -455,41 +494,124 @@ class UnicommerceService:
                 # Track valid orders for sampling
                 if financials["include_in_revenue"]:
                     valid_basic_orders.append(order)
+                    basic_total_gross += financials["gross_sales"]
+                    basic_total_net += financials["net_sales"]
+                    basic_total_discount += financials["discount"]
+                    basic_total_tax += financials["tax_amount"]
+                    channel = financials["channel"]
+                    if channel not in channel_breakdown_basic:
+                        channel_breakdown_basic[channel] = {"orders": 0, "gross_sales": 0, "net_sales": 0}
+                    channel_breakdown_basic[channel]["orders"] += 1
+                    channel_breakdown_basic[channel]["gross_sales"] += financials["gross_sales"]
+                    channel_breakdown_basic[channel]["net_sales"] += financials["net_sales"]
+                    basic_total_gross += financials["gross_sales"]
+                    basic_total_net += financials["net_sales"]
+                    basic_total_discount += financials["discount"]
+                    basic_total_tax += financials["tax_amount"]
+                    channel = financials["channel"]
+                    if channel not in channel_breakdown_basic:
+                        channel_breakdown_basic[channel] = {"orders": 0, "gross_sales": 0, "net_sales": 0}
+                    channel_breakdown_basic[channel]["orders"] += 1
+                    channel_breakdown_basic[channel]["gross_sales"] += financials["gross_sales"]
+                    channel_breakdown_basic[channel]["net_sales"] += financials["net_sales"]
+                    basic_total_gross += financials["gross_sales"]
+                    basic_total_net += financials["net_sales"]
+                    basic_total_discount += financials["discount"]
+                    basic_total_tax += financials["tax_amount"]
+                    channel = financials["channel"]
+                    if channel not in channel_breakdown_basic:
+                        channel_breakdown_basic[channel] = {"orders": 0, "gross_sales": 0, "net_sales": 0}
+                    channel_breakdown_basic[channel]["orders"] += 1
+                    channel_breakdown_basic[channel]["gross_sales"] += financials["gross_sales"]
+                    channel_breakdown_basic[channel]["net_sales"] += financials["net_sales"]
             
             valid_orders_count = len(valid_basic_orders)  # Define this here
             print(f"📊 Processed {len(basic_processed_orders)} orders, {valid_orders_count} valid for revenue")
             
-            # TEMPORARY: Add estimated revenue calculation based on order count
-            # Use industry averages for fashion e-commerce in India
-            channel_avg_values = {
-                "MYNTRA": 1500,      # Higher AOV on Myntra
-                "AMAZON": 1200,      # Amazon fashion AOV
-                "FLIPKART": 1100,    # Flipkart fashion AOV  
-                "AJIO": 1400,        # Ajio AOV
-                "NYKAA": 1800,       # Nykaa fashion AOV
-                "WEBSITE": 1600,     # Direct website AOV
-            }
+            # REAL DATA: Fetch detailed order information in parallel for accurate financial data
+            sample_size = min(50, valid_orders_count)
+            sample_orders = valid_basic_orders[:sample_size] if sample_size > 0 else []
             
-            # Calculate estimated revenue based on orders by channel
-            estimated_revenue = 0.0
+            total_gross_sales = 0.0
+            total_net_sales = 0.0
+            total_discount = 0.0
+            total_tax = 0.0
             channel_breakdown = {}
             
-            for order in basic_processed_orders:
-                channel = order.get("channel", "WEBSITE").upper()
-                if order["status"] not in ["CANCELLED", "RETURNED", "REFUNDED", "CANCELED", "FAILED"]:
-                    avg_value = channel_avg_values.get(channel, 1300)  # Default AOV
-                    estimated_revenue += avg_value
+            if sample_orders:
+                print(f"🔄 Fetching REAL financial data for {sample_size} sample orders in parallel...")
+                semaphore = asyncio.Semaphore(10)
+                
+                async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
+                    headers = await self._get_headers()
+
+                    async def fetch_order_detail_safe(order):
+                        async with semaphore:
+                            order_code = order.get("code", "")
+                            try:
+                                details = await self.get_order_details(order_code, client=client, headers=headers)
+                                if details and details.get("successful"):
+                                    return details.get("order", {})
+                            except Exception as e:
+                                print(f"Error fetching {order_code}: {e}")
+                            return None
+
+                    tasks = [fetch_order_detail_safe(order) for order in sample_orders]
+                    detailed_orders = await asyncio.gather(*tasks, return_exceptions=True)
                     
-                    if channel not in channel_breakdown:
-                        channel_breakdown[channel] = {"orders": 0, "estimated_revenue": 0}
-                    channel_breakdown[channel]["orders"] += 1
-                    channel_breakdown[channel]["estimated_revenue"] += avg_value
+                    successful_count = 0
+                    for idx, detailed_order in enumerate(detailed_orders):
+                        if detailed_order and not isinstance(detailed_order, Exception):
+                            original_order = sample_orders[idx]
+                            financials = self.extract_detailed_order_financials(detailed_order, original_order)
+                            
+                            if financials["include_in_revenue"]:
+                                total_gross_sales += financials["gross_sales"]
+                                total_net_sales += financials["net_sales"]
+                                total_discount += financials["discount"]
+                                total_tax += financials["tax_amount"]
+                                
+                                channel = financials["channel"]
+                                if channel not in channel_breakdown:
+                                    channel_breakdown[channel] = {"orders": 0, "gross_sales": 0, "net_sales": 0}
+                                channel_breakdown[channel]["orders"] += 1
+                                channel_breakdown[channel]["gross_sales"] += financials["gross_sales"]
+                                channel_breakdown[channel]["net_sales"] += financials["net_sales"]
+                                
+                                successful_count += 1
+                    
+                    if successful_count > 0 and valid_orders_count > successful_count:
+                        extrapolation_factor = valid_orders_count / successful_count
+                        total_gross_sales *= extrapolation_factor
+                        total_net_sales *= extrapolation_factor
+                        total_discount *= extrapolation_factor
+                        total_tax *= extrapolation_factor
+                        
+                        for channel in channel_breakdown:
+                            channel_breakdown[channel]["orders"] = int(channel_breakdown[channel]["orders"] * extrapolation_factor)
+                            channel_breakdown[channel]["gross_sales"] *= extrapolation_factor
+                            channel_breakdown[channel]["net_sales"] *= extrapolation_factor
+                        
+                        data_accuracy = "extrapolated"
+                    else:
+                        data_accuracy = "complete"
+                    
+                    if successful_count == 0 and valid_orders_count > 0:
+                        total_gross_sales = basic_total_gross
+                        total_net_sales = basic_total_net
+                        total_discount = basic_total_discount
+                        total_tax = basic_total_tax
+                        channel_breakdown = channel_breakdown_basic
+                        data_accuracy = "basic"
+            else:
+                total_gross_sales = basic_total_gross
+                total_net_sales = basic_total_net
+                total_discount = basic_total_discount
+                total_tax = basic_total_tax
+                channel_breakdown = channel_breakdown_basic
+                data_accuracy = "basic" if valid_orders_count > 0 else "no_data"
             
-            print(f"💰 Estimated revenue: ₹{estimated_revenue:,.2f} based on {valid_orders_count} valid orders")
-            print(f"📊 Channel breakdown: {channel_breakdown}")
-            
-            # Return processed data with estimates
-            processed_orders = basic_processed_orders[:50]  # Return basic data for display
+            processed_orders = basic_processed_orders[:50]
             
             return {
                 "success": True,
@@ -504,14 +626,14 @@ class UnicommerceService:
                 "summary": {
                     "total_orders": total_orders,
                     "valid_orders": valid_orders_count,
-                    "total_gross_sales": round(estimated_revenue, 2),
-                    "total_net_sales": round(estimated_revenue * 0.85, 2),  # Account for discounts
-                    "total_revenue": round(estimated_revenue * 0.85, 2),    # Use net sales as revenue
-                    "total_discount": round(estimated_revenue * 0.15, 2),   # Estimated 15% discount
-                    "total_tax": round(estimated_revenue * 0.18, 2),       # 18% GST
+                    "total_gross_sales": round(total_gross_sales, 2),
+                    "total_net_sales": round(total_net_sales, 2),
+                    "total_revenue": round(total_net_sales, 2),
+                    "total_discount": round(total_discount, 2),
+                    "total_tax": round(total_tax, 2),
                     "currency": "INR",
-                    "avg_order_value": round(estimated_revenue / valid_orders_count if valid_orders_count > 0 else 0, 2),
-                    "data_accuracy": "estimated",  # Clear indicator this is estimated
+                    "avg_order_value": round(total_net_sales / valid_orders_count if valid_orders_count > 0 else 0, 2),
+                    "data_accuracy": data_accuracy,
                     "channel_breakdown": channel_breakdown
                 },
                 "orders": processed_orders
@@ -550,85 +672,169 @@ class UnicommerceService:
                 }
             }
 
-        to_date = datetime.utcnow()
-        from_date = to_date - timedelta(days=7)  # 7 days ago
+        try:
+            to_date = datetime.utcnow()
+            from_date = to_date - timedelta(days=7)
 
-        result = await self.search_sale_orders(
-            from_date=from_date,
-            to_date=to_date,
-            display_start=0,
-            display_length=1000  # Fetch up to 1000 records
-        )
+            result = await self.fetch_all_sale_orders(
+                from_date=from_date,
+                to_date=to_date,
+                max_orders=5000,
+                page_size=100
+            )
 
-        # Check if there was an error in our service layer OR Unicommerce API
-        if result.get("success") == False or not result.get("successful", False):
-            # Return a structure that won't break the frontend
+            if not result.get("successful", False):
+                return {
+                    "success": False,
+                    "message": "Failed to fetch from Unicommerce",
+                    "period": "last_7_days",
+                    "from_date": from_date.isoformat(),
+                    "to_date": to_date.isoformat(),
+                    "summary": {
+                        "total_orders": 0,
+                        "total_revenue": 0,
+                        "currency": "INR"
+                    },
+                    "orders": []
+                }
+
+            sale_orders = result.get("elements", [])
+            total_orders = result.get("totalRecords", len(sale_orders))
+
+            basic_processed_orders = []
+            valid_basic_orders = []
+
+            for order in sale_orders:
+                financials = self.extract_order_financials(order)
+                basic_processed_orders.append({
+                    "code": financials["order_code"],
+                    "status": financials["status"],
+                    "channel": financials["channel"],
+                    "gross_sales": financials["gross_sales"],
+                    "net_sales": financials["net_sales"],
+                    "discount": financials["discount"],
+                    "tax_amount": financials["tax_amount"]
+                })
+
+                if financials["include_in_revenue"]:
+                    valid_basic_orders.append(order)
+
+            valid_orders_count = len(valid_basic_orders)
+
+            sample_size = min(50, valid_orders_count)
+            sample_orders = valid_basic_orders[:sample_size] if sample_size > 0 else []
+
+            total_gross_sales = 0.0
+            total_net_sales = 0.0
+            total_discount = 0.0
+            total_tax = 0.0
+            channel_breakdown = {}
+
+            if sample_orders:
+                semaphore = asyncio.Semaphore(10)
+
+                async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
+                    headers = await self._get_headers()
+
+                    async def fetch_order_detail_safe(order):
+                        async with semaphore:
+                            order_code = order.get("code", "")
+                            try:
+                                details = await self.get_order_details(order_code, client=client, headers=headers)
+                                if details and details.get("successful"):
+                                    return details.get("order", {})
+                            except Exception as e:
+                                print(f"Error fetching {order_code}: {e}")
+                            return None
+
+                    tasks = [fetch_order_detail_safe(order) for order in sample_orders]
+                    detailed_orders = await asyncio.gather(*tasks, return_exceptions=True)
+
+                    successful_count = 0
+                    for idx, detailed_order in enumerate(detailed_orders):
+                        if detailed_order and not isinstance(detailed_order, Exception):
+                            original_order = sample_orders[idx]
+                            financials = self.extract_detailed_order_financials(detailed_order, original_order)
+
+                            if financials["include_in_revenue"]:
+                                total_gross_sales += financials["gross_sales"]
+                                total_net_sales += financials["net_sales"]
+                                total_discount += financials["discount"]
+                                total_tax += financials["tax_amount"]
+
+                                channel = financials["channel"]
+                                if channel not in channel_breakdown:
+                                    channel_breakdown[channel] = {"orders": 0, "gross_sales": 0, "net_sales": 0}
+                                channel_breakdown[channel]["orders"] += 1
+                                channel_breakdown[channel]["gross_sales"] += financials["gross_sales"]
+                                channel_breakdown[channel]["net_sales"] += financials["net_sales"]
+
+                                successful_count += 1
+
+                    if successful_count > 0 and valid_orders_count > successful_count:
+                        extrapolation_factor = valid_orders_count / successful_count
+                        total_gross_sales *= extrapolation_factor
+                        total_net_sales *= extrapolation_factor
+                        total_discount *= extrapolation_factor
+                        total_tax *= extrapolation_factor
+
+                        for channel in channel_breakdown:
+                            channel_breakdown[channel]["orders"] = int(channel_breakdown[channel]["orders"] * extrapolation_factor)
+                            channel_breakdown[channel]["gross_sales"] *= extrapolation_factor
+                            channel_breakdown[channel]["net_sales"] *= extrapolation_factor
+
+                        data_accuracy = "extrapolated"
+                    else:
+                        data_accuracy = "complete"
+                    
+                    if successful_count == 0 and valid_orders_count > 0:
+                        total_gross_sales = basic_total_gross
+                        total_net_sales = basic_total_net
+                        total_discount = basic_total_discount
+                        total_tax = basic_total_tax
+                        channel_breakdown = channel_breakdown_basic
+                        data_accuracy = "basic"
+            else:
+                total_gross_sales = basic_total_gross
+                total_net_sales = basic_total_net
+                total_discount = basic_total_discount
+                total_tax = basic_total_tax
+                channel_breakdown = channel_breakdown_basic
+                data_accuracy = "basic" if valid_orders_count > 0 else "no_data"
+
+            processed_orders = basic_processed_orders[:50]
+
             return {
-                "success": False,
-                "message": result.get("message", "Failed to fetch from Unicommerce"),
+                "success": True,
                 "period": "last_7_days",
                 "from_date": from_date.isoformat(),
                 "to_date": to_date.isoformat(),
                 "summary": {
+                    "total_orders": total_orders,
+                    "valid_orders": valid_orders_count,
+                    "total_gross_sales": round(total_gross_sales, 2),
+                    "total_net_sales": round(total_net_sales, 2),
+                    "total_revenue": round(total_net_sales, 2),
+                    "total_discount": round(total_discount, 2),
+                    "total_tax": round(total_tax, 2),
+                    "currency": "INR",
+                    "avg_order_value": round(total_net_sales / valid_orders_count if valid_orders_count > 0 else 0, 2),
+                    "data_accuracy": data_accuracy,
+                    "channel_breakdown": channel_breakdown
+                },
+                "orders": processed_orders
+            }
+        except Exception as e:
+            print(f"❌ Exception in get_last_7_days_sales: {e}")
+            return {
+                "success": False,
+                "message": f"Exception occurred: {str(e)}",
+                "summary": {
                     "total_orders": 0,
                     "total_revenue": 0,
                     "currency": "INR"
-                },
-                "orders": [],
-                "error_details": result.get("error", "Unknown error")
+                }
             }
-
-        # Calculate summary statistics
-        sale_orders = result.get("elements", [])
-
-        # Use totalRecords from API for accurate count (we only fetch first 1000)
-        total_orders = result.get("totalRecords", len(sale_orders))
-        
-        # Fetch real revenue by getting order details for first 50 orders (sample)
-        # For large datasets, we use sampling to balance accuracy vs performance
-        total_revenue = 0
-        sample_size = min(50, len(sale_orders))  # Sample first 50 orders
-        
-        if sample_size > 0:
-            # ⚡ PARALLEL EXECUTION: Fetch all order details concurrently with shared client
-            async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
-                # Fetch headers once (not 50 times!)
-                headers = await self._get_headers()
-                
-                # Create tasks with shared client and headers
-                tasks = [
-                    self.get_order_details(order.get("code"), client=client, headers=headers)
-                    for order in sale_orders[:sample_size]
-                ]
-                
-                # Execute all API calls simultaneously
-                order_details_list = await asyncio.gather(*tasks, return_exceptions=True)
-                
-                # Calculate total revenue from results
-                successful_fetches = 0
-                for order_details in order_details_list:
-                    if order_details and not isinstance(order_details, Exception):
-                        total_revenue += order_details.get("total_amount", 0)
-                        successful_fetches += 1
-                
-                # Extrapolate to total orders if we have a sample
-                if successful_fetches > 0 and sample_size < total_orders:
-                    avg_order_value = total_revenue / successful_fetches
-                    total_revenue = avg_order_value * total_orders
-
-        return {
-            "success": True,
-            "period": "last_7_days",
-            "from_date": from_date.isoformat(),
-            "to_date": to_date.isoformat(),
-            "summary": {
-                "total_orders": total_orders,
-                "total_revenue": round(total_revenue, 2),
-                "currency": "INR",
-                "note": f"Revenue calculated from {sample_size} order samples" if sample_size < total_orders else "Revenue calculated from all orders"
-            },
-            "orders": sale_orders
-        }
 
     async def get_last_30_days_sales(self) -> Dict[str, Any]:
         """
@@ -649,85 +855,169 @@ class UnicommerceService:
                 }
             }
 
-        to_date = datetime.utcnow()
-        from_date = to_date - timedelta(days=30)  # 30 days ago
+        try:
+            to_date = datetime.utcnow()
+            from_date = to_date - timedelta(days=30)
 
-        result = await self.search_sale_orders(
-            from_date=from_date,
-            to_date=to_date,
-            display_start=0,
-            display_length=1000  # Fetch up to 1000 records
-        )
+            result = await self.fetch_all_sale_orders(
+                from_date=from_date,
+                to_date=to_date,
+                max_orders=10000,
+                page_size=100
+            )
 
-        # Check if there was an error in our service layer OR Unicommerce API
-        if result.get("success") == False or not result.get("successful", False):
-            # Return a structure that won't break the frontend
+            if not result.get("successful", False):
+                return {
+                    "success": False,
+                    "message": "Failed to fetch from Unicommerce",
+                    "period": "last_30_days",
+                    "from_date": from_date.isoformat(),
+                    "to_date": to_date.isoformat(),
+                    "summary": {
+                        "total_orders": 0,
+                        "total_revenue": 0,
+                        "currency": "INR"
+                    },
+                    "orders": []
+                }
+
+            sale_orders = result.get("elements", [])
+            total_orders = result.get("totalRecords", len(sale_orders))
+
+            basic_processed_orders = []
+            valid_basic_orders = []
+
+            for order in sale_orders:
+                financials = self.extract_order_financials(order)
+                basic_processed_orders.append({
+                    "code": financials["order_code"],
+                    "status": financials["status"],
+                    "channel": financials["channel"],
+                    "gross_sales": financials["gross_sales"],
+                    "net_sales": financials["net_sales"],
+                    "discount": financials["discount"],
+                    "tax_amount": financials["tax_amount"]
+                })
+
+                if financials["include_in_revenue"]:
+                    valid_basic_orders.append(order)
+
+            valid_orders_count = len(valid_basic_orders)
+
+            sample_size = min(50, valid_orders_count)
+            sample_orders = valid_basic_orders[:sample_size] if sample_size > 0 else []
+
+            total_gross_sales = 0.0
+            total_net_sales = 0.0
+            total_discount = 0.0
+            total_tax = 0.0
+            channel_breakdown = {}
+
+            if sample_orders:
+                semaphore = asyncio.Semaphore(10)
+
+                async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
+                    headers = await self._get_headers()
+
+                    async def fetch_order_detail_safe(order):
+                        async with semaphore:
+                            order_code = order.get("code", "")
+                            try:
+                                details = await self.get_order_details(order_code, client=client, headers=headers)
+                                if details and details.get("successful"):
+                                    return details.get("order", {})
+                            except Exception as e:
+                                print(f"Error fetching {order_code}: {e}")
+                            return None
+
+                    tasks = [fetch_order_detail_safe(order) for order in sample_orders]
+                    detailed_orders = await asyncio.gather(*tasks, return_exceptions=True)
+
+                    successful_count = 0
+                    for idx, detailed_order in enumerate(detailed_orders):
+                        if detailed_order and not isinstance(detailed_order, Exception):
+                            original_order = sample_orders[idx]
+                            financials = self.extract_detailed_order_financials(detailed_order, original_order)
+
+                            if financials["include_in_revenue"]:
+                                total_gross_sales += financials["gross_sales"]
+                                total_net_sales += financials["net_sales"]
+                                total_discount += financials["discount"]
+                                total_tax += financials["tax_amount"]
+
+                                channel = financials["channel"]
+                                if channel not in channel_breakdown:
+                                    channel_breakdown[channel] = {"orders": 0, "gross_sales": 0, "net_sales": 0}
+                                channel_breakdown[channel]["orders"] += 1
+                                channel_breakdown[channel]["gross_sales"] += financials["gross_sales"]
+                                channel_breakdown[channel]["net_sales"] += financials["net_sales"]
+
+                                successful_count += 1
+
+                    if successful_count > 0 and valid_orders_count > successful_count:
+                        extrapolation_factor = valid_orders_count / successful_count
+                        total_gross_sales *= extrapolation_factor
+                        total_net_sales *= extrapolation_factor
+                        total_discount *= extrapolation_factor
+                        total_tax *= extrapolation_factor
+
+                        for channel in channel_breakdown:
+                            channel_breakdown[channel]["orders"] = int(channel_breakdown[channel]["orders"] * extrapolation_factor)
+                            channel_breakdown[channel]["gross_sales"] *= extrapolation_factor
+                            channel_breakdown[channel]["net_sales"] *= extrapolation_factor
+
+                        data_accuracy = "extrapolated"
+                    else:
+                        data_accuracy = "complete"
+                    
+                    if successful_count == 0 and valid_orders_count > 0:
+                        total_gross_sales = basic_total_gross
+                        total_net_sales = basic_total_net
+                        total_discount = basic_total_discount
+                        total_tax = basic_total_tax
+                        channel_breakdown = channel_breakdown_basic
+                        data_accuracy = "basic"
+            else:
+                total_gross_sales = basic_total_gross
+                total_net_sales = basic_total_net
+                total_discount = basic_total_discount
+                total_tax = basic_total_tax
+                channel_breakdown = channel_breakdown_basic
+                data_accuracy = "basic" if valid_orders_count > 0 else "no_data"
+
+            processed_orders = basic_processed_orders[:50]
+
             return {
-                "success": False,
-                "message": result.get("message", "Failed to fetch from Unicommerce"),
+                "success": True,
                 "period": "last_30_days",
                 "from_date": from_date.isoformat(),
                 "to_date": to_date.isoformat(),
                 "summary": {
+                    "total_orders": total_orders,
+                    "valid_orders": valid_orders_count,
+                    "total_gross_sales": round(total_gross_sales, 2),
+                    "total_net_sales": round(total_net_sales, 2),
+                    "total_revenue": round(total_net_sales, 2),
+                    "total_discount": round(total_discount, 2),
+                    "total_tax": round(total_tax, 2),
+                    "currency": "INR",
+                    "avg_order_value": round(total_net_sales / valid_orders_count if valid_orders_count > 0 else 0, 2),
+                    "data_accuracy": data_accuracy,
+                    "channel_breakdown": channel_breakdown
+                },
+                "orders": processed_orders
+            }
+        except Exception as e:
+            print(f"❌ Exception in get_last_30_days_sales: {e}")
+            return {
+                "success": False,
+                "message": f"Exception occurred: {str(e)}",
+                "summary": {
                     "total_orders": 0,
                     "total_revenue": 0,
                     "currency": "INR"
-                },
-                "orders": [],
-                "error_details": result.get("error", "Unknown error")
+                }
             }
-
-        # Calculate summary statistics
-        sale_orders = result.get("elements", [])
-
-        # Use totalRecords from API for accurate count (we only fetch first 1000)
-        total_orders = result.get("totalRecords", len(sale_orders))
-        
-        # Fetch real revenue by getting order details for first 50 orders (sample)
-        # For large datasets, we use sampling to balance accuracy vs performance
-        total_revenue = 0
-        sample_size = min(50, len(sale_orders))  # Sample first 50 orders
-        
-        if sample_size > 0:
-            # ⚡ PARALLEL EXECUTION: Fetch all order details concurrently with shared client
-            async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
-                # Fetch headers once (not 50 times!)
-                headers = await self._get_headers()
-                
-                # Create tasks with shared client and headers
-                tasks = [
-                    self.get_order_details(order.get("code"), client=client, headers=headers)
-                    for order in sale_orders[:sample_size]
-                ]
-                
-                # Execute all API calls simultaneously
-                order_details_list = await asyncio.gather(*tasks, return_exceptions=True)
-                
-                # Calculate total revenue from results
-                successful_fetches = 0
-                for order_details in order_details_list:
-                    if order_details and not isinstance(order_details, Exception):
-                        total_revenue += order_details.get("total_amount", 0)
-                        successful_fetches += 1
-                
-                # Extrapolate to total orders if we have a sample
-                if successful_fetches > 0 and sample_size < total_orders:
-                    avg_order_value = total_revenue / successful_fetches
-                    total_revenue = avg_order_value * total_orders
-
-        return {
-            "success": True,
-            "period": "last_30_days",
-            "from_date": from_date.isoformat(),
-            "to_date": to_date.isoformat(),
-            "summary": {
-                "total_orders": total_orders,
-                "total_revenue": round(total_revenue, 2),
-                "currency": "INR",
-                "note": f"Revenue calculated from {sample_size} order samples" if sample_size < total_orders else "Revenue calculated from all orders"
-            },
-            "orders": sale_orders
-        }
 
     async def get_detailed_sales_report(
         self,

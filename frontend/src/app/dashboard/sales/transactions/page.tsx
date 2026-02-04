@@ -39,36 +39,113 @@ export default function SalesTransactionsPage() {
     },
   });
 
+<<<<<<< Updated upstream
   // Fetch Unicommerce sales data (last 24 hours)
   const { data: unicommerceSales, isLoading: unicommerceLoading } = useQuery({
+=======
+  // Fetch Unicommerce orders with custom date range (parallel calls for all pages)
+  const { data: unicommerceOrders, isLoading: unicommerceLoading } = useQuery({
+    queryKey: ['unicommerce-orders', filters.dateFrom, filters.dateTo],
+    queryFn: async () => {
+      if (!filters.dateFrom || !filters.dateTo) return { orders: [], totalRecords: 0 };
+
+      const fromDate = new Date(filters.dateFrom).toISOString();
+      const toDate = new Date(filters.dateTo + 'T23:59:59').toISOString();
+
+      // First call to get total count
+      const firstBatch = await unicommerceApi.searchOrders({
+        from_date: fromDate,
+        to_date: toDate,
+        display_start: 0,
+        display_length: 1000
+      });
+
+      const totalRecords = firstBatch.data.totalRecords || 0;
+      let allOrders = firstBatch.data.elements || [];
+
+      // If there are more records, fetch remaining batches in parallel
+      if (totalRecords > 1000) {
+        const remainingBatches = Math.ceil((totalRecords - 1000) / 1000);
+        const batchPromises = [];
+
+        for (let i = 1; i <= remainingBatches; i++) {
+          batchPromises.push(
+            unicommerceApi.searchOrders({
+              from_date: fromDate,
+              to_date: toDate,
+              display_start: i * 1000,
+              display_length: 1000
+            })
+          );
+        }
+
+        const batchResults = await Promise.all(batchPromises);
+        batchResults.forEach(result => {
+          allOrders = [...allOrders, ...(result.data.elements || [])];
+        });
+      }
+
+      return { orders: allOrders, totalRecords };
+    },
+    enabled: shouldFetchData && !!filters.panelId && isNaN(parseInt(filters.panelId)),
+    refetchInterval: 300000, // Refetch every 5 minutes
+    retry: 2,
+  });
+
+  // Fetch Unicommerce sales data (last 24 hours, 7 days, 30 days) for stats - REAL-TIME with parallel calls
+  const { data: unicommerceSales, isLoading: loadingSales } = useQuery({
+>>>>>>> Stashed changes
     queryKey: ['unicommerce-last-24-hours'],
     queryFn: async () => {
       const response = await unicommerceApi.getLast24Hours();
       return response.data;
     },
+<<<<<<< Updated upstream
     refetchInterval: 300000, // Refetch every 5 minutes
     retry: 2,
   });
 
   // Fetch Unicommerce sales data (last 7 days)
   const { data: unicommerce7Days, isLoading: unicommerce7DaysLoading } = useQuery({
+=======
+    refetchInterval: 60000, // Refresh every 1 minute for real-time data
+    staleTime: 30000, // Consider stale after 30s
+    retry: 2,
+  });
+
+  const { data: unicommerce7Days, isLoading: loading7Days } = useQuery({
+>>>>>>> Stashed changes
     queryKey: ['unicommerce-last-7-days'],
     queryFn: async () => {
       const response = await unicommerceApi.getLast7Days();
       return response.data;
     },
+<<<<<<< Updated upstream
     refetchInterval: 300000, // Refetch every 5 minutes
     retry: 2,
   });
 
   // Fetch Unicommerce sales data (last 30 days)
   const { data: unicommerce30Days, isLoading: unicommerce30DaysLoading } = useQuery({
+=======
+    refetchInterval: 60000, // Refresh every 1 minute
+    staleTime: 30000,
+    retry: 2,
+  });
+
+  const { data: unicommerce30Days, isLoading: loading30Days } = useQuery({
+>>>>>>> Stashed changes
     queryKey: ['unicommerce-last-30-days'],
     queryFn: async () => {
       const response = await unicommerceApi.getLast30Days();
       return response.data;
     },
+<<<<<<< Updated upstream
     refetchInterval: 300000, // Refetch every 5 minutes
+=======
+    refetchInterval: 60000, // Refresh every 1 minute
+    staleTime: 30000,
+>>>>>>> Stashed changes
     retry: 2,
   });
 
@@ -265,6 +342,7 @@ export default function SalesTransactionsPage() {
         <div className="card bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-l-4 border-blue-500">
           <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">Today's Sales</p>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+<<<<<<< Updated upstream
             {unicommerceLoading ? (
               <span className="animate-pulse">...</span>
             ) : unicommerceSales?.summary?.total_orders ? (
@@ -284,16 +362,24 @@ export default function SalesTransactionsPage() {
             ) : (
               'From Local Database'
             )}
+=======
+            {loadingSales ? '...' : (unicommerceSales?.summary?.total_orders || 0)}
           </p>
-          {unicommerceSales?.summary?.total_revenue && (
-            <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mt-2">
-              Revenue: ₹{unicommerceSales.summary.total_revenue.toLocaleString('en-IN')}
-            </p>
-          )}
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+              Real-time Unicommerce (Last 24hrs)
+            </span>
+          </p>
+          <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mt-2">
+            Revenue: {loadingSales ? '...' : `₹${(unicommerceSales?.summary?.total_revenue || 0).toLocaleString('en-IN')}`}
+>>>>>>> Stashed changes
+          </p>
         </div>
         <div className="card bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-l-4 border-green-500">
           <p className="text-sm font-medium text-green-600 dark:text-green-400 mb-1">This Week</p>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+<<<<<<< Updated upstream
             {unicommerce7DaysLoading ? (
               <span className="animate-pulse">...</span>
             ) : unicommerce7Days?.summary?.total_orders ? (
@@ -313,16 +399,24 @@ export default function SalesTransactionsPage() {
             ) : (
               'From Local Database'
             )}
+=======
+            {loading7Days ? '...' : (unicommerce7Days?.summary?.total_orders || 0)}
           </p>
-          {unicommerce7Days?.summary?.total_revenue && (
-            <p className="text-xs font-semibold text-green-700 dark:text-green-300 mt-2">
-              Revenue: ₹{unicommerce7Days.summary.total_revenue.toLocaleString('en-IN')}
-            </p>
-          )}
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+              Real-time Unicommerce (Last 7 days)
+            </span>
+          </p>
+          <p className="text-xs font-semibold text-green-700 dark:text-green-300 mt-2">
+            Revenue: {loading7Days ? '...' : `₹${(unicommerce7Days?.summary?.total_revenue || 0).toLocaleString('en-IN')}`}
+>>>>>>> Stashed changes
+          </p>
         </div>
         <div className="card bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-l-4 border-purple-500">
           <p className="text-sm font-medium text-purple-600 dark:text-purple-400 mb-1">This Month</p>
           <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+<<<<<<< Updated upstream
             {unicommerce30DaysLoading ? (
               <span className="animate-pulse">...</span>
             ) : unicommerce30Days?.summary?.total_orders ? (
@@ -342,16 +436,24 @@ export default function SalesTransactionsPage() {
             ) : (
               'From Local Database'
             )}
+=======
+            {loading30Days ? '...' : (unicommerce30Days?.summary?.total_orders || 0)}
           </p>
-          {unicommerce30Days?.summary?.total_revenue && (
-            <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mt-2">
-              Revenue: ₹{unicommerce30Days.summary.total_revenue.toLocaleString('en-IN')}
-            </p>
-          )}
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+              Real-time Unicommerce (Last 30 days)
+            </span>
+          </p>
+          <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mt-2">
+            Revenue: {loading30Days ? '...' : `₹${(unicommerce30Days?.summary?.total_revenue || 0).toLocaleString('en-IN')}`}
+>>>>>>> Stashed changes
+          </p>
         </div>
         <div className="card bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 border-l-4 border-emerald-500">
           <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 mb-1">Total Revenue</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+<<<<<<< Updated upstream
             {unicommerce30DaysLoading ? (
               <span className="animate-pulse">...</span>
             ) : unicommerce30Days?.summary?.total_revenue ? (
@@ -371,6 +473,15 @@ export default function SalesTransactionsPage() {
             ) : (
               'From Local Database'
             )}
+=======
+            {loading30Days ? '...' : `₹${(unicommerce30Days?.summary?.total_revenue || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+              Real-time Unicommerce (Last 30 days)
+            </span>
+>>>>>>> Stashed changes
           </p>
         </div>
       </div>
