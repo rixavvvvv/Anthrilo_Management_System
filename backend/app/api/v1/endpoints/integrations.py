@@ -24,15 +24,15 @@ async def get_last_24_hours():
 
         logger.info(
             f"Unicommerce response success: {result.get('success', True)}")
-        
+
         # Log sample order for debugging revenue field
         if result.get('orders') and len(result.get('orders', [])) > 0:
             sample_order = result['orders'][0]
             logger.info(f"Sample order fields: {list(sample_order.keys())}")
             logger.info(f"Sample order revenue-related fields: total={sample_order.get('total')}, "
-                       f"orderAmount={sample_order.get('orderAmount')}, "
-                       f"totalAmount={sample_order.get('totalAmount')}, "
-                       f"totalPrice={sample_order.get('totalPrice')}")
+                        f"orderAmount={sample_order.get('orderAmount')}, "
+                        f"totalAmount={sample_order.get('totalAmount')}, "
+                        f"totalPrice={sample_order.get('totalPrice')}")
 
         # Return result even if unsuccessful, let frontend handle it
         return result
@@ -102,6 +102,62 @@ async def get_last_30_days():
         }
 
 
+@router.get("/unicommerce/search-orders")
+async def search_orders(
+    from_date: str,
+    to_date: str,
+    display_start: int = 0,
+    display_length: int = 100
+):
+    """
+    Search orders from Unicommerce with custom date range and pagination
+    """
+    try:
+        from datetime import datetime
+        logger.info(f"Searching orders from {from_date} to {to_date}")
+
+        # Parse dates
+        from_dt = datetime.fromisoformat(from_date.replace('Z', '+00:00'))
+        to_dt = datetime.fromisoformat(to_date.replace('Z', '+00:00'))
+
+        service = UnicommerceService()
+        result = await service.search_sale_orders(
+            from_date=from_dt,
+            to_date=to_dt,
+            display_start=display_start,
+            display_length=display_length
+        )
+
+        return result
+    except Exception as e:
+        logger.error(f"Error searching orders: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to search orders from Unicommerce"
+        }
+
+
+@router.get("/unicommerce/order-items/{order_code}")
+async def get_order_items(order_code: str):
+    """
+    Get order items with SKU and price details for a specific order
+    """
+    try:
+        logger.info(f"Fetching order items for {order_code}")
+        service = UnicommerceService()
+        result = await service.get_order_details(order_code)
+
+        return result
+    except Exception as e:
+        logger.error(f"Error fetching order items: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to fetch order items"
+        }
+
+
 @router.get("/unicommerce/auth/status")
 async def get_auth_status():
     """
@@ -111,7 +167,7 @@ async def get_auth_status():
     try:
         token_manager = get_token_manager()
         status = token_manager.get_token_status()
-        
+
         return {
             "success": True,
             "authentication_status": status,
@@ -135,7 +191,7 @@ async def force_refresh_token():
     try:
         token_manager = get_token_manager()
         token = await token_manager.get_valid_token()
-        
+
         if token:
             return {
                 "success": True,
