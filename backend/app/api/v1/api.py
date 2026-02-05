@@ -1,5 +1,7 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, yarns, fabrics, processes, garments, inventory, sales, panels, production, discounts, ads, reports, integrations
+from app.api.v1.endpoints import auth, yarns, fabrics, processes, garments, inventory, sales, panels, production, discounts, ads, reports
+# Use optimized integrations for accurate revenue calculation
+from app.api.v1.endpoints import integrations_optimized as integrations
 
 api_router = APIRouter()
 

@@ -39,37 +39,40 @@ export default function SalesTransactionsPage() {
     },
   });
 
-  // Fetch Unicommerce sales data (last 24 hours, 7 days, 30 days) for stats - REAL-TIME with parallel calls
+  // Reuse cached Unicommerce data from dashboard (no duplicate API calls!)
   const { data: unicommerceSales, isLoading: loadingSales } = useQuery({
-    queryKey: ['unicommerce-last-24-hours'],
+    queryKey: ['unicommerce-last-24-hours'], // Same key as dashboard
     queryFn: async () => {
       const response = await unicommerceApi.getLast24Hours();
       return response.data;
     },
-    refetchInterval: 60000, // Refresh every 1 minute for real-time data
-    staleTime: 30000, // Consider stale after 30s
+    refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes
+    staleTime: 3 * 60 * 1000, // Reuse cached data for 3 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
     retry: 2,
   });
 
   const { data: unicommerce7Days, isLoading: loading7Days } = useQuery({
-    queryKey: ['unicommerce-last-7-days'],
+    queryKey: ['unicommerce-last-7-days'], // Same key as dashboard
     queryFn: async () => {
       const response = await unicommerceApi.getLast7Days();
       return response.data;
     },
-    refetchInterval: 60000, // Refresh every 1 minute
-    staleTime: 30000,
+    refetchInterval: 10 * 60 * 1000, // Refetch every 10 minutes
+    staleTime: 5 * 60 * 1000, // Reuse cached data for 5 minutes
+    gcTime: 15 * 60 * 1000, // Keep in cache for 15 minutes
     retry: 2,
   });
 
   const { data: unicommerce30Days, isLoading: loading30Days } = useQuery({
-    queryKey: ['unicommerce-last-30-days'],
+    queryKey: ['unicommerce-last-30-days'], // Same key as dashboard
     queryFn: async () => {
-      const response = await unicommerceApi.getLast24Hours();
+      const response = await unicommerceApi.getLast30Days();
       return response.data;
     },
-    refetchInterval: 60000, // Refresh every 1 minute
-    staleTime: 30000,
+    refetchInterval: 15 * 60 * 1000, // Refetch every 15 minutes
+    staleTime: 10 * 60 * 1000, // Reuse cached data for 10 minutes
+    gcTime: 20 * 60 * 1000, // Keep in cache for 20 minutes
     retry: 2,
   });
 
@@ -539,14 +542,14 @@ export default function SalesTransactionsPage() {
                         </td>
                         <td className="py-3 px-4">
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${item.status === 'COMPLETE'
-                              ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                              : item.status === 'PROCESSING'
-                                ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
-                                : item.status === 'CANCELLED'
-                                  ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
-                                  : item.status === 'CREATED'
-                                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200'
-                                    : 'bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200'
+                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                            : item.status === 'PROCESSING'
+                              ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
+                              : item.status === 'CANCELLED'
+                                ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                                : item.status === 'CREATED'
+                                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200'
+                                  : 'bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200'
                             }`}>
                             {item.status}
                           </span>
