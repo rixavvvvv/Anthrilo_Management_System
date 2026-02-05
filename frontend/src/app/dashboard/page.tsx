@@ -9,34 +9,48 @@ export default function DashboardPage() {
   const [refreshInterval, setRefreshInterval] = useState<'1min' | '5min' | '10min'>('1min');
 
   // Real-time Unicommerce data with auto-refresh
-  const { data: last24Hours, isLoading: loading24h, dataUpdatedAt: updated24h } = useQuery({
-    queryKey: ['unicommerce', 'last-24-hours'],
+  const { data: todayData, isLoading: loadingToday, dataUpdatedAt: updatedToday } = useQuery({
+    queryKey: ['unicommerce-today'],
     queryFn: async () => {
-      const response = await unicommerceApi.getLast24Hours();
+      const response = await unicommerceApi.getToday();
       return response.data;
     },
-    refetchInterval: refreshInterval === '1min' ? 60000 : refreshInterval === '5min' ? 300000 : 600000,
-    staleTime: 30000, // Consider data stale after 30s
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+
+  const { data: yesterdayData, isLoading: loadingYesterday } = useQuery({
+    queryKey: ['unicommerce-yesterday'],
+    queryFn: async () => {
+      const response = await unicommerceApi.getYesterday();
+      return response.data;
+    },
+    refetchInterval: 10 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 
   const { data: last7Days, isLoading: loading7d, dataUpdatedAt: updated7d } = useQuery({
-    queryKey: ['unicommerce', 'last-7-days'],
+    queryKey: ['unicommerce-last-7-days'],
     queryFn: async () => {
       const response = await unicommerceApi.getLast7Days();
       return response.data;
     },
-    refetchInterval: refreshInterval === '1min' ? 60000 : refreshInterval === '5min' ? 300000 : 600000,
-    staleTime: 30000,
+    refetchInterval: 10 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 
   const { data: last30Days, isLoading: loading30d, dataUpdatedAt: updated30d } = useQuery({
-    queryKey: ['unicommerce', 'last-30-days'],
+    queryKey: ['unicommerce-last-30-days'],
     queryFn: async () => {
       const response = await unicommerceApi.getLast30Days();
       return response.data;
     },
-    refetchInterval: refreshInterval === '1min' ? 60000 : refreshInterval === '5min' ? 300000 : 600000,
-    staleTime: 30000,
+    refetchInterval: 15 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 20 * 60 * 1000,
   });
 
   // Legacy data for additional stats
@@ -75,15 +89,17 @@ export default function DashboardPage() {
   }, 0) || 0;
 
   // Real-time Unicommerce stats
-  const todayOrders = last24Hours?.summary?.total_orders || 0;
-  const todayRevenue = last24Hours?.summary?.total_revenue || 0;
+  const todayOrders = todayData?.summary?.total_orders || 0;
+  const todayRevenue = todayData?.summary?.total_revenue || 0;
+  const yesterdayOrders = yesterdayData?.summary?.total_orders || 0;
+  const yesterdayRevenue = yesterdayData?.summary?.total_revenue || 0;
   const last7DaysOrders = last7Days?.summary?.total_orders || 0;
   const last7DaysRevenue = last7Days?.summary?.total_revenue || 0;
   const last30DaysOrders = last30Days?.summary?.total_orders || 0;
   const last30DaysRevenue = last30Days?.summary?.total_revenue || 0;
 
-  const isLoading = loading24h || loading7d || loading30d || garmentsLoading || inventoryLoading || panelsLoading;
-  const isUnicommerceLoading = loading24h || loading7d || loading30d;
+  const isLoading = loadingToday || loading7d || loading30d || garmentsLoading || inventoryLoading || panelsLoading;
+  const isUnicommerceLoading = loadingToday || loadingYesterday || loading7d || loading30d;
 
   // Helper function to format time ago
   const timeAgo = (timestamp: number) => {
@@ -167,37 +183,34 @@ export default function DashboardPage() {
               <span className="text-xs text-white/80 px-2">Auto-refresh:</span>
               <button
                 onClick={() => setRefreshInterval('1min')}
-                className={`px-3 py-1 text-xs rounded transition-all ${
-                  refreshInterval === '1min' 
-                    ? 'bg-white text-primary-600 font-semibold shadow-lg' 
+                className={`px-3 py-1 text-xs rounded transition-all ${refreshInterval === '1min'
+                    ? 'bg-white text-primary-600 font-semibold shadow-lg'
                     : 'text-white/80 hover:bg-white/20'
-                }`}
+                  }`}
               >
                 1 min
               </button>
               <button
                 onClick={() => setRefreshInterval('5min')}
-                className={`px-3 py-1 text-xs rounded transition-all ${
-                  refreshInterval === '5min' 
-                    ? 'bg-white text-primary-600 font-semibold shadow-lg' 
+                className={`px-3 py-1 text-xs rounded transition-all ${refreshInterval === '5min'
+                    ? 'bg-white text-primary-600 font-semibold shadow-lg'
                     : 'text-white/80 hover:bg-white/20'
-                }`}
+                  }`}
               >
                 5 min
               </button>
               <button
                 onClick={() => setRefreshInterval('10min')}
-                className={`px-3 py-1 text-xs rounded transition-all ${
-                  refreshInterval === '10min' 
-                    ? 'bg-white text-primary-600 font-semibold shadow-lg' 
+                className={`px-3 py-1 text-xs rounded transition-all ${refreshInterval === '10min'
+                    ? 'bg-white text-primary-600 font-semibold shadow-lg'
                     : 'text-white/80 hover:bg-white/20'
-                }`}
+                  }`}
               >
                 10 min
               </button>
             </div>
           </div>
-          
+
           {/* Real-time Status Indicator */}
           <div className="flex items-center gap-4 mt-6">
             <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
@@ -206,9 +219,9 @@ export default function DashboardPage() {
                 {isUnicommerceLoading ? 'Updating...' : 'Live Data'}
               </span>
             </div>
-            {updated24h && (
+            {updatedToday && (
               <div className="text-xs text-white/70 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
-                Last update: {timeAgo(updated24h)}
+                Last update: {timeAgo(updatedToday)}
               </div>
             )}
           </div>
@@ -222,22 +235,22 @@ export default function DashboardPage() {
             🔥 Real-time Sales (Unicommerce)
           </h2>
           <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">
-            Updated every {refreshInterval === '1min' ? '1 minute' : refreshInterval === '5min' ? '5 minutes' : '10 minutes'}
+            Revenue: sellingPrice only
           </span>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Last 24 Hours */}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Today */}
           <div className="card bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20 border-l-4 border-green-500 hover:shadow-xl transition-all duration-300">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-3xl">📊</span>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Last 24 Hours</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Today</h3>
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Today's performance</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">00:00 to now</p>
               </div>
-              {loading24h && (
+              {loadingToday && (
                 <div className="h-6 w-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
               )}
             </div>
@@ -245,18 +258,53 @@ export default function DashboardPage() {
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Orders</p>
                 <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  {loading24h ? '...' : todayOrders.toLocaleString()}
+                  {loadingToday ? '...' : todayOrders.toLocaleString()}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Revenue</p>
                 <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  {loading24h ? '...' : `₹${todayRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+                  {loadingToday ? '...' : `₹${todayRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
                 </p>
               </div>
-              {last24Hours?.summary?.fetch_time_seconds && (
+              {todayData?.fetch_info?.fetch_time_seconds && (
                 <div className="text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
-                  Fetch time: {last24Hours.summary.fetch_time_seconds.toFixed(2)}s
+                  Fetch: {todayData.fetch_info.fetch_time_seconds.toFixed(1)}s
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Yesterday */}
+          <div className="card bg-gradient-to-br from-amber-50 to-yellow-100 dark:from-amber-900/20 dark:to-yellow-800/20 border-l-4 border-amber-500 hover:shadow-xl transition-all duration-300">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-3xl">📆</span>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Yesterday</h3>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Full day</p>
+              </div>
+              {loadingYesterday && (
+                <div className="h-6 w-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+              )}
+            </div>
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Orders</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                  {loadingYesterday ? '...' : yesterdayOrders.toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Revenue</p>
+                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                  {loadingYesterday ? '...' : `₹${yesterdayRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+                </p>
+              </div>
+              {yesterdayData?.fetch_info?.fetch_time_seconds && (
+                <div className="text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
+                  Fetch: {yesterdayData.fetch_info.fetch_time_seconds.toFixed(1)}s
                 </div>
               )}
             </div>
@@ -270,7 +318,7 @@ export default function DashboardPage() {
                   <span className="text-3xl">📈</span>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Last 7 Days</h3>
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Weekly trends</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Complete days</p>
               </div>
               {loading7d && (
                 <div className="h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -289,9 +337,9 @@ export default function DashboardPage() {
                   {loading7d ? '...' : `₹${last7DaysRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
                 </p>
               </div>
-              {last7Days?.summary?.fetch_time_seconds && (
+              {last7Days?.fetch_info?.fetch_time_seconds && (
                 <div className="text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
-                  Fetch time: {last7Days.summary.fetch_time_seconds.toFixed(2)}s
+                  Fetch: {last7Days.fetch_info.fetch_time_seconds.toFixed(1)}s
                 </div>
               )}
             </div>
@@ -305,7 +353,7 @@ export default function DashboardPage() {
                   <span className="text-3xl">📅</span>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Last 30 Days</h3>
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Monthly overview</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Complete days</p>
               </div>
               {loading30d && (
                 <div className="h-6 w-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
@@ -324,9 +372,9 @@ export default function DashboardPage() {
                   {loading30d ? '...' : `₹${last30DaysRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
                 </p>
               </div>
-              {last30Days?.summary?.fetch_time_seconds && (
+              {last30Days?.fetch_info?.fetch_time_seconds && (
                 <div className="text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
-                  Fetch time: {last30Days.summary.fetch_time_seconds.toFixed(2)}s
+                  Fetch: {last30Days.fetch_info.fetch_time_seconds.toFixed(1)}s
                 </div>
               )}
             </div>
@@ -340,63 +388,63 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Active Garments */}
           <div className="card bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-l-4 border-blue-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">Active Products</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                {isLoading ? '...' : activeGarments}
-              </p>
-            </div>
-            <div className="h-14 w-14 rounded-full bg-blue-500/20 dark:bg-blue-500/30 flex items-center justify-center">
-              <span className="text-3xl">👕</span>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">Active Products</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                  {isLoading ? '...' : activeGarments}
+                </p>
+              </div>
+              <div className="h-14 w-14 rounded-full bg-blue-500/20 dark:bg-blue-500/30 flex items-center justify-center">
+                <span className="text-3xl">👕</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Low Stock */}
-        <div className="card bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border-l-4 border-yellow-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-yellow-600 dark:text-yellow-400 mb-1">Low Stock Items</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                {isLoading ? '...' : lowStockItems}
-              </p>
-            </div>
-            <div className="h-14 w-14 rounded-full bg-yellow-500/20 dark:bg-yellow-500/30 flex items-center justify-center">
-              <span className="text-3xl">⚠️</span>
+          {/* Low Stock */}
+          <div className="card bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border-l-4 border-yellow-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-yellow-600 dark:text-yellow-400 mb-1">Low Stock Items</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                  {isLoading ? '...' : lowStockItems}
+                </p>
+              </div>
+              <div className="h-14 w-14 rounded-full bg-yellow-500/20 dark:bg-yellow-500/30 flex items-center justify-center">
+                <span className="text-3xl">⚠️</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Active Panels */}
-        <div className="card bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-l-4 border-purple-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-purple-600 dark:text-purple-400 mb-1">Active Panels</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                {isLoading ? '...' : activePanels}
-              </p>
-            </div>
-            <div className="h-14 w-14 rounded-full bg-purple-500/20 dark:bg-purple-500/30 flex items-center justify-center">
-              <span className="text-3xl">🏪</span>
+          {/* Active Panels */}
+          <div className="card bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-l-4 border-purple-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-purple-600 dark:text-purple-400 mb-1">Active Panels</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                  {isLoading ? '...' : activePanels}
+                </p>
+              </div>
+              <div className="h-14 w-14 rounded-full bg-purple-500/20 dark:bg-purple-500/30 flex items-center justify-center">
+                <span className="text-3xl">🏪</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Inventory Value */}
-        <div className="card bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 border-l-4 border-indigo-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400 mb-1">Inventory Value</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {isLoading ? '...' : `₹${(totalInventoryValue / 1000).toFixed(0)}K`}
-              </p>
-            </div>
-            <div className="h-14 w-14 rounded-full bg-indigo-500/20 dark:bg-indigo-500/30 flex items-center justify-center">
-              <span className="text-3xl">📦</span>
+          {/* Inventory Value */}
+          <div className="card bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 border-l-4 border-indigo-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400 mb-1">Inventory Value</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  {isLoading ? '...' : `₹${(totalInventoryValue / 1000).toFixed(0)}K`}
+                </p>
+              </div>
+              <div className="h-14 w-14 rounded-full bg-indigo-500/20 dark:bg-indigo-500/30 flex items-center justify-center">
+                <span className="text-3xl">📦</span>
+              </div>
             </div>
           </div>
-        </div>
         </div>
       </div>
 
@@ -420,10 +468,10 @@ export default function DashboardPage() {
                   <div className={`h-16 w-16 rounded-2xl ${action.iconBg} flex items-center justify-center transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300`}>
                     <span className="text-4xl">{action.icon}</span>
                   </div>
-                  <svg 
-                    className="h-6 w-6 text-gray-400 dark:text-gray-600 group-hover:text-primary-500 dark:group-hover:text-primary-400 transform group-hover:translate-x-1 group-hover:-translate-y-1 transition-all duration-300" 
-                    fill="none" 
-                    viewBox="0 0 24 24" 
+                  <svg
+                    className="h-6 w-6 text-gray-400 dark:text-gray-600 group-hover:text-primary-500 dark:group-hover:text-primary-400 transform group-hover:translate-x-1 group-hover:-translate-y-1 transition-all duration-300"
+                    fill="none"
+                    viewBox="0 0 24 24"
                     stroke="currentColor"
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -470,11 +518,10 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="flex items-center space-x-3">
-            <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
-              isUnicommerceLoading 
-                ? 'bg-yellow-100 dark:bg-yellow-900/30' 
+            <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${isUnicommerceLoading
+                ? 'bg-yellow-100 dark:bg-yellow-900/30'
                 : 'bg-green-100 dark:bg-green-900/30'
-            }`}>
+              }`}>
               <span className="text-xl">{isUnicommerceLoading ? '🔄' : '✅'}</span>
             </div>
             <div>
