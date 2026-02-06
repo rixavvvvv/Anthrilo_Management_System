@@ -7,6 +7,9 @@ PHASE 1: saleOrder/search API
 - Gets order CODES only (no pricing data)
 - Used for pagination and filtering
 
+Note-> Although we have Export Api's but we didn't get its access that api can help us to get the selling price in single api call 
+So, we're using this two phase approach to get the accurate selling price for each order.
+
 PHASE 2: saleorder/get API (with paymentDetailRequired: true)
 - Called for EACH order code
 - Returns full order with sellingPrice in items
