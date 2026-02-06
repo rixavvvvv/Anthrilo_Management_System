@@ -29,10 +29,10 @@ pydantic-settings==2.1.0
 email-validator==2.1.0
 
 # Data Processing & Analysis
-pandas==2.1.4
-numpy==1.26.3
-scikit-learn==1.4.0
-prophet==1.1.5
+pandas>=2.2.0
+numpy>=1.26.4
+scikit-learn>=1.4.0
+prophet>=1.1.5
 
 # Apache Airflow (for data pipeline orchestration)
 # apache-airflow==2.8.0  # Uncomment when needed
