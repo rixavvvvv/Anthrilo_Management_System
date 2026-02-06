@@ -33,7 +33,7 @@ async def get_today_sales():
     Revenue: Calculated using sellingPrice ONLY
     """
     try:
-        logger.info("📊 Fetching TODAY sales")
+        logger.info("Fetching TODAY sales")
         service = get_unicommerce_service()
         result = await service.get_today_sales()
 
