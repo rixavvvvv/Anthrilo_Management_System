@@ -1,19 +1,22 @@
 """
-Unicommerce Integration API Endpoints - PRODUCTION VERSION
-===========================================================
-Accurate revenue using sellingPrice ONLY with proper pagination
+Unicommerce Integration API Endpoints - PRODUCTION VERSION (v2)
+================================================================
+Accurate revenue using sellingPrice ONLY with two-phase fetch.
 
-Features:
-- Today, Yesterday, Last 7 Days, Last 30 Days filters
-- Page-wise pagination (12 orders per page)
-- Revenue by channel
-- Validation logging
+Includes:
+- Summary endpoints (today, yesterday, 7-days, 30-days)
+- Paginated order listing
+- Background sync endpoints
+- Sync status monitoring
+- Cache management
+- Revenue validation
 """
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, BackgroundTasks
 import logging
 from datetime import datetime, timezone, timedelta
 from app.services.unicommerce_optimized import get_unicommerce_service
+from app.services.sync_service import get_sync_service
 from app.core.token_manager import get_token_manager
 
 router = APIRouter()
@@ -21,17 +24,12 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# SUMMARY ENDPOINTS (For dashboard cards - no pagination needed)
+# SUMMARY ENDPOINTS (For dashboard cards)
 # =============================================================================
 
 @router.get("/unicommerce/today")
 async def get_today_sales():
-    """
-    Get today's sales summary.
-
-    Time range: 00:00:00 to (current time - 1 minute)
-    Revenue: Calculated using sellingPrice ONLY
-    """
+    """Get today's sales summary using two-phase approach."""
     try:
         logger.info("Fetching TODAY sales")
         service = get_unicommerce_service()
@@ -40,99 +38,80 @@ async def get_today_sales():
         if result.get("success"):
             summary = result.get("summary", {})
             logger.info(
-                f"✅ TODAY: {summary.get('total_orders', 0)} orders, "
-                f"₹{summary.get('total_revenue', 0):,.2f} (sellingPrice)"
+                f"TODAY: {summary.get('total_orders', 0)} orders, "
+                f"INR {summary.get('total_revenue', 0):,.2f}"
             )
-
         return result
 
     except Exception as e:
-        logger.error(f"❌ Error in get_today_sales: {e}", exc_info=True)
+        logger.error(f"Error in get_today_sales: {e}", exc_info=True)
         return {"success": False, "error": str(e), "message": "Failed to fetch today's sales"}
 
 
 @router.get("/unicommerce/yesterday")
 async def get_yesterday_sales():
-    """
-    Get yesterday's sales summary.
-
-    Time range: 00:00:00 to 23:59:59
-    Revenue: Calculated using sellingPrice ONLY
-    """
+    """Get yesterday's sales summary."""
     try:
-        logger.info("📊 Fetching YESTERDAY sales")
+        logger.info("Fetching YESTERDAY sales")
         service = get_unicommerce_service()
         result = await service.get_yesterday_sales()
 
         if result.get("success"):
             summary = result.get("summary", {})
             logger.info(
-                f"✅ YESTERDAY: {summary.get('total_orders', 0)} orders, "
-                f"₹{summary.get('total_revenue', 0):,.2f} (sellingPrice)"
+                f"YESTERDAY: {summary.get('total_orders', 0)} orders, "
+                f"INR {summary.get('total_revenue', 0):,.2f}"
             )
-
         return result
 
     except Exception as e:
-        logger.error(f"❌ Error in get_yesterday_sales: {e}", exc_info=True)
+        logger.error(f"Error in get_yesterday_sales: {e}", exc_info=True)
         return {"success": False, "error": str(e), "message": "Failed to fetch yesterday's sales"}
 
 
 @router.get("/unicommerce/last-7-days")
 async def get_last_7_days():
-    """
-    Get last 7 complete days sales (not including today).
-
-    Revenue: Calculated using sellingPrice ONLY
-    No overlap with Today filter.
-    """
+    """Get last 7 complete days sales (not including today)."""
     try:
-        logger.info("📊 Fetching LAST 7 DAYS sales")
+        logger.info("Fetching LAST 7 DAYS sales")
         service = get_unicommerce_service()
         result = await service.get_last_7_days_sales()
 
         if result.get("success"):
             summary = result.get("summary", {})
             logger.info(
-                f"✅ 7 DAYS: {summary.get('total_orders', 0)} orders, "
-                f"₹{summary.get('total_revenue', 0):,.2f} (sellingPrice)"
+                f"7 DAYS: {summary.get('total_orders', 0)} orders, "
+                f"INR {summary.get('total_revenue', 0):,.2f}"
             )
-
         return result
 
     except Exception as e:
-        logger.error(f"❌ Error in get_last_7_days: {e}", exc_info=True)
+        logger.error(f"Error in get_last_7_days: {e}", exc_info=True)
         return {"success": False, "error": str(e), "message": "Failed to fetch last 7 days sales"}
 
 
 @router.get("/unicommerce/last-30-days")
 async def get_last_30_days():
-    """
-    Get last 30 complete days sales (not including today).
-
-    Revenue: Calculated using sellingPrice ONLY
-    No overlap with Today filter.
-    """
+    """Get last 30 complete days sales (not including today)."""
     try:
-        logger.info("📊 Fetching LAST 30 DAYS sales")
+        logger.info("Fetching LAST 30 DAYS sales")
         service = get_unicommerce_service()
         result = await service.get_last_30_days_sales()
 
         if result.get("success"):
             summary = result.get("summary", {})
             logger.info(
-                f"✅ 30 DAYS: {summary.get('total_orders', 0)} orders, "
-                f"₹{summary.get('total_revenue', 0):,.2f} (sellingPrice)"
+                f"30 DAYS: {summary.get('total_orders', 0)} orders, "
+                f"INR {summary.get('total_revenue', 0):,.2f}"
             )
-
         return result
 
     except Exception as e:
-        logger.error(f"❌ Error in get_last_30_days: {e}", exc_info=True)
+        logger.error(f"Error in get_last_30_days: {e}", exc_info=True)
         return {"success": False, "error": str(e), "message": "Failed to fetch last 30 days sales"}
 
 
-# Backward compatibility aliases
+# Backward compatibility alias
 @router.get("/unicommerce/last-24-hours")
 async def get_last_24_hours():
     """Alias for today's sales (backward compatibility)"""
@@ -148,29 +127,12 @@ async def get_today_orders_paginated(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(12, ge=1, le=100, description="Orders per page")
 ):
-    """
-    Get today's orders with pagination.
-
-    - Page-wise navigation (Next/Previous/Page number)
-    - 12 orders per page by default
-    - Revenue per page using sellingPrice
-    """
+    """Get today's orders with pagination."""
     try:
-        logger.info(f"📄 Fetching TODAY orders - Page {page}")
         service = get_unicommerce_service()
-        result = await service.get_today_orders_paginated(page, page_size)
-
-        if result.get("success"):
-            pagination = result.get("pagination", {})
-            logger.info(
-                f"✅ Page {page}/{pagination.get('total_pages', 0)}: "
-                f"{len(result.get('orders', []))} orders"
-            )
-
-        return result
-
+        return await service.get_today_orders_paginated(page, page_size)
     except Exception as e:
-        logger.error(f"❌ Error: {e}", exc_info=True)
+        logger.error(f"Error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -181,12 +143,10 @@ async def get_yesterday_orders_paginated(
 ):
     """Get yesterday's orders with pagination."""
     try:
-        logger.info(f"📄 Fetching YESTERDAY orders - Page {page}")
         service = get_unicommerce_service()
-        result = await service.get_yesterday_orders_paginated(page, page_size)
-        return result
+        return await service.get_yesterday_orders_paginated(page, page_size)
     except Exception as e:
-        logger.error(f"❌ Error: {e}", exc_info=True)
+        logger.error(f"Error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -197,12 +157,10 @@ async def get_last_7_days_orders_paginated(
 ):
     """Get last 7 days orders with pagination."""
     try:
-        logger.info(f"📄 Fetching 7 DAYS orders - Page {page}")
         service = get_unicommerce_service()
-        result = await service.get_last_7_days_orders_paginated(page, page_size)
-        return result
+        return await service.get_last_7_days_orders_paginated(page, page_size)
     except Exception as e:
-        logger.error(f"❌ Error: {e}", exc_info=True)
+        logger.error(f"Error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -213,12 +171,10 @@ async def get_last_30_days_orders_paginated(
 ):
     """Get last 30 days orders with pagination."""
     try:
-        logger.info(f"📄 Fetching 30 DAYS orders - Page {page}")
         service = get_unicommerce_service()
-        result = await service.get_last_30_days_orders_paginated(page, page_size)
-        return result
+        return await service.get_last_30_days_orders_paginated(page, page_size)
     except Exception as e:
-        logger.error(f"❌ Error: {e}", exc_info=True)
+        logger.error(f"Error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -231,10 +187,6 @@ async def get_custom_orders_paginated(
 ):
     """Get orders for custom date range with pagination."""
     try:
-        logger.info(
-            f"📄 Fetching CUSTOM orders {from_date} to {to_date} - Page {page}")
-
-        # Parse dates
         from_dt = datetime.strptime(from_date, "%Y-%m-%d").replace(
             hour=0, minute=0, second=0, tzinfo=timezone.utc
         )
@@ -243,18 +195,17 @@ async def get_custom_orders_paginated(
         )
 
         service = get_unicommerce_service()
-        result = await service.get_orders_paginated(from_dt, to_dt, page, page_size)
-        return result
+        return await service.get_orders_paginated(from_dt, to_dt, page, page_size)
 
     except ValueError as e:
         return {"success": False, "error": f"Invalid date format: {e}"}
     except Exception as e:
-        logger.error(f"❌ Error: {e}", exc_info=True)
+        logger.error(f"Error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
 # =============================================================================
-# SALES REPORT ENDPOINT (For /dashboard/reports/sales)
+# SALES REPORT ENDPOINT
 # =============================================================================
 
 @router.get("/unicommerce/sales-report")
@@ -264,20 +215,8 @@ async def get_sales_report(
     period: str = Query(
         "today", description="Preset: today, yesterday, last_7_days, last_30_days, custom")
 ):
-    """
-    Get comprehensive sales report.
-
-    Revenue: Calculated using sellingPrice ONLY
-
-    Presets:
-    - today: 00:00:00 to (now - 1 minute)
-    - yesterday: 00:00:00 to 23:59:59
-    - last_7_days: 7 complete days (not including today)
-    - last_30_days: 30 complete days (not including today)
-    - custom: Use from_date and to_date
-    """
+    """Get comprehensive sales report."""
     try:
-        logger.info(f"📊 Generating sales report - Period: {period}")
         service = get_unicommerce_service()
 
         if period == "today":
@@ -297,22 +236,14 @@ async def get_sales_report(
             )
             result = await service.get_custom_range_sales(from_dt, to_dt)
         else:
-            # Default to today
             result = await service.get_today_sales()
-
-        if result.get("success"):
-            summary = result.get("summary", {})
-            logger.info(
-                f"✅ Report: {summary.get('total_orders', 0)} orders, "
-                f"₹{summary.get('total_revenue', 0):,.2f} revenue (sellingPrice)"
-            )
 
         return result
 
     except ValueError as e:
         return {"success": False, "error": f"Invalid date format: {e}"}
     except Exception as e:
-        logger.error(f"❌ Error: {e}", exc_info=True)
+        logger.error(f"Error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -325,13 +256,8 @@ async def get_channel_revenue(
     period: str = Query(
         "last_30_days", description="Period for channel breakdown")
 ):
-    """
-    Get revenue breakdown by channel/marketplace.
-
-    Revenue: Calculated using sellingPrice ONLY per channel
-    """
+    """Get revenue breakdown by channel/marketplace."""
     try:
-        logger.info(f"📊 Fetching channel revenue - Period: {period}")
         service = get_unicommerce_service()
 
         if period == "today":
@@ -346,12 +272,10 @@ async def get_channel_revenue(
         if not result.get("success"):
             return result
 
-        # Extract channel breakdown
         summary = result.get("summary", {})
         channel_breakdown = summary.get("channel_breakdown", {})
         total_revenue = summary.get("total_revenue", 0)
 
-        # Format for frontend
         channels = []
         for channel, data in sorted(
             channel_breakdown.items(),
@@ -363,21 +287,13 @@ async def get_channel_revenue(
                 "orders": data.get("orders", 0),
                 "revenue": data.get("revenue", 0),
                 "percentage": round(
-                    (data.get("revenue", 0) / total_revenue *
-                     100) if total_revenue > 0 else 0,
+                    (data.get("revenue", 0) / total_revenue * 100) if total_revenue > 0 else 0,
                     2
                 )
             })
 
-        # Validation: channel sum should equal total
         channel_sum = sum(ch["revenue"] for ch in channels)
         validation_passed = abs(channel_sum - total_revenue) < 1
-
-        if not validation_passed:
-            logger.warning(
-                f"⚠️ VALIDATION: Channel sum ({channel_sum:,.2f}) != "
-                f"Total ({total_revenue:,.2f})"
-            )
 
         return {
             "success": True,
@@ -394,7 +310,96 @@ async def get_channel_revenue(
         }
 
     except Exception as e:
-        logger.error(f"❌ Error: {e}", exc_info=True)
+        logger.error(f"Error: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# BACKGROUND SYNC ENDPOINTS
+# =============================================================================
+
+@router.post("/unicommerce/sync/{period}")
+async def trigger_sync(
+    period: str,
+    background_tasks: BackgroundTasks
+):
+    """
+    Trigger background sync for a period.
+    Orders are fetched from Unicommerce and persisted to DB.
+
+    Valid periods: today, yesterday, last_7_days, last_30_days
+    """
+    valid_periods = {"today", "yesterday", "last_7_days", "last_30_days"}
+    if period not in valid_periods:
+        return {
+            "success": False,
+            "error": f"Invalid period. Use: {', '.join(valid_periods)}"
+        }
+
+    try:
+        sync_service = get_sync_service()
+
+        # Check if already running
+        status = sync_service.get_sync_status(period)
+        if status.get("status") == "running":
+            return {
+                "success": False,
+                "message": f"Sync for '{period}' is already running",
+                "status": status,
+            }
+
+        # Run sync in background
+        async def _run_sync():
+            await sync_service.sync_period(period)
+
+        background_tasks.add_task(_run_sync)
+
+        return {
+            "success": True,
+            "message": f"Sync started for '{period}' in background",
+            "period": period,
+        }
+
+    except Exception as e:
+        logger.error(f"Error triggering sync: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/unicommerce/sync/all")
+async def trigger_sync_all(background_tasks: BackgroundTasks):
+    """Trigger background sync for all periods."""
+    try:
+        sync_service = get_sync_service()
+
+        async def _run_all_syncs():
+            for period in ["today", "yesterday", "last_7_days", "last_30_days"]:
+                try:
+                    await sync_service.sync_period(period)
+                except Exception as e:
+                    logger.error(f"Sync failed for {period}: {e}")
+
+        background_tasks.add_task(_run_all_syncs)
+
+        return {
+            "success": True,
+            "message": "Sync started for all periods in background",
+        }
+
+    except Exception as e:
+        logger.error(f"Error: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/unicommerce/sync/status")
+async def get_sync_status(
+    period: str = Query(None, description="Period to check, or omit for all")
+):
+    """Get sync status for a specific period or all periods."""
+    try:
+        sync_service = get_sync_service()
+        return sync_service.get_sync_status(period)
+    except Exception as e:
+        logger.error(f"Error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -404,20 +409,12 @@ async def get_channel_revenue(
 
 @router.get("/unicommerce/validate")
 async def validate_revenue():
-    """
-    Run revenue validation checks.
-
-    Checks:
-    - 7-day revenue < 30-day revenue
-    - Channel totals = overall total
-    """
+    """Run revenue validation checks across all periods."""
     try:
-        logger.info("🔍 Running revenue validation")
         service = get_unicommerce_service()
-        result = await service.validate_revenue_consistency()
-        return result
+        return await service.validate_revenue_consistency()
     except Exception as e:
-        logger.error(f"❌ Error: {e}", exc_info=True)
+        logger.error(f"Error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -427,17 +424,17 @@ async def validate_revenue():
 
 @router.get("/unicommerce/auth/status")
 async def get_auth_status():
-    """Get Unicommerce authentication status."""
+    """Get Unicommerce authentication status and stats."""
     try:
         token_manager = get_token_manager()
         status = token_manager.get_token_status()
         return {
             "success": True,
             "authentication_status": status,
-            "message": "Token lifecycle is managed automatically"
+            "message": "Token lifecycle is managed automatically (60s proactive refresh)"
         }
     except Exception as e:
-        logger.error(f"❌ Error: {e}", exc_info=True)
+        logger.error(f"Error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -457,7 +454,7 @@ async def force_refresh_token():
         else:
             return {"success": False, "message": "Failed to refresh token"}
     except Exception as e:
-        logger.error(f"❌ Error: {e}", exc_info=True)
+        logger.error(f"Error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -478,15 +475,14 @@ async def search_orders(
         to_dt = datetime.fromisoformat(to_date.replace('Z', '+00:00'))
 
         service = get_unicommerce_service()
-        result = await service.search_sale_orders(
+        return await service.search_sale_orders(
             from_date=from_dt,
             to_date=to_dt,
             display_start=display_start,
             display_length=display_length
         )
-        return result
     except Exception as e:
-        logger.error(f"❌ Error: {e}", exc_info=True)
+        logger.error(f"Error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -497,23 +493,24 @@ async def get_order_items(order_code: str):
         service = get_unicommerce_service()
         return await service.get_order_details(order_code)
     except Exception as e:
-        logger.error(f"❌ Error: {e}", exc_info=True)
+        logger.error(f"Error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
+# =============================================================================
+# CACHE MANAGEMENT
+# =============================================================================
+
 @router.post("/unicommerce/clear-cache")
 async def clear_cache():
-    """Clear the sales data cache to force fresh data fetch."""
+    """Clear the in-memory sales data cache to force fresh data fetch."""
     try:
         service = get_unicommerce_service()
         service._cache.clear()
-        logger.info("🗑️ Sales data cache cleared")
-        return {
-            "success": True,
-            "message": "Cache cleared successfully"
-        }
+        logger.info("Sales data cache cleared")
+        return {"success": True, "message": "Cache cleared successfully"}
     except Exception as e:
-        logger.error(f"❌ Error clearing cache: {e}", exc_info=True)
+        logger.error(f"Error clearing cache: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -522,7 +519,6 @@ async def get_cache_stats():
     """Get cache statistics showing what's cached and TTL info."""
     try:
         service = get_unicommerce_service()
-        from datetime import datetime
 
         stats = []
         for key, (timestamp, data) in service._cache.items():
@@ -544,5 +540,5 @@ async def get_cache_stats():
             "items": stats
         }
     except Exception as e:
-        logger.error(f"❌ Error getting cache stats: {e}", exc_info=True)
+        logger.error(f"Error getting cache stats: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
