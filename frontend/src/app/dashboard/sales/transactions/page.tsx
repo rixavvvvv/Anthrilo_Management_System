@@ -41,9 +41,9 @@ export default function SalesTransactionsPage() {
 
   // Reuse cached Unicommerce data from dashboard (no duplicate API calls!)
   const { data: unicommerceSales, isLoading: loadingSales } = useQuery({
-    queryKey: ['unicommerce-last-24-hours'], // Same key as dashboard
+    queryKey: ['unicommerce-today'], // Same key as dashboard
     queryFn: async () => {
-      const response = await unicommerceApi.getLast24Hours();
+      const response = await unicommerceApi.getToday();
       return response.data;
     },
     refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes
