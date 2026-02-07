@@ -499,3 +499,50 @@ async def get_order_items(order_code: str):
     except Exception as e:
         logger.error(f"❌ Error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
+
+
+@router.post("/unicommerce/clear-cache")
+async def clear_cache():
+    """Clear the sales data cache to force fresh data fetch."""
+    try:
+        service = get_unicommerce_service()
+        service._cache.clear()
+        logger.info("🗑️ Sales data cache cleared")
+        return {
+            "success": True,
+            "message": "Cache cleared successfully"
+        }
+    except Exception as e:
+        logger.error(f"❌ Error clearing cache: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/unicommerce/cache-stats")
+async def get_cache_stats():
+    """Get cache statistics showing what's cached and TTL info."""
+    try:
+        service = get_unicommerce_service()
+        from datetime import datetime
+
+        stats = []
+        for key, (timestamp, data) in service._cache.items():
+            age_seconds = (datetime.now() - timestamp).total_seconds()
+            remaining_seconds = max(0, service.CACHE_TTL_SECONDS - age_seconds)
+
+            stats.append({
+                "key": key,
+                "age_seconds": round(age_seconds, 2),
+                "remaining_seconds": round(remaining_seconds, 2),
+                "is_expired": age_seconds >= service.CACHE_TTL_SECONDS,
+                "cached_at": timestamp.isoformat()
+            })
+
+        return {
+            "success": True,
+            "cache_ttl_seconds": service.CACHE_TTL_SECONDS,
+            "total_cached_items": len(stats),
+            "items": stats
+        }
+    except Exception as e:
+        logger.error(f"❌ Error getting cache stats: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
