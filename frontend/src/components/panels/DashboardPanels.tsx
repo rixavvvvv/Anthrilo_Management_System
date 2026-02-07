@@ -16,21 +16,50 @@ import React from 'react';
 
 export function LoadingPanel() {
     return (
-        <div className="card animate-pulse">
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-4"></div>
-            <div className="h-10 bg-gray-300 dark:bg-gray-600 rounded w-1/2"></div>
+        <div className="card">
+            <div className="flex items-center gap-4">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+                <div className="flex-1">
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-2"></div>
+                    <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
+                </div>
+            </div>
+            <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                <p>🔄 Fetching ALL orders from Unicommerce API for complete accuracy...</p>
+                <p className="mt-1">⏱️ First load: 30 seconds - 5 minutes (depends on order volume)</p>
+                <p className="mt-1">⚡ Cached loads (within 15 min): Instant (&lt; 2 seconds)</p>
+            </div>
         </div>
     );
 }
 
 export function ErrorPanel({ message }: { message: string }) {
+    const isTimeout = message.includes('timeout') || message.includes('timed out') || message.includes('exceeded');
+
     return (
         <div className="card border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20">
-            <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
-                <span className="text-2xl">⚠️</span>
-                <div>
-                    <p className="font-semibold">Error</p>
-                    <p className="text-sm">{message}</p>
+            <div className="flex items-start gap-3">
+                <span className="text-3xl">⚠️</span>
+                <div className="flex-1">
+                    <p className="font-semibold text-red-600 dark:text-red-400 mb-1">Error Loading Data</p>
+                    <p className="text-sm text-red-600 dark:text-red-400 mb-3">{message}</p>
+
+                    {isTimeout && (
+                        <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">💡 Why this happened:</p>
+                            <p className="text-xs text-blue-800 dark:text-blue-200 mb-2">
+                                You're fetching ALL orders (no limits) for complete business accuracy.
+                                Large datasets (5000+ orders) may take 3-5 minutes on first load.
+                            </p>
+                            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">✅ Try these solutions:</p>
+                            <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1 list-disc list-inside">
+                                <li>Wait 2-3 minutes and refresh - data is now cached and will load instantly</li>
+                                <li>Try a shorter period first (Today/Yesterday) to verify system is working</li>
+                                <li>Check your internet connection and Unicommerce API status</li>
+                                <li>The wait is worth it - you get 100% accurate data for business decisions!</li>
+                            </ul>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -98,8 +127,8 @@ export function KPICard({
                     )}
                     {trend && (
                         <div className={`flex items-center gap-1 mt-2 text-sm font-medium ${trend.isPositive
-                                ? 'text-green-600 dark:text-green-400'
-                                : 'text-red-600 dark:text-red-400'
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-600 dark:text-red-400'
                             }`}>
                             <span>{trend.isPositive ? '↑' : '↓'}</span>
                             <span>{Math.abs(trend.value)}%</span>
@@ -378,6 +407,10 @@ interface FetchInfoPanelProps {
         phase1_time_seconds: number;
         phase2_time_seconds: number;
         total_time_seconds: number;
+        retry_recovered?: number;
+        phase1_dedup?: number;
+        phase2_dedup?: number;
+        reconciliation_passed?: boolean;
     };
     loading?: boolean;
 }
@@ -387,14 +420,44 @@ export function FetchInfoPanel({ fetchInfo, loading = false }: FetchInfoPanelPro
         return <LoadingPanel />;
     }
 
+    // Determine if data was likely cached (very fast response)
+    const wasCached = fetchInfo.total_time_seconds < 2;
+    const performanceRating = fetchInfo.total_time_seconds < 5 ? 'Excellent' :
+        fetchInfo.total_time_seconds < 15 ? 'Good' :
+            fetchInfo.total_time_seconds < 30 ? 'Moderate' : 'Slow';
+
+    const failureRate = fetchInfo.total_available > 0
+        ? ((fetchInfo.failed_codes / fetchInfo.total_available) * 100).toFixed(1)
+        : '0';
+
     return (
         <div className="card bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
-            <div className="flex items-center gap-2 mb-4">
-                <span className="text-2xl">⚡</span>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">API Performance</h3>
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                    <span className="text-2xl">⚡</span>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">API Performance & Data Quality</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                    {wasCached && (
+                        <div className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-md text-xs font-semibold">
+                            <span>💾</span>
+                            <span>Cached</span>
+                        </div>
+                    )}
+                    {fetchInfo.reconciliation_passed !== undefined && (
+                        <div className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold ${
+                            fetchInfo.reconciliation_passed
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                        }`}>
+                            <span>{fetchInfo.reconciliation_passed ? '✓' : '✗'}</span>
+                            <span>Reconciliation</span>
+                        </div>
+                    )}
+                </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div>
                     <p className="text-xs text-gray-600 dark:text-gray-400">Total Available</p>
                     <p className="text-xl font-bold text-gray-900 dark:text-white">{fetchInfo.total_available}</p>
@@ -405,12 +468,27 @@ export function FetchInfoPanel({ fetchInfo, loading = false }: FetchInfoPanelPro
                 </div>
                 <div>
                     <p className="text-xs text-gray-600 dark:text-gray-400">Failed</p>
-                    <p className="text-xl font-bold text-red-600 dark:text-red-400">{fetchInfo.failed_codes}</p>
+                    <p className={`text-xl font-bold ${fetchInfo.failed_codes > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                        {fetchInfo.failed_codes}
+                        {fetchInfo.failed_codes > 0 && (
+                            <span className="text-xs ml-1">({failureRate}%)</span>
+                        )}
+                    </p>
+                </div>
+                <div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Retry Recovered</p>
+                    <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                        {fetchInfo.retry_recovered ?? 0}
+                    </p>
+                </div>
+                <div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Rating</p>
+                    <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{performanceRating}</p>
                 </div>
             </div>
 
             <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800">
-                <div className="grid grid-cols-3 gap-4 text-xs">
+                <div className="grid grid-cols-3 md:grid-cols-5 gap-4 text-xs">
                     <div>
                         <p className="text-gray-600 dark:text-gray-400">Phase 1</p>
                         <p className="font-semibold text-gray-900 dark:text-white">{fetchInfo.phase1_time_seconds.toFixed(2)}s</p>
@@ -423,12 +501,25 @@ export function FetchInfoPanel({ fetchInfo, loading = false }: FetchInfoPanelPro
                         <p className="text-gray-600 dark:text-gray-400">Total</p>
                         <p className="font-semibold text-gray-900 dark:text-white">{fetchInfo.total_time_seconds.toFixed(2)}s</p>
                     </div>
+                    {(fetchInfo.phase1_dedup ?? 0) > 0 && (
+                        <div>
+                            <p className="text-gray-600 dark:text-gray-400">P1 Dedup</p>
+                            <p className="font-semibold text-orange-600 dark:text-orange-400">{fetchInfo.phase1_dedup}</p>
+                        </div>
+                    )}
+                    {(fetchInfo.phase2_dedup ?? 0) > 0 && (
+                        <div>
+                            <p className="text-gray-600 dark:text-gray-400">P2 Dedup</p>
+                            <p className="font-semibold text-orange-600 dark:text-orange-400">{fetchInfo.phase2_dedup}</p>
+                        </div>
+                    )}
                 </div>
             </div>
 
             <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800">
                 <p className="text-xs text-gray-600 dark:text-gray-400">
-                    <span className="font-semibold">Two-Phase API:</span> Phase 1 fetches order codes, Phase 2 enriches with revenue data
+                    <span className="font-semibold">Two-Phase API v2:</span> Date-chunked identifier collection + batched detail resolution with retry & deduplication
+                    {wasCached && <span className="text-green-600 dark:text-green-400"> • Data served from 15-min cache</span>}
                 </p>
             </div>
         </div>
