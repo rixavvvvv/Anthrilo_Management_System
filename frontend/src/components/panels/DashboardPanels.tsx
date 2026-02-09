@@ -24,10 +24,13 @@ export function LoadingPanel() {
                     <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
                 </div>
             </div>
-            <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                <p>🔄 Fetching ALL orders from Unicommerce API for complete accuracy...</p>
-                <p className="mt-1">⏱️ First load: 30 seconds - 5 minutes (depends on order volume)</p>
-                <p className="mt-1">⚡ Cached loads (within 15 min): Instant (&lt; 2 seconds)</p>
+            <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                <p className="flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                    <span>Fetching data from Unicommerce API...</span>
+                </p>
+                <p className="ml-4">⏱️ First load: 30-120 seconds (depends on data volume)</p>
+                <p className="ml-4">⚡ Cached loads: Instant (&lt; 2 seconds, 15 min cache)</p>
             </div>
         </div>
     );
@@ -445,11 +448,10 @@ export function FetchInfoPanel({ fetchInfo, loading = false }: FetchInfoPanelPro
                         </div>
                     )}
                     {fetchInfo.reconciliation_passed !== undefined && (
-                        <div className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold ${
-                            fetchInfo.reconciliation_passed
+                        <div className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold ${fetchInfo.reconciliation_passed
                                 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
                                 : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                        }`}>
+                            }`}>
                             <span>{fetchInfo.reconciliation_passed ? '✓' : '✗'}</span>
                             <span>Reconciliation</span>
                         </div>

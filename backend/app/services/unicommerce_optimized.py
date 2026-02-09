@@ -59,20 +59,27 @@ class UnicommerceServiceProduction:
     # =========================================================================
 
     # Phase 1: Search/Identifier Collection
-    API_PAGE_SIZE = 200          # Orders per page for search API (not used - no pagination support)
+    # Orders per page for search API (not used - no pagination support)
+    API_PAGE_SIZE = 200
     MAX_CONCURRENT_PAGES = 30    # Parallel page fetches (not used)
-    DATE_CHUNK_DAYS = 1          # Chunk large date ranges into 1-day windows (OPTIMIZED: was 3)
+    # Chunk large date ranges into 1-day windows (OPTIMIZED: was 3)
+    DATE_CHUNK_DAYS = 1
 
     # Phase 2: Detail Resolution (PERFORMANCE CRITICAL)
-    DETAIL_BATCH_SIZE = 100      # Orders per batch for saleorder/get (OPTIMIZED: was 50)
-    MAX_CONCURRENT_ORDER_GETS = 150  # Parallel order detail fetches (OPTIMIZED: was 80)
+    # Orders per batch for saleorder/get (OPTIMIZED: was 50)
+    DETAIL_BATCH_SIZE = 100
+    # Parallel order detail fetches (OPTIMIZED: was 80)
+    MAX_CONCURRENT_ORDER_GETS = 150
 
     # Retry configuration
     MAX_RETRIES = 2              # Reduced from 3 for faster failure
-    RETRY_DELAY = 0.3            # Initial delay in seconds (OPTIMIZED: was 0.5)
+    # Initial delay in seconds (OPTIMIZED: was 0.5)
+    RETRY_DELAY = 0.3
     RETRY_BACKOFF = 1.5          # Multiplier per retry (OPTIMIZED: was 2.0)
-    RETRY_BATCH_SIZE = 50        # Smaller batches for retries (OPTIMIZED: was 30)
-    RETRY_BATCH_DELAY = 0.3      # Delay between retry batches (OPTIMIZED: was 0.5)
+    # Smaller batches for retries (OPTIMIZED: was 30)
+    RETRY_BATCH_SIZE = 50
+    # Delay between retry batches (OPTIMIZED: was 0.5)
+    RETRY_BATCH_DELAY = 0.3
 
     # Cache
     CACHE_TTL_SECONDS = 900      # 15 minutes
@@ -214,7 +221,7 @@ class UnicommerceServiceProduction:
         """
         Fetch a single page from saleOrder/search.
         Returns: (success, orders, totalRecords, error)
-        
+
         NOTE: Unicommerce API does NOT support pagination parameters.
         Returns all orders in the date range (max ~200-300 per day).
         """
@@ -256,10 +263,10 @@ class UnicommerceServiceProduction:
     ) -> Tuple[List[str], int, List[str]]:
         """
         Fetch ALL order codes for a single date chunk.
-        
+
         NOTE: Unicommerce API does NOT support pagination - it returns ALL orders
         for the requested date range in a single response (typically 200-300 orders/day max).
-        
+
         Returns: (order_codes, totalRecords, errors)
         """
         all_codes: List[str] = []
@@ -411,7 +418,8 @@ class UnicommerceServiceProduction:
 
                     if response.status_code == 429:
                         # Rate limited - backoff and retry
-                        delay = self.RETRY_DELAY * (self.RETRY_BACKOFF ** attempt)
+                        delay = self.RETRY_DELAY * \
+                            (self.RETRY_BACKOFF ** attempt)
                         logger.warning(
                             f"Rate limited for {order_code}, "
                             f"retry {attempt+1} in {delay:.1f}s"
@@ -430,14 +438,16 @@ class UnicommerceServiceProduction:
                     else:
                         error_msg = data.get("message", "Unknown API error")
                         if attempt < self.MAX_RETRIES:
-                            delay = self.RETRY_DELAY * (self.RETRY_BACKOFF ** attempt)
+                            delay = self.RETRY_DELAY * \
+                                (self.RETRY_BACKOFF ** attempt)
                             await asyncio.sleep(delay)
                             continue
                         return False, None, error_msg
 
                 except httpx.TimeoutException:
                     if attempt < self.MAX_RETRIES:
-                        delay = self.RETRY_DELAY * (self.RETRY_BACKOFF ** attempt)
+                        delay = self.RETRY_DELAY * \
+                            (self.RETRY_BACKOFF ** attempt)
                         await asyncio.sleep(delay)
                         continue
                     return False, None, "Timeout after all retries"
@@ -445,14 +455,16 @@ class UnicommerceServiceProduction:
                 except httpx.HTTPStatusError as e:
                     status = e.response.status_code
                     if status in (429, 500, 502, 503, 504) and attempt < self.MAX_RETRIES:
-                        delay = self.RETRY_DELAY * (self.RETRY_BACKOFF ** attempt)
+                        delay = self.RETRY_DELAY * \
+                            (self.RETRY_BACKOFF ** attempt)
                         await asyncio.sleep(delay)
                         continue
                     return False, None, f"HTTP {status}"
 
                 except Exception as e:
                     if attempt < self.MAX_RETRIES:
-                        delay = self.RETRY_DELAY * (self.RETRY_BACKOFF ** attempt)
+                        delay = self.RETRY_DELAY * \
+                            (self.RETRY_BACKOFF ** attempt)
                         await asyncio.sleep(delay)
                         continue
                     return False, None, str(e)
@@ -506,7 +518,8 @@ class UnicommerceServiceProduction:
             headers = await self._get_headers()
 
             for batch_start in range(0, len(order_codes), effective_batch_size):
-                batch = order_codes[batch_start:batch_start + effective_batch_size]
+                batch = order_codes[batch_start:batch_start +
+                                    effective_batch_size]
 
                 tasks = [
                     self._fetch_order_detail(client, headers, code)
@@ -544,10 +557,12 @@ class UnicommerceServiceProduction:
                 retry_headers = await self._get_headers()
 
                 for batch_start in range(0, len(failed_codes), self.RETRY_BATCH_SIZE):
-                    batch = failed_codes[batch_start:batch_start + self.RETRY_BATCH_SIZE]
+                    batch = failed_codes[batch_start:batch_start +
+                                         self.RETRY_BATCH_SIZE]
 
                     tasks = [
-                        self._fetch_order_detail(retry_client, retry_headers, code)
+                        self._fetch_order_detail(
+                            retry_client, retry_headers, code)
                         for code in batch
                     ]
 
@@ -713,7 +728,8 @@ class UnicommerceServiceProduction:
         logger.info(f"  Phase 1 codes: {phase1_count}")
         logger.info(f"  Phase 2 resolved: {phase2_count}")
         logger.info(f"  Failed: {failed_count}")
-        logger.info(f"  Retry recovered: {phase2_result.get('retry_recovered', 0)}")
+        logger.info(
+            f"  Retry recovered: {phase2_result.get('retry_recovered', 0)}")
         logger.info(f"  Total time: {total_elapsed:.2f}s")
         logger.info("=" * 60)
 
@@ -898,28 +914,30 @@ class UnicommerceServiceProduction:
     ) -> Dict[str, Any]:
         """
         Get orders with CLIENT-SIDE pagination (Unicommerce doesn't support server-side pagination).
-        
+
         Strategy:
         1. Fetch ALL orders for the date range (cached for 15 minutes)
         2. Slice results in memory for pagination
         3. Much faster: subsequent pages are instant, no API calls
         """
-        logger.info(f"Fetching page {page} (size {page_size}) - using cached full dataset")
 
         # Build a cache key for this date range + details
         cache_key = f"orders_detailed_{from_date.date()}_{to_date.date()}"
-        
-        # Check cache first
+
+        # Check cache first - FAST PATH
         cached_orders = self._get_from_cache(cache_key)
-        
+
         if cached_orders is None:
             # Fetch ALL orders with details (one-time cost, then cached)
-            logger.info(f"Cache miss - fetching all orders for {from_date.date()} to {to_date.date()}")
-            
+            logger.info(
+                f"📥 Cache miss - fetching all orders for {from_date.date()} to {to_date.date()}")
+            logger.info(
+                f"⏱️  First load: 30s - 5min (depends on order volume)")
+
             fetch_result = await self.fetch_all_orders_with_revenue(
                 from_date, to_date, max_orders=100000
             )
-            
+
             if not fetch_result.get("successful", False):
                 return {
                     "success": False,
@@ -927,9 +945,9 @@ class UnicommerceServiceProduction:
                     "orders": [],
                     "pagination": {},
                 }
-            
+
             all_orders = fetch_result.get("orders", [])
-            
+
             # Process all orders
             processed_all = []
             for order in all_orders:
@@ -944,22 +962,25 @@ class UnicommerceServiceProduction:
                     "item_count": calc["item_count"],
                     "include_in_revenue": calc["include_in_revenue"],
                 })
-            
+
             # Cache the processed orders
             self._set_cache(cache_key, processed_all)
             cached_orders = processed_all
-            logger.info(f"Cached {len(cached_orders)} orders for future pagination")
+            logger.info(
+                f"✅ Cached {len(cached_orders)} orders for instant future pagination")
         else:
-            logger.info(f"Cache hit - using {len(cached_orders)} cached orders")
-        
+            logger.info(
+                f"⚡ CACHED: Using {len(cached_orders)} cached orders (instant load < 2s)")
+
         # Client-side pagination
         total_orders = len(cached_orders)
-        total_pages = (total_orders + page_size - 1) // page_size if total_orders > 0 else 1
-        
+        total_pages = (total_orders + page_size -
+                       1) // page_size if total_orders > 0 else 1
+
         start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size
         page_orders = cached_orders[start_idx:end_idx]
-        
+
         page_revenue = sum(order["net_revenue"] for order in page_orders)
 
         return {
@@ -1000,12 +1021,13 @@ class UnicommerceServiceProduction:
         Fetches ALL orders (no limits) for accurate business data.
         Uses 15-min cache to avoid repeated fetches.
         """
-        # Check cache first for standard periods
+        # Check cache first for standard periods - FAST PATH
         if period_name != "custom":
             cache_key = self._get_cache_key(period_name)
             cached_data = self._get_from_cache(cache_key)
             if cached_data is not None:
-                logger.info(f"Returning cached data for {period_name}")
+                logger.info(
+                    f"✅ CACHED: Returning {period_name} data instantly (no API calls)")
                 return cached_data
 
         logger.info("=" * 70)

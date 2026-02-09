@@ -50,11 +50,11 @@ type Period = 'today' | 'yesterday' | 'last7' | 'last30';
 export default function PanelsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('today');
 
-  // Fetch data for all periods
-  const todayData = useTodaySales();
-  const yesterdayData = useYesterdaySales();
-  const last7Data = useLast7DaysSales();
-  const last30Data = useLast30DaysSales();
+  // Fetch data ONLY for the selected period (PERFORMANCE FIX)
+  const todayData = useTodaySales(selectedPeriod === 'today');
+  const yesterdayData = useYesterdaySales(selectedPeriod === 'yesterday');
+  const last7Data = useLast7DaysSales(selectedPeriod === 'last7');
+  const last30Data = useLast30DaysSales(selectedPeriod === 'last30');
 
   // Select current period data
   const currentData = {
