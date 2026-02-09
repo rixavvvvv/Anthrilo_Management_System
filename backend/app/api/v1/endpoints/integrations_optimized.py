@@ -90,27 +90,6 @@ async def get_last_7_days():
         return {"success": False, "error": str(e), "message": "Failed to fetch last 7 days sales"}
 
 
-@router.get("/unicommerce/last-30-days")
-async def get_last_30_days():
-    """Get last 30 complete days sales (not including today)."""
-    try:
-        logger.info("Fetching LAST 30 DAYS sales")
-        service = get_unicommerce_service()
-        result = await service.get_last_30_days_sales()
-
-        if result.get("success"):
-            summary = result.get("summary", {})
-            logger.info(
-                f"30 DAYS: {summary.get('total_orders', 0)} orders, "
-                f"INR {summary.get('total_revenue', 0):,.2f}"
-            )
-        return result
-
-    except Exception as e:
-        logger.error(f"Error in get_last_30_days: {e}", exc_info=True)
-        return {"success": False, "error": str(e), "message": "Failed to fetch last 30 days sales"}
-
-
 # Backward compatibility alias
 @router.get("/unicommerce/last-24-hours")
 async def get_last_24_hours():
@@ -164,20 +143,6 @@ async def get_last_7_days_orders_paginated(
         return {"success": False, "error": str(e)}
 
 
-@router.get("/unicommerce/orders/last-30-days")
-async def get_last_30_days_orders_paginated(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(12, ge=1, le=100)
-):
-    """Get last 30 days orders with pagination."""
-    try:
-        service = get_unicommerce_service()
-        return await service.get_last_30_days_orders_paginated(page, page_size)
-    except Exception as e:
-        logger.error(f"Error: {e}", exc_info=True)
-        return {"success": False, "error": str(e)}
-
-
 @router.get("/unicommerce/orders/custom")
 async def get_custom_orders_paginated(
     from_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
@@ -213,7 +178,7 @@ async def get_sales_report(
     from_date: str = Query(None, description="Start date (YYYY-MM-DD)"),
     to_date: str = Query(None, description="End date (YYYY-MM-DD)"),
     period: str = Query(
-        "today", description="Preset: today, yesterday, last_7_days, last_30_days, custom")
+        "today", description="Preset: today, yesterday, last_7_days, custom")
 ):
     """Get comprehensive sales report."""
     try:
@@ -225,8 +190,6 @@ async def get_sales_report(
             result = await service.get_yesterday_sales()
         elif period == "last_7_days":
             result = await service.get_last_7_days_sales()
-        elif period == "last_30_days":
-            result = await service.get_last_30_days_sales()
         elif period == "custom" and from_date and to_date:
             from_dt = datetime.strptime(from_date, "%Y-%m-%d").replace(
                 hour=0, minute=0, second=0, tzinfo=timezone.utc
@@ -247,6 +210,103 @@ async def get_sales_report(
         return {"success": False, "error": str(e)}
 
 
+@router.get("/unicommerce/daily-sales-report")
+async def get_daily_sales_report(
+    date: str = Query(..., description="Date for report (YYYY-MM-DD)")
+):
+    """
+    Get Daily Sales Report with channel-wise breakdown.
+
+    Returns:
+    - Channel Name (unique)
+    - Quantity of Items (total items per channel)
+    - Selling Price (sum of sellingPrice per channel)
+
+    Uses existing saleorder/get data if available, otherwise fetches fresh data.
+    """
+    try:
+        service = get_unicommerce_service()
+
+        # Parse the date
+        report_date = datetime.strptime(date, "%Y-%m-%d").date()
+        today = datetime.now(timezone.utc).date()
+        yesterday = today - timedelta(days=1)
+
+        # Check if we can reuse existing cached data
+        result = None
+        if report_date == today:
+            result = await service.get_today_sales()
+        elif report_date == yesterday:
+            result = await service.get_yesterday_sales()
+        else:
+            # Fetch custom date range (full day)
+            from_dt = datetime.strptime(date, "%Y-%m-%d").replace(
+                hour=0, minute=0, second=0, tzinfo=timezone.utc
+            )
+            to_dt = datetime.strptime(date, "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59, tzinfo=timezone.utc
+            )
+            result = await service.get_custom_range_sales(from_dt, to_dt)
+
+        if not result.get("success"):
+            return result
+
+        # Extract channel breakdown data
+        channel_breakdown = result.get(
+            "summary", {}).get("channel_breakdown", {})
+
+        # Transform to report format
+        # Group by channel with quantity and selling price
+        report_data = []
+        for channel_name, channel_data in channel_breakdown.items():
+            report_data.append({
+                "channel_name": channel_name,
+                # Total items in channel
+                "quantity": channel_data.get("items", 0),
+                # Sum of sellingPrice
+                "selling_price": channel_data.get("revenue", 0),
+                "orders": channel_data.get("orders", 0),  # Number of orders
+            })
+
+        # Sort by revenue (highest first)
+        report_data.sort(key=lambda x: x["selling_price"], reverse=True)
+
+        # Calculate totals
+        total_quantity = sum(item["quantity"] for item in report_data)
+        total_revenue = sum(item["selling_price"] for item in report_data)
+        total_orders = result.get("summary", {}).get(
+            "valid_orders", 0)  # Only valid orders
+        total_all_orders = result.get("summary", {}).get(
+            "total_orders", 0)  # All orders
+        excluded_items = result.get("summary", {}).get(
+            "total_items", 0) - total_quantity
+
+        return {
+            "success": True,
+            "date": date,
+            "report": report_data,
+            "totals": {
+                "total_channels": len(report_data),
+                "total_quantity": total_quantity,  # Items from revenue-generating orders only
+                "total_revenue": round(total_revenue, 2),
+                "total_orders": total_orders,  # Valid orders only
+                "excluded_items": excluded_items,  # Items from cancelled/returned orders
+                "all_orders": total_all_orders,  # Including excluded orders
+            },
+            "currency": "INR",
+            "data_source": "saleorder/get API",
+            "cached": result.get("fetch_info", {}).get("cached", False),
+            "note": f"Report shows {total_quantity} items from revenue-generating orders. {excluded_items} items excluded from cancelled/returned orders.",
+        }
+
+    except ValueError as e:
+        return {"success": False, "error": f"Invalid date format. Use YYYY-MM-DD: {e}"}
+    except Exception as e:
+        logger.error(
+            f"Error generating daily sales report: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
 # =============================================================================
 # CHANNEL BREAKDOWN ENDPOINT
 # =============================================================================
@@ -254,7 +314,7 @@ async def get_sales_report(
 @router.get("/unicommerce/channel-revenue")
 async def get_channel_revenue(
     period: str = Query(
-        "last_30_days", description="Period for channel breakdown")
+        "last_7_days", description="Period for channel breakdown")
 ):
     """Get revenue breakdown by channel/marketplace."""
     try:
@@ -264,10 +324,8 @@ async def get_channel_revenue(
             result = await service.get_today_sales()
         elif period == "yesterday":
             result = await service.get_yesterday_sales()
-        elif period == "last_7_days":
-            result = await service.get_last_7_days_sales()
         else:
-            result = await service.get_last_30_days_sales()
+            result = await service.get_last_7_days_sales()
 
         if not result.get("success"):
             return result
@@ -328,9 +386,9 @@ async def trigger_sync(
     Trigger background sync for a period.
     Orders are fetched from Unicommerce and persisted to DB.
 
-    Valid periods: today, yesterday, last_7_days, last_30_days
+    Valid periods: today, yesterday, last_7_days
     """
-    valid_periods = {"today", "yesterday", "last_7_days", "last_30_days"}
+    valid_periods = {"today", "yesterday", "last_7_days"}
     if period not in valid_periods:
         return {
             "success": False,
@@ -373,7 +431,7 @@ async def trigger_sync_all(background_tasks: BackgroundTasks):
         sync_service = get_sync_service()
 
         async def _run_all_syncs():
-            for period in ["today", "yesterday", "last_7_days", "last_30_days"]:
+            for period in ["today", "yesterday", "last_7_days"]:
                 try:
                     await sync_service.sync_period(period)
                 except Exception as e:
@@ -554,7 +612,7 @@ async def check_cache_status():
     try:
         service = get_unicommerce_service()
 
-        periods = ["today", "yesterday", "last_7_days", "last_30_days"]
+        periods = ["today", "yesterday", "last_7_days"]
         cache_status = {}
 
         for period in periods:

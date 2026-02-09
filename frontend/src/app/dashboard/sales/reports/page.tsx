@@ -6,10 +6,16 @@ import Link from 'next/link';
 export default function SalesReportsPage() {
   const salesReports = [
     {
+      title: 'Daily Sales Report',
+      description: 'Channel-wise sales breakdown by date with revenue analysis',
+      href: '/dashboard/sales/reports/daily',
+      icon: '📊',
+    },
+    {
       title: 'Sales Analytics',
       description: 'Comprehensive sales performance analysis',
       href: '/dashboard/reports/sales',
-      icon: '📊',
+      icon: '📈',
     },
     {
       title: 'Bundle SKU Sales',
@@ -37,7 +43,7 @@ export default function SalesReportsPage() {
         title="Sales Reports"
         description="Access comprehensive sales analytics and reports"
       />
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {salesReports.map((report) => (
           <Link

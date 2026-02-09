@@ -64,18 +64,6 @@ export default function SalesTransactionsPage() {
     retry: 2,
   });
 
-  const { data: unicommerce30Days, isLoading: loading30Days } = useQuery({
-    queryKey: ['unicommerce-last-30-days'], // Same key as dashboard
-    queryFn: async () => {
-      const response = await unicommerceApi.getLast30Days();
-      return response.data;
-    },
-    refetchInterval: 15 * 60 * 1000, // Refetch every 15 minutes
-    staleTime: 10 * 60 * 1000, // Reuse cached data for 10 minutes
-    gcTime: 20 * 60 * 1000, // Keep in cache for 20 minutes
-    retry: 2,
-  });
-
   // Filter sales based on criteria - handle both local sales and Unicommerce orders
   const filteredSales = useMemo(() => {
     // Check if a channel is selected (not a numeric panel ID)
@@ -88,7 +76,6 @@ export default function SalesTransactionsPage() {
       // Combine orders from all Unicommerce data sources
       if (unicommerceSales?.orders) allOrders = [...allOrders, ...unicommerceSales.orders];
       if (unicommerce7Days?.orders) allOrders = [...allOrders, ...unicommerce7Days.orders];
-      if (unicommerce30Days?.orders) allOrders = [...allOrders, ...unicommerce30Days.orders];
 
       // Remove duplicates by order code
       const uniqueOrders = allOrders.reduce((acc, order) => {
@@ -181,7 +168,7 @@ export default function SalesTransactionsPage() {
 
       return true;
     });
-  }, [sales, filters, searchTerm, panels, unicommerceSales, unicommerce7Days, unicommerce30Days]);
+  }, [sales, filters, searchTerm, panels, unicommerceSales, unicommerce7Days]);
 
   // Calculate statistics
   const today = new Date().toDateString();
@@ -242,13 +229,8 @@ export default function SalesTransactionsPage() {
       if (order.channel) channels.add(order.channel);
     });
 
-    // Add from 30 days data
-    unicommerce30Days?.orders?.forEach((order: any) => {
-      if (order.channel) channels.add(order.channel);
-    });
-
     return Array.from(channels).sort();
-  }, [unicommerceSales, unicommerce7Days, unicommerce30Days]);
+  }, [unicommerceSales, unicommerce7Days]);
 
   // Data fetches automatically when mandatory filters are filled
 
@@ -294,33 +276,6 @@ export default function SalesTransactionsPage() {
           </p>
           <p className="text-xs font-semibold text-green-700 dark:text-green-300 mt-2">
             Revenue: {loading7Days ? '...' : `₹${(unicommerce7Days?.summary?.total_revenue || 0).toLocaleString('en-IN')}`}
-          </p>
-        </div>
-        <div className="card bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-l-4 border-purple-500">
-          <p className="text-sm font-medium text-purple-600 dark:text-purple-400 mb-1">This Month</p>
-          <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-            {loading30Days ? '...' : (unicommerce30Days?.summary?.total_orders || 0)}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              Real-time Unicommerce (Last 30 days)
-            </span>
-          </p>
-          <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mt-2">
-            Revenue: {loading30Days ? '...' : `₹${(unicommerce30Days?.summary?.total_revenue || 0).toLocaleString('en-IN')}`}
-          </p>
-        </div>
-        <div className="card bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 border-l-4 border-emerald-500">
-          <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 mb-1">Total Revenue</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {loading30Days ? '...' : `₹${(unicommerce30Days?.summary?.total_revenue || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              Real-time Unicommerce (Last 30 days)
-            </span>
           </p>
         </div>
       </div>

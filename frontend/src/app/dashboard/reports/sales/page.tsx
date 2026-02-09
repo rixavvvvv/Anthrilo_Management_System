@@ -10,12 +10,12 @@ import { useState, useMemo } from 'react';
  * Features:
  * - Revenue calculated using sellingPrice ONLY
  * - Page-wise pagination (12 orders per page)
- * - Time filters: Today, Yesterday, Last 7 Days, Last 30 Days, Custom
+ * - Time filters: Today, Yesterday, Last 7 Days, Custom
  * - Revenue by channel
  * - Validation logging
  */
 
-type TimeFilter = 'today' | 'yesterday' | 'last_7_days' | 'last_30_days' | 'custom';
+type TimeFilter = 'today' | 'yesterday' | 'last_7_days' | 'custom';
 
 // Format currency
 const formatCurrency = (value: number | undefined | null): string => {
@@ -89,8 +89,8 @@ const Pagination = ({
                             onClick={() => onPageChange(page)}
                             disabled={disabled}
                             className={`w-10 h-10 rounded-lg font-medium transition-colors ${page === currentPage
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                                 }`}
                         >
                             {page}
@@ -166,7 +166,6 @@ export default function SalesReportsPage() {
             case 'today': return 'today';
             case 'yesterday': return 'yesterday';
             case 'last_7_days': return 'last_7_days';
-            case 'last_30_days': return 'last_30_days';
             case 'custom': return 'custom';
         }
     }, [timeFilter]);
@@ -202,9 +201,6 @@ export default function SalesReportsPage() {
                     break;
                 case 'last_7_days':
                     response = await unicommerceApi.getLast7DaysOrders(currentPage, 12);
-                    break;
-                case 'last_30_days':
-                    response = await unicommerceApi.getLast30DaysOrders(currentPage, 12);
                     break;
                 case 'custom':
                     response = await unicommerceApi.getCustomOrders({
@@ -278,15 +274,14 @@ export default function SalesReportsPage() {
                         { id: 'today', label: '📅 Today' },
                         { id: 'yesterday', label: '📆 Yesterday' },
                         { id: 'last_7_days', label: '📊 Last 7 Days' },
-                        { id: 'last_30_days', label: '🗓️ Last 30 Days' },
                         { id: 'custom', label: '⚙️ Custom' },
                     ] as const).map((filter) => (
                         <button
                             key={filter.id}
                             onClick={() => handleFilterChange(filter.id)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${timeFilter === filter.id
-                                    ? 'bg-primary-600 text-white shadow-lg'
-                                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                ? 'bg-primary-600 text-white shadow-lg'
+                                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                                 }`}
                         >
                             {filter.label}
