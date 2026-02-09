@@ -287,7 +287,8 @@ async def get_channel_revenue(
                 "orders": data.get("orders", 0),
                 "revenue": data.get("revenue", 0),
                 "percentage": round(
-                    (data.get("revenue", 0) / total_revenue * 100) if total_revenue > 0 else 0,
+                    (data.get("revenue", 0) / total_revenue *
+                     100) if total_revenue > 0 else 0,
                     2
                 )
             })
@@ -541,4 +542,52 @@ async def get_cache_stats():
         }
     except Exception as e:
         logger.error(f"Error getting cache stats: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/unicommerce/cache-check")
+async def check_cache_status():
+    """
+    Quickly check cache status for all standard periods without fetching data.
+    Returns which periods are cached and ready for instant load.
+    """
+    try:
+        service = get_unicommerce_service()
+
+        periods = ["today", "yesterday", "last_7_days", "last_30_days"]
+        cache_status = {}
+
+        for period in periods:
+            cache_key = service._get_cache_key(period)
+            if cache_key in service._cache:
+                timestamp, _ = service._cache[cache_key]
+                age_seconds = (datetime.now() - timestamp).total_seconds()
+                is_valid = age_seconds < service.CACHE_TTL_SECONDS
+
+                cache_status[period] = {
+                    "cached": True,
+                    "valid": is_valid,
+                    "age_seconds": round(age_seconds, 2),
+                    "remaining_seconds": round(max(0, service.CACHE_TTL_SECONDS - age_seconds), 2),
+                    "cached_at": timestamp.isoformat()
+                }
+            else:
+                cache_status[period] = {
+                    "cached": False,
+                    "valid": False,
+                    "age_seconds": None,
+                    "remaining_seconds": 0
+                }
+
+        all_cached = all(status["valid"] for status in cache_status.values())
+
+        return {
+            "success": True,
+            "all_periods_cached": all_cached,
+            "cache_ttl_seconds": service.CACHE_TTL_SECONDS,
+            "periods": cache_status,
+            "message": "All data cached and ready for instant load" if all_cached else "Some periods need fetching"
+        }
+    except Exception as e:
+        logger.error(f"Error checking cache: {e}", exc_info=True)
         return {"success": False, "error": str(e)}

@@ -24,11 +24,11 @@
 import { useState } from 'react';
 import { PageHeader } from '@/components/ui/Common';
 import {
-  useUnicommerceToday,
-  useUnicommerceYesterday,
-  useUnicommerceLast7Days,
-  useUnicommerceLast30Days,
-} from '@/lib/hooks/useUnicommerceSales';
+  useTodaySales,
+  useYesterdaySales,
+  useLast7DaysSales,
+  useLast30DaysSales,
+} from '@/lib/hooks/useUnicommerce';
 import {
   KPICard,
   RevenuePanel,
@@ -50,11 +50,11 @@ type Period = 'today' | 'yesterday' | 'last7' | 'last30';
 export default function PanelsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('today');
 
-  // Fetch data for all periods
-  const todayData = useUnicommerceToday();
-  const yesterdayData = useUnicommerceYesterday();
-  const last7Data = useUnicommerceLast7Days();
-  const last30Data = useUnicommerceLast30Days();
+  // Fetch data ONLY for the selected period (PERFORMANCE FIX)
+  const todayData = useTodaySales(selectedPeriod === 'today');
+  const yesterdayData = useYesterdaySales(selectedPeriod === 'yesterday');
+  const last7Data = useLast7DaysSales(selectedPeriod === 'last7');
+  const last30Data = useLast30DaysSales(selectedPeriod === 'last30');
 
   // Select current period data
   const currentData = {
