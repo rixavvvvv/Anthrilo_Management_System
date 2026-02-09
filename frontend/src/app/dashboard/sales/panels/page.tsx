@@ -27,7 +27,6 @@ import {
   useTodaySales,
   useYesterdaySales,
   useLast7DaysSales,
-  useLast30DaysSales,
 } from '@/lib/hooks/useUnicommerce';
 import {
   KPICard,
@@ -41,11 +40,9 @@ import {
 import {
   BarChart,
   DonutChart,
-  ComparisonCard,
-  MetricCard,
 } from '@/components/panels/Charts';
 
-type Period = 'today' | 'yesterday' | 'last7' | 'last30';
+type Period = 'today' | 'yesterday' | 'last7';
 
 export default function PanelsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('today');
@@ -54,21 +51,16 @@ export default function PanelsPage() {
   const todayData = useTodaySales(selectedPeriod === 'today');
   const yesterdayData = useYesterdaySales(selectedPeriod === 'yesterday');
   const last7Data = useLast7DaysSales(selectedPeriod === 'last7');
-  const last30Data = useLast30DaysSales(selectedPeriod === 'last30');
-
-  // Select current period data
   const currentData = {
     today: todayData,
     yesterday: yesterdayData,
     last7: last7Data,
-    last30: last30Data,
   }[selectedPeriod];
 
   const periodLabels = {
     today: 'Today',
     yesterday: 'Yesterday',
     last7: 'Last 7 Days',
-    last30: 'Last 30 Days',
   };
 
   return (
@@ -149,69 +141,18 @@ export default function PanelsPage() {
       </div>
 
       {/* Revenue Deep Dive - Phase 2 Only */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          {currentData.loading ? (
-            <LoadingPanel />
-          ) : (
-            <RevenuePanel
-              title={`${periodLabels[selectedPeriod]} Revenue Breakdown`}
-              revenue={currentData.data?.summary.total_revenue || 0}
-              orders={currentData.data?.summary.valid_orders || 0}
-              averageOrderValue={currentData.data?.summary.avg_order_value || 0}
-              loading={currentData.loading}
-            />
-          )}
-        </div>
-
-        <div>
-          {currentData.loading ? (
-            <LoadingPanel />
-          ) : (
-            <div className="card">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Revenue Components
-              </h3>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center pb-2 border-b border-gray-200 dark:border-gray-700">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Gross Revenue</span>
-                  <span className="font-semibold text-gray-900 dark:text-white">
-                    ₹{(currentData.data?.summary.total_revenue || 0).toLocaleString('en-IN')}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pb-2 border-b border-gray-200 dark:border-gray-700">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Total Discounts</span>
-                  <span className="font-semibold text-orange-600 dark:text-orange-400">
-                    -₹{(currentData.data?.summary.total_discount || 0).toLocaleString('en-IN')}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pb-2 border-b border-gray-200 dark:border-gray-700">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Total Tax</span>
-                  <span className="font-semibold text-gray-900 dark:text-white">
-                    ₹{(currentData.data?.summary.total_tax || 0).toLocaleString('en-IN')}
-                  </span>
-                </div>
-                <div className="pt-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Net Revenue</span>
-                    <span className="text-xl font-bold text-green-600 dark:text-green-400">
-                      ₹{(currentData.data?.summary.total_revenue || 0).toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Currency: {currentData.data?.summary.currency || 'INR'}
-                </p>
-                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                  Method: {currentData.data?.summary.calculation_method || 'sellingPrice_only'}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+      <div className="grid grid-cols-1 gap-6">
+        {currentData.loading ? (
+          <LoadingPanel />
+        ) : (
+          <RevenuePanel
+            title={`${periodLabels[selectedPeriod]} Revenue Breakdown`}
+            revenue={currentData.data?.summary.total_revenue || 0}
+            orders={currentData.data?.summary.valid_orders || 0}
+            averageOrderValue={currentData.data?.summary.avg_order_value || 0}
+            loading={currentData.loading}
+          />
+        )}
       </div>
 
       {/* Channel Revenue Visualization - Bar Chart */}

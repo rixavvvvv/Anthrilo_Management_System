@@ -42,17 +42,6 @@ export default function DashboardPage() {
     gcTime: 15 * 60 * 1000,
   });
 
-  const { data: last30Days, isLoading: loading30d, dataUpdatedAt: updated30d } = useQuery({
-    queryKey: ['unicommerce-last-30-days'],
-    queryFn: async () => {
-      const response = await unicommerceApi.getLast30Days();
-      return response.data;
-    },
-    refetchInterval: 15 * 60 * 1000,
-    staleTime: 10 * 60 * 1000,
-    gcTime: 20 * 60 * 1000,
-  });
-
   // Legacy data for additional stats
   const { data: garments, isLoading: garmentsLoading } = useQuery({
     queryKey: ['garments'],
@@ -91,15 +80,16 @@ export default function DashboardPage() {
   // Real-time Unicommerce stats
   const todayOrders = todayData?.summary?.total_orders || 0;
   const todayRevenue = todayData?.summary?.total_revenue || 0;
+  const todayItems = todayData?.summary?.total_items || 0;  // NEW
   const yesterdayOrders = yesterdayData?.summary?.total_orders || 0;
   const yesterdayRevenue = yesterdayData?.summary?.total_revenue || 0;
+  const yesterdayItems = yesterdayData?.summary?.total_items || 0;  // NEW
   const last7DaysOrders = last7Days?.summary?.total_orders || 0;
   const last7DaysRevenue = last7Days?.summary?.total_revenue || 0;
-  const last30DaysOrders = last30Days?.summary?.total_orders || 0;
-  const last30DaysRevenue = last30Days?.summary?.total_revenue || 0;
+  const last7DaysItems = last7Days?.summary?.total_items || 0;  // NEW
 
-  const isLoading = loadingToday || loading7d || loading30d || garmentsLoading || inventoryLoading || panelsLoading;
-  const isUnicommerceLoading = loadingToday || loadingYesterday || loading7d || loading30d;
+  const isLoading = loadingToday || loading7d || garmentsLoading || inventoryLoading || panelsLoading;
+  const isUnicommerceLoading = loadingToday || loadingYesterday || loading7d;
 
   // Helper function to format time ago
   const timeAgo = (timestamp: number) => {
@@ -184,8 +174,8 @@ export default function DashboardPage() {
               <button
                 onClick={() => setRefreshInterval('1min')}
                 className={`px-3 py-1 text-xs rounded transition-all ${refreshInterval === '1min'
-                    ? 'bg-white text-primary-600 font-semibold shadow-lg'
-                    : 'text-white/80 hover:bg-white/20'
+                  ? 'bg-white text-primary-600 font-semibold shadow-lg'
+                  : 'text-white/80 hover:bg-white/20'
                   }`}
               >
                 1 min
@@ -193,8 +183,8 @@ export default function DashboardPage() {
               <button
                 onClick={() => setRefreshInterval('5min')}
                 className={`px-3 py-1 text-xs rounded transition-all ${refreshInterval === '5min'
-                    ? 'bg-white text-primary-600 font-semibold shadow-lg'
-                    : 'text-white/80 hover:bg-white/20'
+                  ? 'bg-white text-primary-600 font-semibold shadow-lg'
+                  : 'text-white/80 hover:bg-white/20'
                   }`}
               >
                 5 min
@@ -202,8 +192,8 @@ export default function DashboardPage() {
               <button
                 onClick={() => setRefreshInterval('10min')}
                 className={`px-3 py-1 text-xs rounded transition-all ${refreshInterval === '10min'
-                    ? 'bg-white text-primary-600 font-semibold shadow-lg'
-                    : 'text-white/80 hover:bg-white/20'
+                  ? 'bg-white text-primary-600 font-semibold shadow-lg'
+                  : 'text-white/80 hover:bg-white/20'
                   }`}
               >
                 10 min
@@ -262,6 +252,12 @@ export default function DashboardPage() {
                 </p>
               </div>
               <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Items</p>
+                <p className="text-2xl font-semibold text-gray-700 dark:text-gray-300">
+                  {loadingToday ? '...' : todayItems.toLocaleString()}
+                </p>
+              </div>
+              <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Revenue</p>
                 <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                   {loadingToday ? '...' : `₹${todayRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
@@ -294,6 +290,12 @@ export default function DashboardPage() {
                 <p className="text-sm text-gray-600 dark:text-gray-400">Orders</p>
                 <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
                   {loadingYesterday ? '...' : yesterdayOrders.toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Items</p>
+                <p className="text-2xl font-semibold text-gray-700 dark:text-gray-300">
+                  {loadingYesterday ? '...' : yesterdayItems.toLocaleString()}
                 </p>
               </div>
               <div>
@@ -332,6 +334,12 @@ export default function DashboardPage() {
                 </p>
               </div>
               <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Items</p>
+                <p className="text-2xl font-semibold text-gray-700 dark:text-gray-300">
+                  {loading7d ? '...' : last7DaysItems.toLocaleString()}
+                </p>
+              </div>
+              <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Revenue</p>
                 <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                   {loading7d ? '...' : `₹${last7DaysRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
@@ -340,41 +348,6 @@ export default function DashboardPage() {
               {last7Days?.fetch_info?.fetch_time_seconds && (
                 <div className="text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
                   Fetch: {last7Days.fetch_info.fetch_time_seconds.toFixed(1)}s
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Last 30 Days */}
-          <div className="card bg-gradient-to-br from-purple-50 to-pink-100 dark:from-purple-900/20 dark:to-pink-800/20 border-l-4 border-purple-500 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-3xl">📅</span>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Last 30 Days</h3>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Complete days</p>
-              </div>
-              {loading30d && (
-                <div className="h-6 w-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-              )}
-            </div>
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Orders</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  {loading30d ? '...' : last30DaysOrders.toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Revenue</p>
-                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                  {loading30d ? '...' : `₹${last30DaysRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
-                </p>
-              </div>
-              {last30Days?.fetch_info?.fetch_time_seconds && (
-                <div className="text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
-                  Fetch: {last30Days.fetch_info.fetch_time_seconds.toFixed(1)}s
                 </div>
               )}
             </div>
@@ -519,8 +492,8 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center space-x-3">
             <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${isUnicommerceLoading
-                ? 'bg-yellow-100 dark:bg-yellow-900/30'
-                : 'bg-green-100 dark:bg-green-900/30'
+              ? 'bg-yellow-100 dark:bg-yellow-900/30'
+              : 'bg-green-100 dark:bg-green-900/30'
               }`}>
               <span className="text-xl">{isUnicommerceLoading ? '🔄' : '✅'}</span>
             </div>

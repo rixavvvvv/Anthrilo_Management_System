@@ -53,8 +53,6 @@ class SyncService:
             return self.uc_service.get_yesterday_range()
         elif period == "last_7_days":
             return self.uc_service.get_last_n_days_range(7)
-        elif period == "last_30_days":
-            return self.uc_service.get_last_n_days_range(30)
         else:
             raise ValueError(f"Unknown period: {period}")
 
@@ -104,7 +102,8 @@ class SyncService:
 
             if not fetch_result.get("successful"):
                 sync_status.status = "failed"
-                sync_status.error_message = fetch_result.get("error", "Fetch failed")
+                sync_status.error_message = fetch_result.get(
+                    "error", "Fetch failed")
                 sync_status.completed_at = datetime.utcnow()
                 db.commit()
                 return {
@@ -192,7 +191,8 @@ class SyncService:
             sync_status.total_expected = total_records
             sync_status.total_synced = synced_count
             sync_status.total_failed = len(failed_codes) + len(upsert_errors)
-            sync_status.failed_codes = failed_codes[:100]  # Limit stored failures
+            # Limit stored failures
+            sync_status.failed_codes = failed_codes[:100]
             sync_status.completed_at = datetime.utcnow()
             db.commit()
 
@@ -280,7 +280,8 @@ class SyncService:
             status_stats: Dict[str, int] = {}
 
             for order in orders:
-                status_stats[order.status] = status_stats.get(order.status, 0) + 1
+                status_stats[order.status] = status_stats.get(
+                    order.status, 0) + 1
                 total_discount += order.discount or 0
                 total_tax += order.tax or 0
                 total_refund += order.refund or 0
