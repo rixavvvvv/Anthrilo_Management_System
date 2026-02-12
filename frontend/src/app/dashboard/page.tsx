@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { garmentApi, inventoryApi, panelApi, unicommerceApi } from '@/lib/api';
+import { ucSales } from '@/lib/api/uc';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -12,7 +12,7 @@ export default function DashboardPage() {
   const { data: todayData, isLoading: loadingToday, dataUpdatedAt: updatedToday } = useQuery({
     queryKey: ['unicommerce-today'],
     queryFn: async () => {
-      const response = await unicommerceApi.getToday();
+      const response = await ucSales.getToday();
       return response.data;
     },
     refetchInterval: 5 * 60 * 1000,
@@ -23,7 +23,7 @@ export default function DashboardPage() {
   const { data: yesterdayData, isLoading: loadingYesterday } = useQuery({
     queryKey: ['unicommerce-yesterday'],
     queryFn: async () => {
-      const response = await unicommerceApi.getYesterday();
+      const response = await ucSales.getYesterday();
       return response.data;
     },
     refetchInterval: 10 * 60 * 1000,
@@ -34,7 +34,7 @@ export default function DashboardPage() {
   const { data: last7Days, isLoading: loading7d, dataUpdatedAt: updated7d } = useQuery({
     queryKey: ['unicommerce-last-7-days'],
     queryFn: async () => {
-      const response = await unicommerceApi.getLast7Days();
+      const response = await ucSales.getLast7Days();
       return response.data;
     },
     refetchInterval: 10 * 60 * 1000,
@@ -42,44 +42,23 @@ export default function DashboardPage() {
     gcTime: 15 * 60 * 1000,
   });
 
-  // Legacy data for additional stats
-  const { data: garments, isLoading: garmentsLoading } = useQuery({
-    queryKey: ['garments'],
+  const { data: channelData } = useQuery({
+    queryKey: ['unicommerce-channels'],
     queryFn: async () => {
-      const response = await garmentApi.getAll();
+      const response = await ucSales.getChannelRevenue('last_7_days');
       return response.data;
     },
+    staleTime: 5 * 60 * 1000,
   });
-
-  const { data: inventory, isLoading: inventoryLoading } = useQuery({
-    queryKey: ['inventory'],
-    queryFn: async () => {
-      const response = await inventoryApi.getAll();
-      return response.data;
-    },
-  });
-
-  const { data: panels, isLoading: panelsLoading } = useQuery({
-    queryKey: ['panels'],
-    queryFn: async () => {
-      const response = await panelApi.getAll();
-      return response.data;
-    },
-  });
-
-  // Calculate stats
-  const activeGarments = garments?.filter((g: any) => g.is_active)?.length || 0;
-  const lowStockItems = inventory?.filter((i: any) => parseInt(i.good_stock) < 50)?.length || 0;
-  const activePanels = panels?.filter((p: any) => p.is_active)?.length || 0;
-  const totalInventoryValue = inventory?.reduce((sum: number, i: any) => {
-    const garment = garments?.find((g: any) => g.style_sku === i.sku);
-    const price = garment?.mrp || 0;
-    return sum + (price * parseInt(i.good_stock || 0));
-  }, 0) || 0;
 
   // Real-time Unicommerce stats
   const todayOrders = todayData?.summary?.total_orders || 0;
   const todayRevenue = todayData?.summary?.total_revenue || 0;
+
+  // UC-derived stats for system overview
+  const activeChannels = channelData?.channels?.length || 0;
+  const weeklyRevenue = last7Days?.summary?.total_revenue || 0;
+  const avgOrderValue = todayData?.summary?.avg_order_value || (todayOrders > 0 ? todayRevenue / todayOrders : 0);
   const todayItems = todayData?.summary?.total_items || 0;  // NEW
   const yesterdayOrders = yesterdayData?.summary?.total_orders || 0;
   const yesterdayRevenue = yesterdayData?.summary?.total_revenue || 0;
@@ -88,7 +67,7 @@ export default function DashboardPage() {
   const last7DaysRevenue = last7Days?.summary?.total_revenue || 0;
   const last7DaysItems = last7Days?.summary?.total_items || 0;  // NEW
 
-  const isLoading = loadingToday || loading7d || garmentsLoading || inventoryLoading || panelsLoading;
+  const isLoading = loadingToday || loading7d;
   const isUnicommerceLoading = loadingToday || loadingYesterday || loading7d;
 
   // Helper function to format time ago
@@ -355,47 +334,47 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* System Stats */}
+      {/* System Stats from Unicommerce */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">System Overview</h2>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Business Overview</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Active Garments */}
+          {/* Today's Orders */}
           <div className="card bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-l-4 border-blue-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">Active Products</p>
+                <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">Today&apos;s Orders</p>
                 <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  {isLoading ? '...' : activeGarments}
+                  {isLoading ? '...' : todayOrders}
                 </p>
               </div>
               <div className="h-14 w-14 rounded-full bg-blue-500/20 dark:bg-blue-500/30 flex items-center justify-center">
-                <span className="text-3xl">👕</span>
+                <span className="text-3xl">🛒</span>
               </div>
             </div>
           </div>
 
-          {/* Low Stock */}
+          {/* Avg Order Value */}
           <div className="card bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border-l-4 border-yellow-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-yellow-600 dark:text-yellow-400 mb-1">Low Stock Items</p>
+                <p className="text-sm font-medium text-yellow-600 dark:text-yellow-400 mb-1">Avg Order Value</p>
                 <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  {isLoading ? '...' : lowStockItems}
+                  {isLoading ? '...' : `₹${avgOrderValue.toFixed(0)}`}
                 </p>
               </div>
               <div className="h-14 w-14 rounded-full bg-yellow-500/20 dark:bg-yellow-500/30 flex items-center justify-center">
-                <span className="text-3xl">⚠️</span>
+                <span className="text-3xl">📊</span>
               </div>
             </div>
           </div>
 
-          {/* Active Panels */}
+          {/* Active Channels */}
           <div className="card bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-l-4 border-purple-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-purple-600 dark:text-purple-400 mb-1">Active Panels</p>
+                <p className="text-sm font-medium text-purple-600 dark:text-purple-400 mb-1">Active Channels</p>
                 <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  {isLoading ? '...' : activePanels}
+                  {isLoading ? '...' : activeChannels}
                 </p>
               </div>
               <div className="h-14 w-14 rounded-full bg-purple-500/20 dark:bg-purple-500/30 flex items-center justify-center">
@@ -404,17 +383,17 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Inventory Value */}
+          {/* Weekly Revenue */}
           <div className="card bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 border-l-4 border-indigo-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400 mb-1">Inventory Value</p>
+                <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400 mb-1">7-Day Revenue</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {isLoading ? '...' : `₹${(totalInventoryValue / 1000).toFixed(0)}K`}
+                  {isLoading ? '...' : `₹${(weeklyRevenue / 1000).toFixed(0)}K`}
                 </p>
               </div>
               <div className="h-14 w-14 rounded-full bg-indigo-500/20 dark:bg-indigo-500/30 flex items-center justify-center">
-                <span className="text-3xl">📦</span>
+                <span className="text-3xl">💰</span>
               </div>
             </div>
           </div>

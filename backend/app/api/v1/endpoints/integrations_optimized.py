@@ -649,3 +649,130 @@ async def check_cache_status():
     except Exception as e:
         logger.error(f"Error checking cache: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# SKU-LEVEL SALES BREAKDOWN (For reports)
+# =============================================================================
+
+@router.get("/unicommerce/sales-by-sku")
+async def get_sales_by_sku(
+    period: str = Query("today", description="today, yesterday, last_7_days, last_30_days"),
+    from_date: str = Query(None, description="Custom start date YYYY-MM-DD"),
+    to_date: str = Query(None, description="Custom end date YYYY-MM-DD"),
+):
+    """
+    Get sales aggregated by SKU with item-level breakdown.
+    Uses cached order data from two-phase fetch.
+    """
+    try:
+        service = get_unicommerce_service()
+
+        if period == "today":
+            dt_from, dt_to = service.get_today_range()
+        elif period == "yesterday":
+            dt_from, dt_to = service.get_yesterday_range()
+        elif period == "last_7_days":
+            dt_from, dt_to = service.get_last_n_days_range(7)
+        elif period == "last_30_days":
+            dt_from, dt_to = service.get_last_n_days_range(30)
+        elif from_date and to_date:
+            dt_from = datetime.strptime(from_date, "%Y-%m-%d").replace(
+                hour=0, minute=0, second=0, tzinfo=timezone.utc
+            )
+            dt_to = datetime.strptime(to_date, "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59, tzinfo=timezone.utc
+            )
+        else:
+            dt_from, dt_to = service.get_today_range()
+
+        # Use cached orders if available (same cache as paginated orders)
+        cache_key = f"orders_detailed_{dt_from.date()}_{dt_to.date()}"
+        cached_orders = service._get_from_cache(cache_key)
+
+        if cached_orders is None:
+            # Need to fetch - use two-phase approach
+            fetch_result = await service.fetch_all_orders_with_revenue(dt_from, dt_to)
+            if not fetch_result.get("successful", False):
+                return {"success": False, "error": "Failed to fetch orders", "skus": []}
+
+            raw_orders = fetch_result.get("orders", [])
+        else:
+            # cached_orders is the processed list (no saleOrderItems) - re-fetch raw
+            fetch_result = await service.fetch_all_orders_with_revenue(dt_from, dt_to)
+            if not fetch_result.get("successful", False):
+                return {"success": False, "error": "Failed to fetch orders", "skus": []}
+            raw_orders = fetch_result.get("orders", [])
+
+        # Aggregate by SKU
+        sku_map = {}
+        for order in raw_orders:
+            channel = order.get("channel", "UNKNOWN")
+            status = order.get("status", "")
+            include = status not in ("CANCELLED", "RETURNED", "UNFULFILLABLE")
+
+            for item in order.get("saleOrderItems", []):
+                sku = item.get("itemSku", "UNKNOWN")
+                if sku not in sku_map:
+                    sku_map[sku] = {
+                        "sku": sku,
+                        "name": item.get("itemName", ""),
+                        "total_quantity": 0,
+                        "total_revenue": 0.0,
+                        "total_discount": 0.0,
+                        "order_count": 0,
+                        "channels": {},
+                        "avg_selling_price": 0.0,
+                    }
+
+                qty = item.get("quantity", 1) or 1
+                selling = float(item.get("sellingPrice", 0) or 0)
+                discount = float(item.get("discount", 0) or 0)
+
+                if include:
+                    sku_map[sku]["total_quantity"] += qty
+                    sku_map[sku]["total_revenue"] += selling
+                    sku_map[sku]["total_discount"] += discount
+                    sku_map[sku]["order_count"] += 1
+
+                    if channel not in sku_map[sku]["channels"]:
+                        sku_map[sku]["channels"][channel] = {"quantity": 0, "revenue": 0.0}
+                    sku_map[sku]["channels"][channel]["quantity"] += qty
+                    sku_map[sku]["channels"][channel]["revenue"] += selling
+
+        # Compute avg selling price and round
+        for s in sku_map.values():
+            if s["total_quantity"] > 0:
+                s["avg_selling_price"] = round(s["total_revenue"] / s["total_quantity"], 2)
+            s["total_revenue"] = round(s["total_revenue"], 2)
+            s["total_discount"] = round(s["total_discount"], 2)
+            for ch in s["channels"].values():
+                ch["revenue"] = round(ch["revenue"], 2)
+
+        skus = sorted(sku_map.values(), key=lambda x: x["total_revenue"], reverse=True)
+        total_revenue = round(sum(s["total_revenue"] for s in skus), 2)
+        total_quantity = sum(s["total_quantity"] for s in skus)
+        total_discount = round(sum(s["total_discount"] for s in skus), 2)
+
+        return {
+            "success": True,
+            "period": period,
+            "from_date": dt_from.isoformat(),
+            "to_date": dt_to.isoformat(),
+            "skus": skus,
+            "summary": {
+                "total_skus": len(skus),
+                "total_quantity": total_quantity,
+                "total_revenue": total_revenue,
+                "total_discount": total_discount,
+                "total_orders": len(raw_orders),
+                "avg_discount_pct": round(
+                    (total_discount / (total_revenue + total_discount) * 100)
+                    if (total_revenue + total_discount) > 0 else 0, 2
+                ),
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Error in sales_by_sku: {e}", exc_info=True)
+        return {"success": False, "error": str(e), "skus": []}

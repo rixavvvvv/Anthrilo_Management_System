@@ -17,7 +17,7 @@ export default function DailySalesReportPage() {
     const { data: dailyReportData, isLoading: reportLoading, refetch: refetchReport } = useQuery({
         queryKey: ['daily-sales-report', reportDate],
         queryFn: async () => {
-            const response = await unicommerceApi.getDailySalesReport(reportDate);
+            const response = await unicommerceApi.getSalesReport({ period: 'custom', from_date: reportDate, to_date: reportDate });
             return response.data;
         },
         enabled: showReport,

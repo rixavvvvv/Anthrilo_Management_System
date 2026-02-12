@@ -2,102 +2,67 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { salesReports } from '@/lib/api/reports';
+import { ucSales } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { PageHeader, LoadingSpinner } from '@/components/ui/Common';
-import { FilterInput, ReportFilters } from '@/components/ui/Filters';
 
-export default function DiscountByPanelPage() {
-  const [filters, setFilters] = useState({
-    panel_id: '',
-    start_date: '',
-    end_date: '',
-  });
+export default function ChannelPerformancePage() {
+  const [period, setPeriod] = useState('last_7_days');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['discountByPanel', filters],
+    queryKey: ['uc-channel-performance', period],
     queryFn: async () => {
-      const response = await salesReports.getDiscountByPanel({
-        panel_id: filters.panel_id ? parseInt(filters.panel_id) : undefined,
-        start_date: filters.start_date,
-        end_date: filters.end_date,
-      });
+      const response = await ucSales.getChannelRevenue(period);
       return response.data;
     },
+    staleTime: 120_000,
   });
 
+  const channels = data?.channels || [];
+
   const columns: Column<any>[] = [
-    { key: 'panel_name', header: 'Panel Name', width: '25%' },
-    { key: 'panel_code', header: 'Panel Code', width: '15%' },
-    {
-      key: 'total_sales',
-      header: 'Total Sales',
+    { key: 'channel', header: 'Channel', width: '25%',
+      render: (value) => (
+        <span className="px-3 py-1 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium">{value}</span>
+      ),
+    },
+    { key: 'orders', header: 'Total Orders',
       render: (value) => <span className="font-semibold text-gray-900 dark:text-gray-100">{value}</span>,
     },
-    {
-      key: 'avg_discount',
-      header: 'Avg Discount',
-      render: (value) => {
-        const colorClass =
-          value > 25 ? 'text-red-600 dark:text-red-400' : value > 15 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400';
-        return <span className={`font-bold ${colorClass}`}>{value?.toFixed(1)}%</span>;
-      },
+    { key: 'revenue', header: 'Revenue',
+      render: (value) => <span className="text-green-600 dark:text-green-400 font-bold">₹{(value || 0).toFixed(2)}</span>,
     },
-    {
-      key: 'total_discount_amount',
-      header: 'Total Discount Given',
-      render: (value) => (
-        <span className="text-red-600 dark:text-red-400 font-semibold">₹{value?.toFixed(2)}</span>
-      ),
-    },
-    {
-      key: 'revenue',
-      header: 'Revenue',
-      render: (value) => (
-        <span className="text-green-600 dark:text-green-400 font-bold">₹{value?.toFixed(2)}</span>
-      ),
+    { key: 'percentage', header: 'Revenue Share %',
+      render: (value) => <span className="font-bold text-primary-600 dark:text-primary-400">{(value || 0).toFixed(1)}%</span>,
     },
   ];
 
   return (
     <div>
-      <PageHeader
-        title="Discount by Panel Report"
-        description="Panel-wise discount analysis and performance tracking"
-      />
+      <PageHeader title="Channel Performance" description="Unicommerce marketplace-wise performance analysis" />
 
-      <ReportFilters onApplyFilters={setFilters}>
-        <FilterInput
-          label="Panel ID"
-          type="number"
-          value={filters.panel_id}
-          onChange={(value) => setFilters({ ...filters, panel_id: value })}
-          placeholder="All Panels"
-        />
-        <FilterInput
-          label="Start Date"
-          type="date"
-          value={filters.start_date}
-          onChange={(value) => setFilters({ ...filters, start_date: value })}
-        />
-        <FilterInput
-          label="End Date"
-          type="date"
-          value={filters.end_date}
-          onChange={(value) => setFilters({ ...filters, end_date: value })}
-        />
-      </ReportFilters>
+      <div className="card mb-4">
+        <div className="flex gap-2">
+          {[
+            { key: 'today', label: 'Today' },
+            { key: 'yesterday', label: 'Yesterday' },
+            { key: 'last_7_days', label: '7 Days' },
+            { key: 'last_30_days', label: '30 Days' },
+          ].map((p) => (
+            <button key={p.key} onClick={() => setPeriod(p.key)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${period === p.key ? 'bg-primary-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="card">
-        <h2 className="mb-4 text-gray-900 dark:text-gray-100">Panel Discount Analysis</h2>
+        <h2 className="mb-4 text-gray-900 dark:text-gray-100">Channel Analysis</h2>
         {isLoading ? (
-          <LoadingSpinner message="Analyzing panel discounts..." />
+          <LoadingSpinner message="Fetching channel data..." />
         ) : (
-          <DataTable
-            data={data || []}
-            columns={columns}
-            emptyMessage="No panel sales data available"
-          />
+          <DataTable data={channels} columns={columns} emptyMessage="No channel data available" />
         )}
       </div>
     </div>
