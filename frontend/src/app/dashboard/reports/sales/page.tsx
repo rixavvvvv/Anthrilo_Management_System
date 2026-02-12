@@ -409,7 +409,7 @@ export default function SalesReportsPage() {
 
                             {channelData?.validation && !channelData.validation.passed && (
                                 <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm text-red-600 dark:text-red-400">
-                                    ⚠️ Validation failed: Channel sum doesn't match total
+                                    ⚠️ Validation failed: Channel sum doesn&apos;t match total
                                 </div>
                             )}
                         </div>

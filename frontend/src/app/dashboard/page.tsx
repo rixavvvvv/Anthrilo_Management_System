@@ -92,7 +92,7 @@ export default function DashboardPage() {
     {
       title: 'Sales Management',
       description: 'Track daily sales & returns',
-      href: '/dashboard/sales/daily',
+      href: '/dashboard/sales',
       icon: '💰',
       gradient: 'from-green-500 to-green-600',
       iconBg: 'bg-green-100 dark:bg-green-900/30',
@@ -441,59 +441,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Recent Activity Placeholder */}
-      <div className="card bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-900/50">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">System Status</h2>
-          <span className="flex items-center text-sm text-green-600 dark:text-green-400">
-            <span className="h-2 w-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
-            All systems operational
-          </span>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="flex items-center space-x-3">
-            <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-              <span className="text-xl">✅</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Database</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Supabase Connected</p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-3">
-            <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-              <span className="text-xl">✅</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">API Server</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">FastAPI Running</p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-3">
-            <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${isUnicommerceLoading
-              ? 'bg-yellow-100 dark:bg-yellow-900/30'
-              : 'bg-green-100 dark:bg-green-900/30'
-              }`}>
-              <span className="text-xl">{isUnicommerceLoading ? '🔄' : '✅'}</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Unicommerce</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {isUnicommerceLoading ? 'Syncing...' : 'Real-time Active'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-3">
-            <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-              <span className="text-xl">✅</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Reports</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">19 Available</p>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

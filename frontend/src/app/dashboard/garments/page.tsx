@@ -1,51 +1,59 @@
 'use client';
 
-import { PageHeader } from '@/components/ui/Common';
+import { useQuery } from '@tanstack/react-query';
+import { ucCatalog, ucSales } from '@/lib/api/uc';
+import { PageHeader, StatCard, LoadingSpinner } from '@/components/ui/Common';
 import Link from 'next/link';
 
 export default function GarmentsPage() {
+  const { data: catalogData, isLoading: loadingCatalog } = useQuery({
+    queryKey: ['uc-garments-overview'],
+    queryFn: async () => {
+      const response = await ucCatalog.searchItems({
+        displayStart: 0,
+        displayLength: 1,
+        getInventorySnapshot: true,
+      });
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: todayData, isLoading: loadingToday } = useQuery({
+    queryKey: ['unicommerce-today'],
+    queryFn: async () => {
+      const response = await ucSales.getToday();
+      return response.data;
+    },
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const totalProducts = catalogData?.totalRecords || 0;
+  const todayOrders = todayData?.summary?.total_orders || 0;
+  const todayRevenue = todayData?.summary?.total_revenue || 0;
+  const isLoading = loadingCatalog || loadingToday;
+
   const modules = [
     {
       title: 'Master Data',
       description: 'Manage garment products, SKUs, and pricing',
       icon: '👕',
       href: '/dashboard/garments/master',
-      color: 'blue',
+      color: 'from-blue-500 to-indigo-500',
     },
     {
       title: 'Inventory',
       description: 'Track finished goods inventory',
       icon: '📦',
       href: '/dashboard/garments/inventory',
-      color: 'green',
+      color: 'from-emerald-500 to-teal-500',
     },
     {
-      title: 'Production',
-      description: 'Production planning and tracking',
-      icon: '🏭',
+      title: 'Orders',
+      description: 'Real-time orders from Unicommerce',
+      icon: '🛒',
       href: '/dashboard/garments/production',
-      color: 'purple',
-    },
-  ];
-
-  const quickActions = [
-    {
-      title: 'Add New Garment',
-      description: 'Create new product in master data',
-      icon: '➕',
-      action: 'add-garment',
-    },
-    {
-      title: 'Update Stock',
-      description: 'Update inventory levels',
-      icon: '📊',
-      action: 'update-stock',
-    },
-    {
-      title: 'Production Plan',
-      description: 'Create new production plan',
-      icon: '📋',
-      action: 'production-plan',
+      color: 'from-purple-500 to-violet-500',
     },
   ];
 
@@ -56,62 +64,55 @@ export default function GarmentsPage() {
         description="Manage garment products, inventory, and production"
       />
 
-      {/* Quick Stats */}
+      {/* Stats from real UC data */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="card hover:shadow-xl transition-shadow bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20">
-          <p className="text-sm text-gray-600 dark:text-gray-400">Total Products</p>
-          <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2">0</p>
-          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Active SKUs</p>
-        </div>
-        <div className="card hover:shadow-xl transition-shadow bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20">
-          <p className="text-sm text-gray-600 dark:text-gray-400">Total Stock</p>
-          <p className="text-3xl font-bold text-green-600 dark:text-green-400 mt-2">0</p>
-          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Units Available</p>
-        </div>
-        <div className="card hover:shadow-xl transition-shadow bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20">
-          <p className="text-sm text-gray-600 dark:text-gray-400">In Production</p>
-          <p className="text-3xl font-bold text-purple-600 dark:text-purple-400 mt-2">0</p>
-          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Active Plans</p>
-        </div>
-        <div className="card hover:shadow-xl transition-shadow bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20">
-          <p className="text-sm text-gray-600 dark:text-gray-400">Stock Value</p>
-          <p className="text-3xl font-bold text-orange-600 dark:text-orange-400 mt-2">₹0</p>
-          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Total Inventory</p>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {quickActions.map((action) => (
-            <button
-              key={action.action}
-              className="card hover:shadow-xl hover:scale-105 transition-all text-left border-l-4 border-l-primary-500"
-            >
-              <div className="text-3xl mb-2">{action.icon}</div>
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">{action.title}</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">{action.description}</p>
-            </button>
-          ))}
-        </div>
+        <StatCard
+          title="Total Products"
+          value={isLoading ? '...' : totalProducts.toLocaleString()}
+          icon="📦"
+          color="blue"
+        />
+        <StatCard
+          title="Today's Orders"
+          value={isLoading ? '...' : todayOrders.toLocaleString()}
+          icon="🛒"
+          color="green"
+        />
+        <StatCard
+          title="Today's Revenue"
+          value={isLoading ? '...' : `₹${(todayRevenue / 1000).toFixed(1)}K`}
+          icon="💰"
+          color="purple"
+        />
+        <StatCard
+          title="Avg Order Value"
+          value={isLoading ? '...' : `₹${todayOrders > 0 ? (todayRevenue / todayOrders).toFixed(0) : '0'}`}
+          icon="📊"
+          color="yellow"
+        />
       </div>
 
       {/* Management Modules */}
       <div>
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Management Modules</h2>
+        <h2 className="text-xl font-semibold mb-4 text-slate-900 dark:text-white">Management Modules</h2>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {modules.map((module) => (
             <Link
               key={module.href}
               href={module.href}
-              className="card hover:shadow-2xl hover:scale-105 transition-all duration-300 border-l-4 border-l-green-500 dark:border-l-green-400"
+              className="card group hover:shadow-2xl transition-all duration-300 relative overflow-hidden"
             >
-              <div className="text-4xl mb-3">{module.icon}</div>
-              <h3 className="mb-2 text-gray-900 dark:text-gray-100 font-semibold">{module.title}</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm">{module.description}</p>
-              <div className="mt-4 text-primary-600 dark:text-primary-400 text-sm font-medium">
-                Open Module →
+              <div className={`absolute inset-0 bg-gradient-to-br ${module.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
+              <div className="relative">
+                <div className="text-4xl mb-4 transform group-hover:scale-110 transition-transform duration-300">{module.icon}</div>
+                <h3 className="text-lg font-semibold mb-2 text-slate-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">{module.title}</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400">{module.description}</p>
+                <div className="mt-4 text-primary-600 dark:text-primary-400 text-sm font-medium flex items-center gap-1">
+                  Open Module
+                  <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
               </div>
             </Link>
           ))}

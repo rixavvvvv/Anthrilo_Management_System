@@ -1,14 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
 
+const PAGE_SIZE = 12;
+
 export default function DiscountAnalysisPage() {
   const [period, setPeriod] = useState('today');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['uc-discount-analysis', period],
@@ -39,21 +42,26 @@ export default function DiscountAnalysisPage() {
     ? ((summary.total_discount / summary.total_revenue) * 100).toFixed(1)
     : '0.0';
 
-  const filtered = search
-    ? allSkus.filter((s: any) =>
-        s.sku?.toLowerCase().includes(search.toLowerCase()) ||
-        s.name?.toLowerCase().includes(search.toLowerCase())
-      )
-    : allSkus;
+  const filtered = useMemo(() => {
+    if (!search) return allSkus;
+    const term = search.toLowerCase();
+    return allSkus.filter((s: any) =>
+      s.sku?.toLowerCase().includes(term) ||
+      s.name?.toLowerCase().includes(term)
+    );
+  }, [allSkus, search]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const columns: Column<any>[] = [
     { key: 'sku', header: 'SKU', width: '14%' },
     { key: 'name', header: 'Product Name', width: '20%' },
     { key: 'total_quantity', header: 'Qty', width: '6%',
-      render: (value) => <span className="font-semibold text-gray-900 dark:text-gray-100">{value}</span>,
+      render: (value) => <span className="font-semibold text-slate-900 dark:text-slate-100">{value}</span>,
     },
     { key: 'total_revenue', header: 'Gross Revenue', width: '12%',
-      render: (value) => <span className="text-gray-900 dark:text-gray-100">₹{(value || 0).toFixed(2)}</span>,
+      render: (value) => <span className="text-slate-900 dark:text-slate-100">₹{(value || 0).toFixed(2)}</span>,
     },
     { key: 'total_discount', header: 'Discount', width: '10%',
       render: (value) => <span className="text-orange-600 dark:text-orange-400 font-semibold">₹{(value || 0).toFixed(2)}</span>,
@@ -61,15 +69,15 @@ export default function DiscountAnalysisPage() {
     { key: 'discount_pct', header: 'Disc %', width: '8%',
       render: (value) => {
         const v = value || 0;
-        const c = v > 30 ? 'text-red-600 dark:text-red-400' : v > 15 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400';
+        const c = v > 30 ? 'text-rose-600 dark:text-rose-400' : v > 15 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400';
         return <span className={`font-bold ${c}`}>{v.toFixed(1)}%</span>;
       },
     },
     { key: 'net_after_discount', header: 'Net Revenue', width: '12%',
-      render: (value) => <span className="text-green-600 dark:text-green-400 font-bold">₹{(value || 0).toFixed(2)}</span>,
+      render: (value) => <span className="text-emerald-600 dark:text-emerald-400 font-bold">₹{(value || 0).toFixed(2)}</span>,
     },
     { key: 'avg_selling_price', header: 'Avg SP', width: '10%',
-      render: (value) => <span className="text-gray-900 dark:text-gray-100">₹{(value || 0).toFixed(2)}</span>,
+      render: (value) => <span className="text-slate-900 dark:text-slate-100">₹{(value || 0).toFixed(2)}</span>,
     },
   ];
 
@@ -86,12 +94,12 @@ export default function DiscountAnalysisPage() {
 
       {Object.values(buckets).some((v) => v > 0) && (
         <div className="card mb-6">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Discount Distribution</h3>
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Discount Distribution</h3>
           <div className="flex flex-wrap gap-3">
             {Object.entries(buckets).map(([bucket, count]) => (
-              <div key={bucket} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-center">
-                <div className="text-lg font-bold text-gray-900 dark:text-gray-100">{count}</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">{bucket}</div>
+              <div key={bucket} className="px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-xl text-center">
+                <div className="text-lg font-bold text-slate-900 dark:text-slate-100">{count}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{bucket}</div>
               </div>
             ))}
           </div>
@@ -107,31 +115,44 @@ export default function DiscountAnalysisPage() {
               { key: 'last_7_days', label: '7 Days' },
               { key: 'last_30_days', label: '30 Days' },
             ].map((p) => (
-              <button key={p.key} onClick={() => setPeriod(p.key)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${period === p.key ? 'bg-primary-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
+              <button key={p.key} onClick={() => { setPeriod(p.key); setPage(0); }}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${period === p.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
                 {p.label}
               </button>
             ))}
           </div>
           <input type="text" placeholder="Search SKU or product..." className="input flex-1"
-            value={search} onChange={(e) => setSearch(e.target.value)} />
+            value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
         </div>
       </div>
 
       {error && (
-        <div className="card bg-red-50 dark:bg-red-900/20 mb-4">
-          <p className="text-red-600 dark:text-red-400">Error: {(error as any)?.message}</p>
+        <div className="card bg-rose-50 dark:bg-rose-900/20 mb-4">
+          <p className="text-rose-600 dark:text-rose-400">Error: {(error as any)?.message}</p>
         </div>
       )}
 
       <div className="card">
-        <h2 className="mb-4 text-gray-900 dark:text-gray-100">Discount Details by SKU</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-slate-900 dark:text-white">Discount Details by SKU</h2>
+          <span className="text-sm text-slate-500 dark:text-slate-400">{filtered.length} SKUs</span>
+        </div>
         {isLoading ? (
           <LoadingSpinner message="Calculating discount analytics from Unicommerce..." />
         ) : (
-          <DataTable data={filtered} columns={columns} emptyMessage="No discount data available for this period." />
+          <DataTable data={paginated} columns={columns} emptyMessage="No discount data available for this period." />
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex justify-between items-center mt-4">
+          <button disabled={page === 0} onClick={() => setPage(page - 1)}
+            className="btn btn-secondary disabled:opacity-40">← Previous</button>
+          <span className="text-sm text-slate-600 dark:text-slate-400">Page {page + 1} of {totalPages}</span>
+          <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}
+            className="btn btn-secondary disabled:opacity-40">Next →</button>
+        </div>
+      )}
     </div>
   );
 }
