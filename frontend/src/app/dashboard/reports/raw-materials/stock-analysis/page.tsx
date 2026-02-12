@@ -1,26 +1,35 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucCatalog } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 12;
 
 export default function InventoryAnalysisPage() {
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(0);
   const [stockFilter, setStockFilter] = useState('all');
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['uc-stock-analysis', page, search],
+    queryKey: ['uc-stock-analysis', page, debouncedSearch],
     queryFn: async () => {
       const response = await ucCatalog.searchItems({
         displayStart: page * PAGE_SIZE,
         displayLength: PAGE_SIZE,
         getInventorySnapshot: true,
-        keyword: search || undefined,
+        keyword: debouncedSearch || undefined,
       });
       return response.data;
     },
@@ -55,16 +64,12 @@ export default function InventoryAnalysisPage() {
   const totalRecords = data?.totalRecords || 0;
   const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
 
-  const outOfStock = items.filter((i: any) => i.status === 'Out of Stock').length;
-  const lowStock = items.filter((i: any) => i.status === 'Critical' || i.status === 'Low').length;
-  const totalValue = items.reduce((s: number, i: any) => s + i.stockValue, 0);
-
   const statusColors: Record<string, string> = {
-    'Out of Stock': 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200',
-    'Critical': 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200',
-    'Low': 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200',
-    'Normal': 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200',
-    'High': 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200',
+    'Out of Stock': 'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200',
+    'Critical': 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200',
+    'Low': 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200',
+    'Normal': 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200',
+    'High': 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200',
   };
 
   const columns: Column<any>[] = [
@@ -72,17 +77,17 @@ export default function InventoryAnalysisPage() {
     { key: 'name', header: 'Product Name', width: '20%' },
     { key: 'categoryName', header: 'Category', width: '10%' },
     { key: 'inventory', header: 'Good Stock', width: '9%',
-      render: (value) => <span className="font-semibold text-gray-900 dark:text-gray-100">{value}</span>,
+      render: (value) => <span className="font-semibold text-slate-900 dark:text-slate-100">{value}</span>,
     },
     { key: 'virtualInventory', header: 'Virtual', width: '8%' },
     { key: 'openSale', header: 'Open Sale', width: '8%',
       render: (value) => <span className="text-blue-600 dark:text-blue-400">{value}</span>,
     },
     { key: 'badInventory', header: 'Bad', width: '6%',
-      render: (value) => value > 0 ? <span className="text-red-500 font-medium">{value}</span> : <span className="text-gray-400">0</span>,
+      render: (value) => value > 0 ? <span className="text-rose-500 font-medium">{value}</span> : <span className="text-slate-400">0</span>,
     },
     { key: 'stockValue', header: 'Stock Value', width: '11%',
-      render: (value) => <span className="text-green-600 dark:text-green-400 font-semibold">₹{(value || 0).toFixed(0)}</span>,
+      render: (value) => <span className="text-emerald-600 dark:text-emerald-400 font-semibold">₹{(value || 0).toFixed(0)}</span>,
     },
     { key: 'status', header: 'Status', width: '10%',
       render: (value) => (
@@ -95,11 +100,10 @@ export default function InventoryAnalysisPage() {
     <div>
       <PageHeader title="Inventory Stock Analysis" description={`Unicommerce stock levels — ${totalRecords.toLocaleString()} total SKUs`} />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <StatCard title="Total SKUs" value={totalRecords.toLocaleString()} icon="📦" color="blue" />
-        <StatCard title="Out of Stock (page)" value={outOfStock} icon="🚫" color="red" />
-        <StatCard title="Low/Critical (page)" value={lowStock} icon="⚠️" color="yellow" />
-        <StatCard title="Stock Value (page)" value={`₹${(totalValue / 1000).toFixed(1)}K`} icon="💰" color="green" />
+        <StatCard title="Page" value={`${page + 1} of ${totalPages || 1}`} icon="📄" color="purple" />
+        <StatCard title="Showing" value={`${filtered.length} of ${totalRecords.toLocaleString()}`} icon="✅" color="green" />
       </div>
 
       <div className="card mb-4">
@@ -113,24 +117,24 @@ export default function InventoryAnalysisPage() {
               { key: 'high', label: 'High Stock' },
             ].map((f) => (
               <button key={f.key} onClick={() => setStockFilter(f.key)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${stockFilter === f.key ? 'bg-primary-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${stockFilter === f.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
                 {f.label}
               </button>
             ))}
           </div>
-          <input type="text" placeholder="Search SKU or product..." className="input flex-1"
-            value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
+          <input type="text" placeholder="Search product name..." className="input flex-1"
+            value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
       </div>
 
       {error && (
-        <div className="card bg-red-50 dark:bg-red-900/20 mb-4">
-          <p className="text-red-600 dark:text-red-400">Error: {(error as any)?.message}</p>
+        <div className="card bg-rose-50 dark:bg-rose-900/20 mb-4">
+          <p className="text-rose-600 dark:text-rose-400">Error: {(error as any)?.message}</p>
         </div>
       )}
 
       <div className="card">
-        <h2 className="mb-4 text-gray-900 dark:text-gray-100">Stock Analysis</h2>
+        <h2 className="mb-4 text-slate-900 dark:text-white">Stock Analysis</h2>
         {isLoading ? (
           <LoadingSpinner message="Fetching stock data from Unicommerce..." />
         ) : (
@@ -142,7 +146,7 @@ export default function InventoryAnalysisPage() {
         <div className="flex justify-between items-center mt-4">
           <button disabled={page === 0} onClick={() => setPage(page - 1)}
             className="btn btn-secondary disabled:opacity-40">← Previous</button>
-          <span className="text-sm text-gray-600 dark:text-gray-400">Page {page + 1} of {totalPages}</span>
+          <span className="text-sm text-slate-600 dark:text-slate-400">Page {page + 1} of {totalPages}</span>
           <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}
             className="btn btn-secondary disabled:opacity-40">Next →</button>
         </div>

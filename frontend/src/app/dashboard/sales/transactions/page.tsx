@@ -2,560 +2,244 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { salesApi, panelApi, unicommerceApi } from '@/lib/api';
+import { ucSales } from '@/lib/api/uc';
+import { DataTable, Column } from '@/components/ui/DataTable';
+import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
+
+const PAGE_SIZE = 12;
 
 export default function SalesTransactionsPage() {
-  const [filters, setFilters] = useState({
-    dateFrom: '',
-    dateTo: '',
-    sku: '',
-    size: '',
-    panelId: '',
-    transactionType: 'all', // all, sale, return
-  });
+  const [period, setPeriod] = useState('today');
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [sizeFilter, setSizeFilter] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('all'); // all, prepaid, cod
 
-  const [searchTerm, setSearchTerm] = useState('');
-
-  // Auto-fetch when mandatory filters are filled
-  const shouldFetchData = filters.dateFrom.trim() !== '' &&
-    filters.dateTo.trim() !== '' &&
-    filters.transactionType !== '' &&
-    filters.panelId.trim() !== '';
-
-  const { data: sales, isLoading: salesLoading } = useQuery({
-    queryKey: ['sales', filters],
+  // Fetch summary data (reuses cache from dashboard)
+  const { data: summaryData, isLoading: loadingSummary } = useQuery({
+    queryKey: ['unicommerce-today'],
     queryFn: async () => {
-      const response = await salesApi.getAll();
+      const response = await ucSales.getToday();
       return response.data;
     },
-    enabled: shouldFetchData,
+    staleTime: 2 * 60 * 1000,
   });
 
-  const { data: panels } = useQuery({
-    queryKey: ['panels'],
+  const { data: weekData, isLoading: loadingWeek } = useQuery({
+    queryKey: ['unicommerce-last-7-days'],
     queryFn: async () => {
-      const response = await panelApi.getAll();
+      const response = await ucSales.getLast7Days();
       return response.data;
     },
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Reuse cached Unicommerce data from dashboard (no duplicate API calls!)
-  const { data: unicommerceSales, isLoading: loadingSales } = useQuery({
-    queryKey: ['unicommerce-today'], // Same key as dashboard
+  // Fetch paginated orders from UC
+  const { data: ordersData, isLoading: loadingOrders, error } = useQuery({
+    queryKey: ['uc-transactions', period, page],
     queryFn: async () => {
-      const response = await unicommerceApi.getToday();
+      const response = await ucSales.getOrders({ period, page, page_size: 100 }); // fetch larger batch for client filtering
       return response.data;
     },
-    refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes
-    staleTime: 3 * 60 * 1000, // Reuse cached data for 3 minutes
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    retry: 2,
+    staleTime: 60_000,
   });
 
-  const { data: unicommerce7Days, isLoading: loading7Days } = useQuery({
-    queryKey: ['unicommerce-last-7-days'], // Same key as dashboard
-    queryFn: async () => {
-      const response = await unicommerceApi.getLast7Days();
-      return response.data;
-    },
-    refetchInterval: 10 * 60 * 1000, // Refetch every 10 minutes
-    staleTime: 5 * 60 * 1000, // Reuse cached data for 5 minutes
-    gcTime: 15 * 60 * 1000, // Keep in cache for 15 minutes
-    retry: 2,
-  });
+  // Flatten orders to item-wise rows
+  const allRows = useMemo(() => {
+    const orders = ordersData?.orders || [];
+    const rows: any[] = [];
+    orders.forEach((order: any) => {
+      const orderItems = order.items || [];
+      if (orderItems.length === 0) {
+        // Order with no items detail
+        rows.push({
+          date: order.displayOrderDateTime || order.created,
+          code: order.displayOrderCode || order.code,
+          channel: order.channel || '-',
+          status: order.status || '-',
+          sku: '-',
+          size: '-',
+          price: order.selling_price || order.total_selling_price || 0,
+          cashOnDelivery: order.cashOnDelivery ?? order.cod ?? false,
+        });
+      } else {
+        orderItems.forEach((item: any) => {
+          rows.push({
+            date: order.displayOrderDateTime || order.created,
+            code: order.displayOrderCode || order.code,
+            channel: order.channel || '-',
+            status: order.status || '-',
+            sku: item.itemSku || item.sku || '-',
+            size: item.size || item.itemSku?.match(/[-_]([SMLXL0-9]+)$/)?.[1] || '-',
+            price: item.sellingPrice || item.selling_price || 0,
+            cashOnDelivery: order.cashOnDelivery ?? order.cod ?? false,
+          });
+        });
+      }
+    });
+    return rows;
+  }, [ordersData]);
 
-  // Filter sales based on criteria - handle both local sales and Unicommerce orders
-  const filteredSales = useMemo(() => {
-    // Check if a channel is selected (not a numeric panel ID)
-    const isChannelSelected = filters.panelId && isNaN(parseInt(filters.panelId));
+  // Extract unique sizes for filter
+  const uniqueSizes = useMemo(() => {
+    const sizes = new Set<string>();
+    allRows.forEach((r) => {
+      if (r.size && r.size !== '-') sizes.add(r.size);
+    });
+    return Array.from(sizes).sort();
+  }, [allRows]);
 
-    if (isChannelSelected) {
-      // Filter Unicommerce data
-      let allOrders: any[] = [];
-
-      // Combine orders from all Unicommerce data sources
-      if (unicommerceSales?.orders) allOrders = [...allOrders, ...unicommerceSales.orders];
-      if (unicommerce7Days?.orders) allOrders = [...allOrders, ...unicommerce7Days.orders];
-
-      // Remove duplicates by order code
-      const uniqueOrders = allOrders.reduce((acc, order) => {
-        if (!acc.find((o: any) => o.code === order.code)) {
-          acc.push(order);
-        }
-        return acc;
-      }, []);
-
-      return uniqueOrders.filter((order: any) => {
-        // Date range filter
-        if (filters.dateFrom) {
-          const orderDate = new Date(order.displayOrderDateTime);
-          const fromDate = new Date(filters.dateFrom);
-          if (orderDate < fromDate) return false;
-        }
-        if (filters.dateTo) {
-          const orderDate = new Date(order.displayOrderDateTime);
-          const toDate = new Date(filters.dateTo);
-          toDate.setHours(23, 59, 59);
-          if (orderDate > toDate) return false;
-        }
-
-        // Channel filter
-        if (filters.panelId !== 'all' && order.channel !== filters.panelId) {
+  // Apply client-side filters
+  const filtered = useMemo(() => {
+    return allRows.filter((row) => {
+      // Search filter
+      if (search) {
+        const term = search.toLowerCase();
+        if (!row.code?.toLowerCase().includes(term) &&
+            !row.sku?.toLowerCase().includes(term) &&
+            !row.channel?.toLowerCase().includes(term)) {
           return false;
         }
-
-        // Search term
-        if (searchTerm) {
-          const term = searchTerm.toLowerCase();
-          const matchesCode = order.code?.toLowerCase().includes(term) || false;
-          const matchesChannel = order.channel?.toLowerCase().includes(term) || false;
-          if (!matchesCode && !matchesChannel) return false;
-        }
-
-        return true;
-      });
-    }
-
-    // Filter local sales data
-    if (!sales) return [];
-
-    return sales.filter((sale: any) => {
-      // Date range filter
-      if (filters.dateFrom) {
-        if (!sale.sale_date || isNaN(new Date(sale.sale_date).getTime())) return false;
-        const saleDate = new Date(sale.sale_date);
-        const fromDate = new Date(filters.dateFrom);
-        if (saleDate < fromDate) return false;
       }
-      if (filters.dateTo) {
-        if (!sale.sale_date || isNaN(new Date(sale.sale_date).getTime())) return false;
-        const saleDate = new Date(sale.sale_date);
-        const toDate = new Date(filters.dateTo);
-        toDate.setHours(23, 59, 59);
-        if (saleDate > toDate) return false;
-      }
-
-      // SKU filter
-      if (filters.sku && !sale.sku.toLowerCase().includes(filters.sku.toLowerCase())) {
-        return false;
-      }
-
       // Size filter
-      if (filters.size && sale.size !== filters.size) {
-        return false;
-      }
-
-      // Panel filter
-      if (filters.panelId && filters.panelId !== 'all' && sale.panel_id !== parseInt(filters.panelId)) {
-        return false;
-      }
-
-      // Transaction type filter
-      if (filters.transactionType !== 'all') {
-        const quantity = parseInt(sale.quantity);
-        if (filters.transactionType === 'sale' && quantity < 0) return false;
-        if (filters.transactionType === 'return' && quantity >= 0) return false;
-      }
-
-      // Search term (SKU or panel)
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase();
-        const matchesSKU = sale.sku.toLowerCase().includes(term);
-        const panel = panels?.find((p: any) => p.id === sale.panel_id);
-        const matchesPanel = panel?.panel_name.toLowerCase().includes(term) || false;
-        if (!matchesSKU && !matchesPanel) return false;
-      }
-
+      if (sizeFilter && row.size !== sizeFilter) return false;
+      // Payment filter
+      if (paymentFilter === 'cod' && !row.cashOnDelivery) return false;
+      if (paymentFilter === 'prepaid' && row.cashOnDelivery) return false;
       return true;
     });
-  }, [sales, filters, searchTerm, panels, unicommerceSales, unicommerce7Days]);
+  }, [allRows, search, sizeFilter, paymentFilter]);
 
-  // Calculate statistics
-  const today = new Date().toDateString();
-  const todaySales = filteredSales.filter((s: any) => {
-    const saleDate = s.sale_date && !isNaN(new Date(s.sale_date).getTime())
-      ? new Date(s.sale_date).toDateString()
-      : null;
-    return saleDate === today;
-  });
+  // Client-side pagination of filtered results
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const clientPage = Math.min(page - 1, totalPages - 1);
+  const paginated = filtered.slice(clientPage * PAGE_SIZE, (clientPage + 1) * PAGE_SIZE);
 
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  const weekSales = filteredSales.filter((s: any) => {
-    if (!s.sale_date || isNaN(new Date(s.sale_date).getTime())) return false;
-    return new Date(s.sale_date) >= weekAgo;
-  });
+  const todaySummary = summaryData?.summary || {};
+  const weekSummary = weekData?.summary || {};
 
-  const monthAgo = new Date();
-  monthAgo.setMonth(monthAgo.getMonth() - 1);
-  const monthSales = filteredSales.filter((s: any) => {
-    if (!s.sale_date || isNaN(new Date(s.sale_date).getTime())) return false;
-    return new Date(s.sale_date) >= monthAgo;
-  });
-
-  const totalRevenue = filteredSales.reduce((sum: number, s: any) => {
-    const quantity = parseInt(s.quantity);
-    const price = parseFloat(s.unit_price);
-    return sum + (quantity * price);
-  }, 0);
-
-  const uniqueSizes = Array.from(new Set(sales?.map((s: any) => s.size) || [])).sort() as string[];
-
-  const clearFilters = () => {
-    setFilters({
-      dateFrom: '',
-      dateTo: '',
-      sku: '',
-      size: '',
-      panelId: '',
-      transactionType: 'all',
-    });
-    setSearchTerm('');
+  const statusColors: Record<string, string> = {
+    CREATED: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200',
+    PROCESSING: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200',
+    COMPLETE: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200',
+    CANCELLED: 'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200',
+    DISPATCHED: 'bg-violet-100 dark:bg-violet-900/30 text-violet-800 dark:text-violet-200',
+    SHIPPED: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-200',
+    DELIVERED: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200',
   };
 
-  const hasActiveFilters = Object.values(filters).some(v => v && v !== 'all') || searchTerm;
-
-  // Extract unique channels from Unicommerce data to merge with panels
-  const uniqueChannels = useMemo(() => {
-    const channels = new Set<string>();
-
-    // Add from 24 hours data
-    unicommerceSales?.orders?.forEach((order: any) => {
-      if (order.channel) channels.add(order.channel);
-    });
-
-    // Add from 7 days data
-    unicommerce7Days?.orders?.forEach((order: any) => {
-      if (order.channel) channels.add(order.channel);
-    });
-
-    return Array.from(channels).sort();
-  }, [unicommerceSales, unicommerce7Days]);
-
-  // Data fetches automatically when mandatory filters are filled
+  const columns: Column<any>[] = [
+    { key: 'date', header: 'Date', width: '14%',
+      render: (value) => value ? new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-',
+    },
+    { key: 'code', header: 'Order Code', width: '15%',
+      render: (value) => <span className="font-mono text-xs font-semibold text-primary-700 dark:text-primary-300">{value}</span>,
+    },
+    { key: 'channel', header: 'Channel', width: '11%',
+      render: (value) => <span className="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium">{value}</span>,
+    },
+    { key: 'status', header: 'Status', width: '10%',
+      render: (value) => <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[value] || 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>{value}</span>,
+    },
+    { key: 'sku', header: 'SKU', width: '15%',
+      render: (value) => <span className="font-mono text-xs text-slate-700 dark:text-slate-300">{value}</span>,
+    },
+    { key: 'size', header: 'Size', width: '7%',
+      render: (value) => <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-xs font-medium">{value}</span>,
+    },
+    { key: 'price', header: 'Price', width: '10%',
+      render: (value) => <span className="text-emerald-600 dark:text-emerald-400 font-semibold">₹{(value || 0).toFixed(0)}</span>,
+    },
+    { key: 'cashOnDelivery', header: 'Payment', width: '9%',
+      render: (value) => (
+        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${value ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200'}`}>
+          {value ? 'COD' : 'Prepaid'}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-          Sales Transactions
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          View and filter all sales transactions
-        </p>
-      </div>
+      <PageHeader title="Sales Transactions" description="Item-wise transactions from Unicommerce" />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="card bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-l-4 border-blue-500">
-          <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">Today's Sales</p>
-          <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-            {loadingSales ? '...' : (unicommerceSales?.summary?.total_orders || 0)}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              Real-time Unicommerce (Last 24hrs)
-            </span>
-          </p>
-          <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mt-2">
-            Revenue: {loadingSales ? '...' : `₹${(unicommerceSales?.summary?.total_revenue || 0).toLocaleString('en-IN')}`}
-          </p>
-        </div>
-        <div className="card bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-l-4 border-green-500">
-          <p className="text-sm font-medium text-green-600 dark:text-green-400 mb-1">This Week</p>
-          <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-            {loading7Days ? '...' : (unicommerce7Days?.summary?.total_orders || 0)}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              Real-time Unicommerce (Last 7 days)
-            </span>
-          </p>
-          <p className="text-xs font-semibold text-green-700 dark:text-green-300 mt-2">
-            Revenue: {loading7Days ? '...' : `₹${(unicommerce7Days?.summary?.total_revenue || 0).toLocaleString('en-IN')}`}
-          </p>
-        </div>
+        <StatCard title="Today's Orders" value={loadingSummary ? '...' : (todaySummary.total_orders || 0)} icon="🛒" color="blue" />
+        <StatCard title="Today's Revenue" value={loadingSummary ? '...' : `₹${((todaySummary.total_revenue || 0) / 1000).toFixed(1)}K`} icon="💰" color="green" />
+        <StatCard title="7-Day Orders" value={loadingWeek ? '...' : (weekSummary.total_orders || 0)} icon="📊" color="purple" />
+        <StatCard title="7-Day Revenue" value={loadingWeek ? '...' : `₹${((weekSummary.total_revenue || 0) / 1000).toFixed(1)}K`} icon="💵" color="indigo" />
       </div>
 
       {/* Filters Section */}
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Filters</h2>
-          {hasActiveFilters && (
-            <button
-              onClick={clearFilters}
-              className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
-            >
-              Clear all filters
-            </button>
-          )}
-        </div>
+        <div className="flex flex-wrap gap-4 items-center">
+          {/* Period */}
+          <div className="flex gap-2">
+            {[
+              { key: 'today', label: 'Today' },
+              { key: 'yesterday', label: 'Yesterday' },
+              { key: 'last_7_days', label: '7 Days' },
+            ].map((p) => (
+              <button key={p.key} onClick={() => { setPeriod(p.key); setPage(1); }}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${period === p.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
+                {p.label}
+              </button>
+            ))}
+          </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Payment */}
+          <select value={paymentFilter} onChange={(e) => { setPaymentFilter(e.target.value); setPage(1); }}
+            className="input w-auto">
+            <option value="all">All Payments</option>
+            <option value="prepaid">Prepaid</option>
+            <option value="cod">COD</option>
+          </select>
+
+          {/* Size */}
+          <select value={sizeFilter} onChange={(e) => { setSizeFilter(e.target.value); setPage(1); }}
+            className="input w-auto">
+            <option value="">All Sizes</option>
+            {uniqueSizes.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+
           {/* Search */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Search
-            </label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by SKU or Panel..."
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
-
-          {/* Date From */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Date From <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="dd-mm-yyyy"
-              required
-            />
-          </div>
-
-          {/* Date To */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Date To <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="dd-mm-yyyy"
-              required
-            />
-          </div>
-
-          {/* Transaction Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Transaction Type <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={filters.transactionType}
-              onChange={(e) => setFilters({ ...filters, transactionType: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              required
-            >
-              <option value="all">All Transactions</option>
-              <option value="sale">Sales Only</option>
-              <option value="return">Returns Only</option>
-            </select>
-          </div>
-
-          {/* SKU Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              SKU
-            </label>
-            <input
-              type="text"
-              value={filters.sku}
-              onChange={(e) => setFilters({ ...filters, sku: e.target.value })}
-              placeholder="Filter by SKU..."
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
-
-          {/* Size Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Size
-            </label>
-            <select
-              value={filters.size}
-              onChange={(e) => setFilters({ ...filters, size: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            >
-              <option value="">All Sizes</option>
-              {uniqueSizes.map((size) => (
-                <option key={size} value={size}>{size}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Panel / Channel Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Panel / Channel <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={filters.panelId}
-              onChange={(e) => setFilters({ ...filters, panelId: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              required
-            >
-              <option value="">Select Panel or Channel</option>
-              <option value="all">All Channels</option>
-              {panels && panels.length > 0 && (
-                <optgroup label="Panels">
-                  {panels.map((panel: any) => (
-                    <option key={`panel-${panel.id}`} value={panel.id}>{panel.panel_name}</option>
-                  ))}
-                </optgroup>
-              )}
-              {uniqueChannels && uniqueChannels.length > 0 && (
-                <optgroup label="Channels">
-                  {uniqueChannels.map((channel) => (
-                    <option key={`channel-${channel}`} value={channel}>{channel}</option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-          </div>
+          <input type="text" placeholder="Search order, SKU, channel..."
+            className="input flex-1 min-w-[200px]"
+            value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
         </div>
-
-        {/* Active Filters Summary */}
-        {shouldFetchData && hasActiveFilters && (
-          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Showing <span className="font-semibold text-primary-600 dark:text-primary-400">{filteredSales.length}</span> of {sales?.length || 0} transactions
-            </p>
-          </div>
-        )}
+        <div className="mt-3 text-xs text-slate-500">
+          {filtered.length} items found
+        </div>
       </div>
+
+      {error && (
+        <div className="card bg-rose-50 dark:bg-rose-900/20">
+          <p className="text-rose-600 dark:text-rose-400">Error: {(error as any)?.message || 'Failed to load transactions'}</p>
+        </div>
+      )}
 
       {/* Transactions Table */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-            Transactions ({filteredSales.length})
-          </h2>
+          <h2 className="text-slate-900 dark:text-white">Transactions ({filtered.length})</h2>
         </div>
-
-        {!shouldFetchData ? (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-            Please select all required filters to view transactions
-          </div>
-        ) : salesLoading ? (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">Loading...</div>
-        ) : filteredSales.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-            {hasActiveFilters ? 'No transactions match your filters' : 'No sales transactions recorded yet'}
-          </div>
+        {loadingOrders ? (
+          <LoadingSpinner message="Fetching transactions from Unicommerce..." />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">Date</th>
-                  <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">Order Code</th>
-                  <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">Channel</th>
-                  <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">Source</th>
-                  <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">Status</th>
-                  <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">Order Category</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSales.map((item: any, index: number) => {
-                  // Check if this is a Unicommerce order or local sale
-                  const isUnicommerceOrder = !!item.channel;
-
-                  if (isUnicommerceOrder) {
-                    // Render Unicommerce order
-                    return (
-                      <tr key={index} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                        <td className="py-3 px-4 text-gray-900 dark:text-gray-100">
-                          {item.displayOrderDateTime
-                            ? new Date(item.displayOrderDateTime).toLocaleDateString('en-IN', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })
-                            : 'N/A'
-                          }
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 rounded text-sm font-mono font-semibold">
-                            {item.displayOrderCode || item.code}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-sm font-semibold">
-                            {item.channel}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-gray-900 dark:text-gray-100">
-                          <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded text-sm">
-                            {item.source}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${item.status === 'COMPLETE'
-                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                            : item.status === 'PROCESSING'
-                              ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
-                              : item.status === 'CANCELLED'
-                                ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
-                                : item.status === 'CREATED'
-                                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200'
-                                  : 'bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200'
-                            }`}>
-                            {item.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-gray-900 dark:text-gray-100 text-sm">
-                          {item.orderCategory || '-'}
-                        </td>
-                      </tr>
-                    );
-                  } else {
-                    // Render local sale
-                    const quantity = parseInt(item.quantity);
-                    const unitPrice = parseFloat(item.unit_price);
-                    const total = quantity * unitPrice;
-                    const isReturn = quantity < 0;
-                    const panel = panels?.find((p: any) => p.id === item.panel_id);
-
-                    return (
-                      <tr key={index} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                        <td className="py-3 px-4 text-gray-900 dark:text-gray-100">
-                          {item.sale_date && !isNaN(new Date(item.sale_date).getTime())
-                            ? new Date(item.sale_date).toLocaleDateString('en-IN')
-                            : 'N/A'
-                          }
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-sm font-mono font-semibold">
-                            {item.sku}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-gray-900 dark:text-gray-100">{item.size}</td>
-                        <td className="py-3 px-4 text-gray-900 dark:text-gray-100">
-                          {panel?.panel_name || `Panel ${item.panel_id}`}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${isReturn
-                            ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
-                            : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                            }`}>
-                            {isReturn ? 'Return' : 'Sale'}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  }
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable data={paginated} columns={columns} emptyMessage="No transactions found for the selected filters." />
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex justify-between items-center">
+          <button disabled={page <= 1} onClick={() => setPage(page - 1)}
+            className="btn btn-secondary disabled:opacity-40">← Previous</button>
+          <span className="text-sm text-slate-600 dark:text-slate-400">Page {page} of {totalPages}</span>
+          <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}
+            className="btn btn-secondary disabled:opacity-40">Next →</button>
+        </div>
+      )}
     </div>
   );
 }

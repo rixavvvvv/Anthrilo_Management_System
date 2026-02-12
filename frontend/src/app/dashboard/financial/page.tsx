@@ -1,157 +1,94 @@
 'use client';
 
-import { PageHeader } from '@/components/ui/Common';
+import { useQuery } from '@tanstack/react-query';
+import { ucSales } from '@/lib/api/uc';
+import { PageHeader, StatCard } from '@/components/ui/Common';
 import Link from 'next/link';
 
 export default function FinancialPage() {
+  // Reuse cached UC data
+  const { data: todayData, isLoading: loadingToday } = useQuery({
+    queryKey: ['unicommerce-today'],
+    queryFn: async () => { const r = await ucSales.getToday(); return r.data; },
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const { data: weekData, isLoading: loadingWeek } = useQuery({
+    queryKey: ['unicommerce-last-7-days'],
+    queryFn: async () => { const r = await ucSales.getLast7Days(); return r.data; },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: yesterdayData, isLoading: loadingYesterday } = useQuery({
+    queryKey: ['unicommerce-yesterday'],
+    queryFn: async () => { const r = await ucSales.getYesterday(); return r.data; },
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const today = todayData?.summary || {};
+  const week = weekData?.summary || {};
+  const yesterday = yesterdayData?.summary || {};
+
+  // Compute growth %
+  const revenueGrowth = yesterday.total_revenue && yesterday.total_revenue > 0
+    ? (((today.total_revenue || 0) - yesterday.total_revenue) / yesterday.total_revenue * 100).toFixed(1)
+    : null;
+
+  const avgOrderValue = today.total_orders > 0 ? (today.total_revenue || 0) / today.total_orders : 0;
+  const weekAvgOrder = week.total_orders > 0 ? (week.total_revenue || 0) / week.total_orders : 0;
+
   const modules = [
-    {
-      title: 'Discount Management',
-      description: 'Track and manage product discounts',
-      icon: '💸',
-      href: '/dashboard/financial/discounts',
-      color: 'blue',
-    },
-    {
-      title: 'Paid Ads',
-      description: 'Track advertising spend and performance',
-      icon: '📢',
-      href: '/dashboard/financial/ads',
-      color: 'green',
-    },
-    {
-      title: 'ROI Analysis',
-      description: 'Return on investment analytics',
-      icon: '📊',
-      href: '/dashboard/financial/roi',
-      color: 'purple',
-    },
+    { title: 'Discount Management', description: 'Track and manage product discounts across channels', icon: '💸', href: '/dashboard/financial/discounts' },
+    { title: 'ROI Analysis', description: 'Return on investment and profitability analytics', icon: '📊', href: '/dashboard/financial/roi' },
   ];
 
   const reports = [
-    {
-      title: 'Discount Reports',
-      description: 'General & panel-wise discount analysis',
-      icon: '💰',
-      href: '/dashboard/reports/sales/discount-general',
-    },
-    {
-      title: 'Panel Settlement',
-      description: 'Commission & logistics calculations',
-      icon: '🧾',
-      href: '/dashboard/reports/panels/settlement',
-    },
-    {
-      title: 'Profit Margins',
-      description: 'Product-wise profitability analysis',
-      icon: '📈',
-      href: '/dashboard/financial/roi',
-    },
-  ];
-
-  const metrics = [
-    {
-      title: 'Total Revenue',
-      value: '₹0',
-      change: '+0%',
-      icon: '💵',
-      positive: true,
-    },
-    {
-      title: 'Ad Spend',
-      value: '₹0',
-      change: '+0%',
-      icon: '📢',
-      positive: false,
-    },
-    {
-      title: 'Net Profit',
-      value: '₹0',
-      change: '+0%',
-      icon: '💰',
-      positive: true,
-    },
-    {
-      title: 'ROI',
-      value: '0%',
-      change: '+0%',
-      icon: '📊',
-      positive: true,
-    },
+    { title: 'Discount Reports', description: 'General & panel-wise discount analysis', icon: '💰', href: '/dashboard/reports/sales/discount-general' },
+    { title: 'Channel Revenue', description: 'Revenue breakdown by sales channel', icon: '🧾', href: '/dashboard/reports/sales/bundle-sku' },
+    { title: 'Profit Margins', description: 'Product-wise profitability analysis', icon: '📈', href: '/dashboard/financial/roi' },
   ];
 
   return (
-    <div>
-      <PageHeader
-        title="Financial Management"
-        description="Track finances, manage discounts, and analyze profitability"
-      />
+    <div className="space-y-6">
+      <PageHeader title="Financial Management" description="Track revenue, analyze profitability, and manage discounts" />
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        {metrics.map((metric, index) => (
-          <div
-            key={metric.title}
-            className={`card hover:shadow-xl transition-shadow bg-gradient-to-br ${
-              index === 0
-                ? 'from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20'
-                : index === 1
-                ? 'from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20'
-                : index === 2
-                ? 'from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20'
-                : 'from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20'
-            }`}
-          >
-            <div className="flex justify-between items-start mb-2">
-              <p className="text-sm text-gray-600 dark:text-gray-400">{metric.title}</p>
-              <span className="text-2xl">{metric.icon}</span>
-            </div>
-            <p
-              className={`text-3xl font-bold mt-2 ${
-                index === 0
-                  ? 'text-green-600 dark:text-green-400'
-                  : index === 1
-                  ? 'text-red-600 dark:text-red-400'
-                  : index === 2
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : 'text-purple-600 dark:text-purple-400'
-              }`}
-            >
-              {metric.value}
-            </p>
-            <p
-              className={`text-xs mt-1 ${
-                metric.positive
-                  ? 'text-green-600 dark:text-green-400'
-                  : 'text-red-600 dark:text-red-400'
-              }`}
-            >
-              {metric.positive ? '↑' : '↓'} {metric.change} this month
-            </p>
-          </div>
-        ))}
+      {/* Key Metrics from Real UC Data */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <StatCard
+          title="Today's Revenue"
+          value={loadingToday ? '...' : `₹${((today.total_revenue || 0) / 1000).toFixed(1)}K`}
+          icon="💵" color="green"
+          trend={revenueGrowth ? { value: parseFloat(revenueGrowth), isPositive: parseFloat(revenueGrowth) >= 0 } : undefined}
+        />
+        <StatCard
+          title="7-Day Revenue"
+          value={loadingWeek ? '...' : `₹${((week.total_revenue || 0) / 1000).toFixed(1)}K`}
+          icon="📊" color="blue"
+        />
+        <StatCard
+          title="Avg Order Value"
+          value={loadingToday ? '...' : `₹${avgOrderValue.toFixed(0)}`}
+          icon="🛒" color="purple"
+          trend={weekAvgOrder > 0 ? { value: Math.round(((avgOrderValue - weekAvgOrder) / weekAvgOrder) * 100), isPositive: avgOrderValue >= weekAvgOrder } : undefined}
+        />
+        <StatCard
+          title="Today's Orders"
+          value={loadingToday ? '...' : (today.total_orders || 0)}
+          icon="📦" color="indigo"
+        />
       </div>
 
       {/* Financial Insights Card */}
-      <div className="card mb-8 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-l-4 border-l-purple-500">
+      <div className="card bg-gradient-to-r from-primary-50 to-violet-50 dark:from-primary-900/20 dark:to-violet-900/20 border-l-4 border-l-primary-500">
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              💡 Financial Insights
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-              Get comprehensive insights into your business finances, profitability, and growth metrics
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Financial Insights</h3>
+            <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
+              All metrics are powered by real-time Unicommerce data. Analyze revenue trends, channel performance, and profitability.
             </p>
             <div className="flex gap-3">
-              <Link href="/dashboard/financial/roi" className="btn btn-primary">
-                View Analytics
-              </Link>
-              <Link
-                href="/dashboard/reports/panels/settlement"
-                className="btn btn-secondary"
-              >
-                Settlement Reports
-              </Link>
+              <Link href="/dashboard/financial/roi" className="btn btn-primary">View Analytics</Link>
+              <Link href="/dashboard/reports/sales/discount-general" className="btn btn-secondary">Discount Reports</Link>
             </div>
           </div>
           <div className="text-6xl opacity-20">💎</div>
@@ -159,21 +96,15 @@ export default function FinancialPage() {
       </div>
 
       {/* Management Modules */}
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Management</h2>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {modules.map((module) => (
-            <Link
-              key={module.href}
-              href={module.href}
-              className="card hover:shadow-2xl hover:scale-105 transition-all duration-300 border-l-4 border-l-purple-500 dark:border-l-purple-400"
-            >
-              <div className="text-4xl mb-3">{module.icon}</div>
-              <h3 className="mb-2 text-gray-900 dark:text-gray-100 font-semibold">{module.title}</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm">{module.description}</p>
-              <div className="mt-4 text-primary-600 dark:text-primary-400 text-sm font-medium">
-                Open Module →
-              </div>
+      <div>
+        <h2 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">Management</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {modules.map((m) => (
+            <Link key={m.href} href={m.href} className="card hover:shadow-xl hover:scale-[1.02] transition-all duration-300 border-l-4 border-l-primary-500">
+              <div className="text-4xl mb-3">{m.icon}</div>
+              <h3 className="mb-2 text-slate-900 dark:text-white font-semibold">{m.title}</h3>
+              <p className="text-slate-600 dark:text-slate-400 text-sm">{m.description}</p>
+              <div className="mt-4 text-primary-600 dark:text-primary-400 text-sm font-medium">Open Module →</div>
             </Link>
           ))}
         </div>
@@ -181,22 +112,14 @@ export default function FinancialPage() {
 
       {/* Reports */}
       <div>
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Reports & Analytics</h2>
+        <h2 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">Reports & Analytics</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {reports.map((report) => (
-            <Link
-              key={report.href}
-              href={report.href}
-              className="card hover:shadow-xl transition-all group"
-            >
-              <div className="text-3xl mb-3 group-hover:scale-110 transition-transform">
-                {report.icon}
-              </div>
-              <h3 className="mb-2 text-gray-900 dark:text-gray-100 font-semibold">{report.title}</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm">{report.description}</p>
-              <div className="mt-4 text-primary-600 dark:text-primary-400 text-sm font-medium">
-                View Report →
-              </div>
+          {reports.map((r) => (
+            <Link key={r.href} href={r.href} className="card hover:shadow-xl transition-all group">
+              <div className="text-3xl mb-3 group-hover:scale-110 transition-transform">{r.icon}</div>
+              <h3 className="mb-2 text-slate-900 dark:text-white font-semibold">{r.title}</h3>
+              <p className="text-slate-600 dark:text-slate-400 text-sm">{r.description}</p>
+              <div className="mt-4 text-primary-600 dark:text-primary-400 text-sm font-medium">View Report →</div>
             </Link>
           ))}
         </div>

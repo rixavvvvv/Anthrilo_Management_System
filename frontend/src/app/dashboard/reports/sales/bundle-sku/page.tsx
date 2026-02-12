@@ -1,14 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
 
+const PAGE_SIZE = 12;
+
 export default function SKUSalesPage() {
   const [period, setPeriod] = useState('today');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['uc-sales-by-sku', period],
@@ -19,41 +22,46 @@ export default function SKUSalesPage() {
     staleTime: 120_000,
   });
 
-  const allSkus = data?.skus || [];
   const summary = data?.summary || {};
 
-  const filtered = search
-    ? allSkus.filter((s: any) =>
-        s.sku?.toLowerCase().includes(search.toLowerCase()) ||
-        s.name?.toLowerCase().includes(search.toLowerCase())
-      )
-    : allSkus;
+  const filtered = useMemo(() => {
+    const allSkus = data?.skus || [];
+    if (!search) return allSkus;
+    const term = search.toLowerCase();
+    return allSkus.filter((s: any) =>
+      s.sku?.toLowerCase().includes(term) ||
+      s.name?.toLowerCase().includes(term)
+    );
+  }, [data, search]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const columns: Column<any>[] = [
     { key: 'sku', header: 'SKU', width: '15%' },
     { key: 'name', header: 'Product Name', width: '22%' },
     { key: 'total_quantity', header: 'Units Sold', width: '9%',
-      render: (value) => <span className="font-semibold text-gray-900 dark:text-gray-100">{value}</span>,
+      render: (value) => <span className="font-semibold text-slate-900 dark:text-slate-100">{value}</span>,
     },
     { key: 'order_count', header: 'Orders', width: '8%',
-      render: (value) => <span className="text-gray-700 dark:text-gray-300">{value}</span>,
+      render: (value) => <span className="text-slate-700 dark:text-slate-300">{value}</span>,
     },
     { key: 'total_revenue', header: 'Revenue', width: '12%',
-      render: (value) => <span className="text-green-600 dark:text-green-400 font-bold">₹{(value || 0).toFixed(2)}</span>,
+      render: (value) => <span className="text-emerald-600 dark:text-emerald-400 font-bold">₹{(value || 0).toFixed(2)}</span>,
     },
     { key: 'total_discount', header: 'Discount', width: '10%',
       render: (value) => <span className="text-orange-600 dark:text-orange-400 font-semibold">₹{(value || 0).toFixed(2)}</span>,
     },
     { key: 'avg_selling_price', header: 'Avg Price', width: '10%',
-      render: (value) => <span className="text-gray-900 dark:text-gray-100">₹{(value || 0).toFixed(2)}</span>,
+      render: (value) => <span className="text-slate-900 dark:text-slate-100">₹{(value || 0).toFixed(2)}</span>,
     },
     { key: 'channels', header: 'Channels', width: '14%',
       render: (value) => {
-        if (!value || typeof value !== 'object') return <span className="text-gray-400">-</span>;
+        if (!value || typeof value !== 'object') return <span className="text-slate-400">-</span>;
         return (
           <div className="flex flex-wrap gap-1">
             {Object.entries(value).map(([ch, info]: [string, any]) => (
-              <span key={ch} className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs font-medium">
+              <span key={ch} className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-medium">
                 {ch}: {info?.quantity || 0}
               </span>
             ))}
@@ -83,31 +91,44 @@ export default function SKUSalesPage() {
               { key: 'last_7_days', label: '7 Days' },
               { key: 'last_30_days', label: '30 Days' },
             ].map((p) => (
-              <button key={p.key} onClick={() => setPeriod(p.key)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${period === p.key ? 'bg-primary-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
+              <button key={p.key} onClick={() => { setPeriod(p.key); setPage(0); }}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${period === p.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
                 {p.label}
               </button>
             ))}
           </div>
           <input type="text" placeholder="Search SKU or product name..." className="input flex-1"
-            value={search} onChange={(e) => setSearch(e.target.value)} />
+            value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
         </div>
       </div>
 
       {error && (
-        <div className="card bg-red-50 dark:bg-red-900/20 mb-4">
-          <p className="text-red-600 dark:text-red-400">Error: {(error as any)?.message || 'Failed to load SKU data'}</p>
+        <div className="card bg-rose-50 dark:bg-rose-900/20 mb-4">
+          <p className="text-rose-600 dark:text-rose-400">Error: {(error as any)?.message || 'Failed to load SKU data'}</p>
         </div>
       )}
 
       <div className="card">
-        <h2 className="mb-4 text-gray-900 dark:text-gray-100">SKU Sales Breakdown</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-slate-900 dark:text-white">SKU Sales Breakdown</h2>
+          <span className="text-sm text-slate-500 dark:text-slate-400">{filtered.length} SKUs</span>
+        </div>
         {isLoading ? (
           <LoadingSpinner message="Fetching SKU sales from Unicommerce..." />
         ) : (
-          <DataTable data={filtered} columns={columns} emptyMessage="No SKU sales data for this period." />
+          <DataTable data={paginated} columns={columns} emptyMessage="No SKU sales data for this period." />
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex justify-between items-center mt-4">
+          <button disabled={page === 0} onClick={() => setPage(page - 1)}
+            className="btn btn-secondary disabled:opacity-40">← Previous</button>
+          <span className="text-sm text-slate-600 dark:text-slate-400">Page {page + 1} of {totalPages}</span>
+          <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}
+            className="btn btn-secondary disabled:opacity-40">Next →</button>
+        </div>
+      )}
     </div>
   );
 }

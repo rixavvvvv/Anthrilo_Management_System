@@ -2,54 +2,39 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
 
   const navigation = [
-    { name: 'Overview', href: '/dashboard', icon: '📊' },
+    { name: 'Overview', href: '/dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
     {
       name: 'Reports',
-      href: '/dashboard/reports/reports-index',
-      icon: '📋',
+      icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
       children: [
         { name: 'All Reports', href: '/dashboard/reports/reports-index' },
         { name: 'Stock Analysis', href: '/dashboard/reports/raw-materials/stock-analysis' },
-        { name: 'Yarn Forecasting', href: '/dashboard/reports/raw-materials/yarn-forecasting' },
-        { name: 'Bundle SKU Sales', href: '/dashboard/reports/sales/bundle-sku' },
-        { name: 'Discount Reports', href: '/dashboard/reports/sales/discount-general' },
-        { name: 'Panel Settlement', href: '/dashboard/reports/panels/settlement' },
-      ],
-    },
-    {
-      name: 'Raw Materials',
-      href: '/dashboard/raw-materials',
-      icon: '🧵',
-      children: [
-        { name: 'Yarn', href: '/dashboard/raw-materials/yarn' },
-        { name: 'Fabric', href: '/dashboard/raw-materials/fabric' },
-        { name: 'Processes', href: '/dashboard/raw-materials/processes' },
+        { name: 'Top Sellers', href: '/dashboard/reports/raw-materials/yarn-forecasting' },
+        { name: 'SKU Sales', href: '/dashboard/reports/sales/bundle-sku' },
+        { name: 'Discounts', href: '/dashboard/reports/sales/discount-general' },
+        { name: 'Channels', href: '/dashboard/reports/panels/settlement' },
       ],
     },
     {
       name: 'Garments',
-      href: '/dashboard/garments',
-      icon: '👕',
+      icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
       children: [
         { name: 'Master Data', href: '/dashboard/garments/master' },
         { name: 'Inventory', href: '/dashboard/garments/inventory' },
-        { name: 'Production', href: '/dashboard/garments/production' },
+        { name: 'Orders', href: '/dashboard/garments/production' },
       ],
     },
     {
       name: 'Sales',
-      href: '/dashboard/sales',
-      icon: '💰',
+      icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
       children: [
         { name: 'Transactions', href: '/dashboard/sales/transactions' },
         { name: 'Panels', href: '/dashboard/sales/panels' },
@@ -58,88 +43,120 @@ export default function DashboardLayout({
     },
     {
       name: 'Financial',
-      href: '/dashboard/financial',
-      icon: '📈',
+      icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
       children: [
+        { name: 'Overview', href: '/dashboard/financial' },
         { name: 'Discounts', href: '/dashboard/financial/discounts' },
-        { name: 'Paid Ads', href: '/dashboard/financial/ads' },
         { name: 'ROI Analysis', href: '/dashboard/financial/roi' },
       ],
     },
   ];
 
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Top Navigation */}
-      <nav className="bg-white dark:bg-gray-800 shadow-md border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <Link href="/dashboard" className="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                Anthrilo
-              </Link>
-              <span className="ml-3 px-2 py-1 bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200 text-xs font-semibold rounded-full">
-                Management System
-              </span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <ThemeToggle />
-              <button className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-              </button>
-              <button className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
+  const isActive = (href: string) => pathname === href;
+  const isGroupActive = (children?: { href: string }[]) =>
+    children?.some(c => pathname === c.href || pathname.startsWith(c.href + '/'));
 
-      <div className="flex">
-        {/* Sidebar */}
-        <aside className="w-64 bg-white dark:bg-gray-800 shadow-lg min-h-screen border-r border-gray-200 dark:border-gray-700">
-          <nav className="mt-5 px-2">
-            {navigation.map((item) => (
-              <div key={item.name}>
-                <Link
-                  href={item.href}
-                  className={`group flex items-center px-3 py-2.5 text-base font-medium rounded-lg transition-all duration-200 mb-1 ${
-                    pathname === item.href
-                      ? 'bg-primary-100 dark:bg-primary-900 text-primary-900 dark:text-primary-100 shadow-sm'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  <span className="mr-3 text-xl">{item.icon}</span>
-                  {item.name}
+  return (
+    <div className="h-screen flex overflow-hidden bg-slate-50 dark:bg-slate-900">
+      {/* Sidebar - Fixed */}
+      <aside className={`${collapsed ? 'w-[68px]' : 'w-60'} flex-shrink-0 flex flex-col h-screen sticky top-0 transition-all duration-300 bg-white dark:bg-slate-800 border-r border-slate-200/80 dark:border-slate-700/80`}>
+        {/* Logo */}
+        <div className="h-16 flex items-center px-4 border-b border-slate-100 dark:border-slate-700/50">
+          <Link href="/dashboard" className="flex items-center gap-2.5 overflow-hidden">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-black text-sm">A</span>
+            </div>
+            {!collapsed && (
+              <span className="text-lg font-bold bg-gradient-to-r from-primary-600 to-indigo-600 dark:from-primary-400 dark:to-indigo-400 bg-clip-text text-transparent whitespace-nowrap">
+                Anthrilo
+              </span>
+            )}
+          </Link>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+          {navigation.map((item) => {
+            if ('href' in item) {
+              return (
+                <Link key={item.name} href={(item as any).href}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${
+                    isActive((item as any).href) ? 'sidebar-active' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-white'
+                  }`}>
+                  <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                  </svg>
+                  {!collapsed && <span>{item.name}</span>}
                 </Link>
-                {item.children && (
-                  <div className="ml-8 mt-1 space-y-1 mb-2">
-                    {item.children.map((child) => (
-                      <Link
-                        key={child.name}
-                        href={child.href}
-                        className={`group flex items-center px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
-                          pathname === child.href
-                            ? 'text-primary-700 dark:text-primary-400 font-medium bg-primary-50 dark:bg-gray-700'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
-                        }`}
-                      >
+              );
+            }
+            return (
+              <div key={item.name} className="space-y-0.5">
+                <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium ${
+                  isGroupActive((item as any).children) ? 'text-primary-600 dark:text-primary-400' : 'text-slate-500 dark:text-slate-400'
+                }`}>
+                  <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                  </svg>
+                  {!collapsed && <span>{item.name}</span>}
+                </div>
+                {!collapsed && (item as any).children && (
+                  <div className="ml-8 space-y-0.5">
+                    {(item as any).children.map((child: any) => (
+                      <Link key={child.href} href={child.href}
+                        className={`block px-3 py-2 rounded-lg text-[13px] transition-all duration-200 ${
+                          isActive(child.href) ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/30'
+                        }`}>
                         {child.name}
                       </Link>
                     ))}
                   </div>
                 )}
               </div>
-            ))}
-          </nav>
-        </aside>
+            );
+          })}
+        </nav>
 
-        {/* Main Content */}
-        <main className="flex-1 p-8 bg-gray-50 dark:bg-gray-900">{children}</main>
+        {/* Sidebar Footer */}
+        <div className="p-3 border-t border-slate-100 dark:border-slate-700/50">
+          <button onClick={() => setCollapsed(!collapsed)}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all">
+            <svg className={`w-4 h-4 transition-transform ${collapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            </svg>
+            {!collapsed && <span>Collapse</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Top Bar */}
+        <header className="h-16 flex-shrink-0 flex items-center justify-between px-6 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-700/80 sticky top-0 z-30">
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-1.5 text-sm text-slate-400">
+              {pathname.split('/').filter(Boolean).map((seg, i, arr) => (
+                <span key={i} className="flex items-center gap-1.5">
+                  {i > 0 && <span>/</span>}
+                  <span className={i === arr.length - 1 ? 'text-slate-700 dark:text-slate-200 font-medium capitalize' : 'capitalize'}>
+                    {seg.replace(/-/g, ' ')}
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-400 to-indigo-500 flex items-center justify-center">
+              <span className="text-white text-xs font-bold">A</span>
+            </div>
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-y-auto p-6 lg:p-8 page-gradient">
+          {children}
+        </main>
       </div>
     </div>
   );

@@ -51,7 +51,7 @@ export function ErrorPanel({ message }: { message: string }) {
                         <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
                             <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">💡 Why this happened:</p>
                             <p className="text-xs text-blue-800 dark:text-blue-200 mb-2">
-                                You're fetching ALL orders (no limits) for complete business accuracy.
+                                You&apos;re fetching ALL orders (no limits) for complete business accuracy.
                                 Large datasets (5000+ orders) may take 3-5 minutes on first load.
                             </p>
                             <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">✅ Try these solutions:</p>

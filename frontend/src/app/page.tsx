@@ -5,223 +5,138 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      <nav className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-lg border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-violet-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+      {/* Navigation */}
+      <nav className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border-b border-white/40 dark:border-slate-800/60 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-600 to-purple-600 dark:from-primary-400 dark:to-purple-400 bg-clip-text text-transparent">
-                Anthrilo
-              </h1>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-600 to-violet-600 flex items-center justify-center">
+                <span className="text-white font-bold text-sm">A</span>
+              </div>
+              <span className="text-xl font-bold text-slate-900 dark:text-white">Anthrilo</span>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center gap-3">
               <ThemeToggle />
-              <Link href="/login" className="btn btn-secondary">
-                Login
-              </Link>
-              <Link href="/dashboard" className="btn btn-primary">
-                Dashboard
+              <Link href="/dashboard" className="px-5 py-2 rounded-xl bg-gradient-to-r from-primary-600 to-violet-600 text-white text-sm font-semibold shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-all">
+                Open Dashboard
               </Link>
             </div>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Hero Section */}
-        <div className="text-center mb-16 pt-8">
-          <div className="inline-block mb-4">
-            <span className="px-4 py-2 bg-primary-100 dark:bg-primary-900/30 text-primary-800 dark:text-primary-300 rounded-full text-sm font-semibold animate-pulse">
-              Enterprise ERP Solution
-            </span>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Hero */}
+        <div className="text-center pt-20 pb-16">
+          <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full bg-primary-100/60 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-sm font-medium text-primary-700 dark:text-primary-300">Live Unicommerce Data</span>
           </div>
-          <h1 className="text-5xl md:text-6xl font-bold text-gray-900 dark:text-gray-100 mb-6 leading-tight">
-            Anthrilo Management System
+          <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold leading-tight mb-6">
+            <span className="text-slate-900 dark:text-white">Anthrilo</span>
+            <br />
+            <span className="bg-gradient-to-r from-primary-600 via-violet-600 to-purple-600 bg-clip-text text-transparent">Management System</span>
           </h1>
-          <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto leading-relaxed">
-            Enterprise-grade ERP solution for textile manufacturing and garment production management
+          <p className="text-lg md:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
+            Real-time inventory, sales, and financial analytics powered by Unicommerce — all in one modern dashboard.
           </p>
-          <div className="mt-8 flex justify-center gap-4">
-            <Link href="/dashboard" className="btn btn-primary text-lg px-8 py-3">
+          <div className="mt-10 flex justify-center gap-4">
+            <Link href="/dashboard" className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-primary-600 to-violet-600 text-white font-semibold shadow-xl shadow-primary-500/25 hover:shadow-primary-500/40 hover:-translate-y-0.5 transition-all text-lg">
               Get Started
             </Link>
-            <Link href="#features" className="btn btn-secondary text-lg px-8 py-3">
+            <a href="#features" className="px-8 py-3.5 rounded-2xl bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold hover:bg-white dark:hover:bg-slate-800 transition-all text-lg">
               Learn More
-            </Link>
+            </a>
           </div>
         </div>
 
-        {/* Modules Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16">
-          {/* Module I */}
-          <div className="card hover:shadow-2xl hover:scale-105 transition-all duration-300 border-l-4 border-l-blue-500 dark:border-l-blue-400 group">
-            <div className="text-primary-600 dark:text-primary-400 mb-4 transform group-hover:scale-110 transition-transform duration-300">
-              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-            </div>
-            <h3 className="mb-3 text-gray-900 dark:text-gray-100 font-bold">Raw Material & Processing</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Manage yarn, fabric, and processing workflows including knitting, dyeing, finishing, and printing
-            </p>
-            <Link href="/dashboard/raw-materials" className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-semibold inline-flex items-center group">
-              Learn more 
-              <svg className="w-4 h-4 ml-1 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
+        {/* Modules */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-12">
+          {[
+            { title: 'Reports & Analytics', desc: 'Stock analysis, SKU sales breakdown, channel revenue, and discounts — all from real data.', href: '/dashboard/reports/reports-index', gradient: 'from-blue-500 to-cyan-500', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+            { title: 'Garments & Sales', desc: 'Catalog management, inventory tracking, production orders, and transaction history.', href: '/dashboard/garments', gradient: 'from-emerald-500 to-green-500', icon: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z' },
+            { title: 'Financial', desc: 'Revenue analytics, discount management, ROI analysis, and profitability tracking.', href: '/dashboard/financial', gradient: 'from-violet-500 to-purple-500', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+          ].map((m) => (
+            <Link key={m.href} href={m.href} className="group relative overflow-hidden rounded-2xl bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border border-white/60 dark:border-slate-700/60 p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${m.gradient} flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform`}>
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={m.icon} /></svg>
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">{m.title}</h3>
+              <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">{m.desc}</p>
+              <div className="mt-4 text-primary-600 dark:text-primary-400 text-sm font-semibold flex items-center gap-1 group-hover:gap-2 transition-all">
+                Explore <span>→</span>
+              </div>
             </Link>
-          </div>
+          ))}
+        </div>
 
-          {/* Module II */}
-          <div className="card hover:shadow-2xl hover:scale-105 transition-all duration-300 border-l-4 border-l-green-500 dark:border-l-green-400 group">
-            <div className="text-green-600 dark:text-green-400 mb-4 transform group-hover:scale-110 transition-transform duration-300">
-              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-              </svg>
-            </div>
-            <h3 className="mb-3 text-gray-900 dark:text-gray-100 font-bold">Garment & Sales</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Track inventory, production planning, sales transactions, and panel-wise performance
-            </p>
-            <Link href="/dashboard/garments" className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-semibold inline-flex items-center group">
-              Learn more 
-              <svg className="w-4 h-4 ml-1 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
-          </div>
-
-          {/* Module III */}
-          <div className="card hover:shadow-2xl hover:scale-105 transition-all duration-300 border-l-4 border-l-purple-500 dark:border-l-purple-400 group">
-            <div className="text-purple-600 dark:text-purple-400 mb-4 transform group-hover:scale-110 transition-transform duration-300">
-              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </div>
-            <h3 className="mb-3 text-gray-900 dark:text-gray-100 font-bold">Financial & Marketing</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Manage discounts, track paid advertising ROI, and generate comprehensive financial reports
-            </p>
-            <Link href="/dashboard/financial" className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-semibold inline-flex items-center group">
-              Learn more 
-              <svg className="w-4 h-4 ml-1 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
+        {/* Features */}
+        <div id="features" className="py-16">
+          <h2 className="text-3xl font-bold text-center text-slate-900 dark:text-white mb-12">Why Anthrilo?</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {[
+              { title: 'Real-time Unicommerce Sync', desc: 'Live catalog, orders, and revenue data from 11+ sales channels synced automatically.', color: 'primary' },
+              { title: '61,000+ Products Tracked', desc: 'Full catalog search, inventory monitoring, and stock analysis in real-time.', color: 'emerald' },
+              { title: 'Actionable Analytics', desc: 'Channel-wise revenue, SKU sales breakdown, discount analysis, and profitability reports.', color: 'violet' },
+              { title: 'Modern & Fast', desc: 'Built with Next.js 14, React Query caching, and a responsive glass-morphism UI.', color: 'amber' },
+            ].map((f) => (
+              <div key={f.title} className="flex items-start gap-4 p-6 rounded-2xl bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm border border-white/40 dark:border-slate-700/40">
+                <div className={`w-10 h-10 rounded-xl bg-${f.color}-100 dark:bg-${f.color}-900/30 flex items-center justify-center flex-shrink-0`}>
+                  <svg className={`w-5 h-5 text-${f.color}-600 dark:text-${f.color}-400`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 dark:text-white mb-1">{f.title}</h4>
+                  <p className="text-slate-600 dark:text-slate-400 text-sm">{f.desc}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Key Features */}
-        <div id="features" className="mt-20 card">
-          <h2 className="mb-8 text-center text-gray-900 dark:text-gray-100">Key Features</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="flex items-start group">
-              <div className="flex-shrink-0">
-                <div className="flex items-center justify-center h-14 w-14 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 dark:from-primary-400 dark:to-primary-500 text-white shadow-lg transform group-hover:scale-110 transition-transform duration-300">
-                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-              </div>
-              <div className="ml-5">
-                <h4 className="font-bold text-gray-900 dark:text-gray-100 mb-2">Real-time Inventory Tracking</h4>
-                <p className="text-gray-600 dark:text-gray-400">Monitor stock levels across all warehouses in real-time with automated alerts</p>
-              </div>
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-12">
+          {[
+            { num: '61K+', label: 'Products', color: 'primary' },
+            { num: '11+', label: 'Sales Channels', color: 'emerald' },
+            { num: '19+', label: 'Reports', color: 'violet' },
+            { num: '24/7', label: 'Real-time', color: 'amber' },
+          ].map((s) => (
+            <div key={s.label} className="text-center p-6 rounded-2xl bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm border border-white/40 dark:border-slate-700/40">
+              <div className={`text-3xl font-extrabold text-${s.color}-600 dark:text-${s.color}-400 mb-1`}>{s.num}</div>
+              <div className="text-slate-600 dark:text-slate-400 text-sm font-medium">{s.label}</div>
             </div>
-            
-            <div className="flex items-start group">
-              <div className="flex-shrink-0">
-                <div className="flex items-center justify-center h-14 w-14 rounded-xl bg-gradient-to-br from-green-500 to-green-600 dark:from-green-400 dark:to-green-500 text-white shadow-lg transform group-hover:scale-110 transition-transform duration-300">
-                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-              </div>
-              <div className="ml-5">
-                <h4 className="font-bold text-gray-900 dark:text-gray-100 mb-2">Production Planning</h4>
-                <p className="text-gray-600 dark:text-gray-400">Plan and track production with material requirement calculations and forecasting</p>
-              </div>
-            </div>
-            
-            <div className="flex items-start group">
-              <div className="flex-shrink-0">
-                <div className="flex items-center justify-center h-14 w-14 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 dark:from-purple-400 dark:to-purple-500 text-white shadow-lg transform group-hover:scale-110 transition-transform duration-300">
-                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-              </div>
-              <div className="ml-5">
-                <h4 className="font-bold text-gray-900 dark:text-gray-100 mb-2">Advanced Analytics</h4>
-                <p className="text-gray-600 dark:text-gray-400">Generate comprehensive reports and ROI analysis for marketing campaigns</p>
-              </div>
-            </div>
-            
-            <div className="flex items-start group">
-              <div className="flex-shrink-0">
-                <div className="flex items-center justify-center h-14 w-14 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 dark:from-orange-400 dark:to-orange-500 text-white shadow-lg transform group-hover:scale-110 transition-transform duration-300">
-                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-              </div>
-              <div className="ml-5">
-                <h4 className="font-bold text-gray-900 dark:text-gray-100 mb-2">Multi-channel Sales</h4>
-                <p className="text-gray-600 dark:text-gray-400">Manage sales across multiple panels and channels efficiently with unified dashboard</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Section */}
-        <div className="mt-20 grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="text-center p-6 card hover:shadow-xl transition-shadow">
-            <div className="text-4xl font-bold text-primary-600 dark:text-primary-400 mb-2">19+</div>
-            <div className="text-gray-600 dark:text-gray-400 font-medium">Business Reports</div>
-          </div>
-          <div className="text-center p-6 card hover:shadow-xl transition-shadow">
-            <div className="text-4xl font-bold text-green-600 dark:text-green-400 mb-2">100%</div>
-            <div className="text-gray-600 dark:text-gray-400 font-medium">Real-time Updates</div>
-          </div>
-          <div className="text-center p-6 card hover:shadow-xl transition-shadow">
-            <div className="text-4xl font-bold text-purple-600 dark:text-purple-400 mb-2">3</div>
-            <div className="text-gray-600 dark:text-gray-400 font-medium">Core Modules</div>
-          </div>
-          <div className="text-center p-6 card hover:shadow-xl transition-shadow">
-            <div className="text-4xl font-bold text-orange-600 dark:text-orange-400 mb-2">24/7</div>
-            <div className="text-gray-600 dark:text-gray-400 font-medium">System Availability</div>
-          </div>
+          ))}
         </div>
       </main>
 
-      <footer className="bg-gray-900 dark:bg-black text-white mt-24 border-t border-gray-800 dark:border-gray-700">
+      {/* Footer */}
+      <footer className="bg-slate-900 dark:bg-black border-t border-slate-800 mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
             <div>
-              <h3 className="text-xl font-bold mb-4 bg-gradient-to-r from-primary-400 to-purple-400 bg-clip-text text-transparent">Anthrilo</h3>
-              <p className="text-gray-400">Enterprise ERP for textile manufacturing excellence</p>
+              <span className="text-xl font-bold bg-gradient-to-r from-primary-400 to-violet-400 bg-clip-text text-transparent">Anthrilo</span>
+              <p className="text-slate-500 mt-2 text-sm">Enterprise management powered by Unicommerce real-time data.</p>
             </div>
             <div>
-              <h4 className="font-semibold mb-4 text-gray-200">Quick Links</h4>
+              <h4 className="font-semibold text-slate-300 mb-3 text-sm">Quick Links</h4>
               <ul className="space-y-2">
-                <li><Link href="/dashboard" className="text-gray-400 hover:text-primary-400 transition-colors">Dashboard</Link></li>
-                <li><Link href="/dashboard/reports/reports-index" className="text-gray-400 hover:text-primary-400 transition-colors">Reports</Link></li>
-                <li><Link href="/dashboard/garments/master" className="text-gray-400 hover:text-primary-400 transition-colors">Products</Link></li>
+                <li><Link href="/dashboard" className="text-slate-500 hover:text-primary-400 transition-colors text-sm">Dashboard</Link></li>
+                <li><Link href="/dashboard/reports/reports-index" className="text-slate-500 hover:text-primary-400 transition-colors text-sm">Reports</Link></li>
+                <li><Link href="/dashboard/garments/master" className="text-slate-500 hover:text-primary-400 transition-colors text-sm">Products</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold mb-4 text-gray-200">Modules</h4>
+              <h4 className="font-semibold text-slate-300 mb-3 text-sm">Modules</h4>
               <ul className="space-y-2">
-                <li><Link href="/dashboard/raw-materials" className="text-gray-400 hover:text-primary-400 transition-colors">Raw Materials</Link></li>
-                <li><Link href="/dashboard/garments" className="text-gray-400 hover:text-primary-400 transition-colors">Garments</Link></li>
-                <li><Link href="/dashboard/financial" className="text-gray-400 hover:text-primary-400 transition-colors">Financial</Link></li>
+                <li><Link href="/dashboard/garments" className="text-slate-500 hover:text-primary-400 transition-colors text-sm">Garments</Link></li>
+                <li><Link href="/dashboard/sales" className="text-slate-500 hover:text-primary-400 transition-colors text-sm">Sales</Link></li>
+                <li><Link href="/dashboard/financial" className="text-slate-500 hover:text-primary-400 transition-colors text-sm">Financial</Link></li>
               </ul>
             </div>
           </div>
-          <div className="border-t border-gray-800 pt-8">
-            <p className="text-center text-gray-500">
-              © 2026 Anthrilo Management System. All rights reserved.
-            </p>
+          <div className="border-t border-slate-800 pt-8">
+            <p className="text-center text-slate-600 text-sm">© 2025 Anthrilo Management System. All rights reserved.</p>
           </div>
         </div>
       </footer>
