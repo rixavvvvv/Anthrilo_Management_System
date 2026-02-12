@@ -15,6 +15,90 @@ class ReportsService:
     def __init__(self, db: Session):
         self.db = db
     
+    # ==================== RAW MATERIALS REPORTS ====================
+    
+    def raw_materials_stock_analysis(self, category: Optional[str] = None) -> list:
+        """Combined raw materials stock analysis for yarn + fabric"""
+        items = []
+        
+        if not category or category.lower() == 'yarn':
+            yarns = self.db.query(Yarn).all()
+            for y in yarns:
+                stock_qty = float(y.stock_quantity or 0)
+                unit_price = float(y.unit_price or 0)
+                value = stock_qty * unit_price
+                status = 'Low' if stock_qty < 50 else ('High' if stock_qty > 500 else 'Normal')
+                items.append({
+                    "item_name": f"{y.yarn_type} ({y.yarn_count})",
+                    "category": "Yarn",
+                    "quantity": stock_qty,
+                    "unit": y.unit or "kg",
+                    "value": value,
+                    "stock_status": status,
+                })
+        
+        if not category or category.lower() == 'fabric':
+            fabrics = self.db.query(Fabric).all()
+            for f in fabrics:
+                stock_qty = float(f.stock_quantity or 0)
+                cpu = float(f.cost_per_unit or 0)
+                value = stock_qty * cpu
+                status = 'Low' if stock_qty < 50 else ('High' if stock_qty > 500 else 'Normal')
+                items.append({
+                    "item_name": f"{f.fabric_type} - {f.subtype} ({f.gsm} GSM)",
+                    "category": "Fabric",
+                    "quantity": stock_qty,
+                    "unit": f.unit or "kg",
+                    "value": value,
+                    "stock_status": status,
+                })
+        
+        return items
+    
+    def yarn_forecasting_report(self, forecast_days: int = 30) -> list:
+        """Yarn demand forecasting based on production plans and historical data"""
+        from datetime import timedelta
+        
+        yarns = self.db.query(Yarn).all()
+        result = []
+        
+        for y in yarns:
+            stock_qty = float(y.stock_quantity or 0)
+            
+            # Estimate daily consumption from production plans that need yarn
+            # Use recent production plans' yarn_requirement as a proxy
+            recent_plans = self.db.query(ProductionPlan).filter(
+                ProductionPlan.status.in_(["PLANNED", "IN_PROGRESS"]),
+                ProductionPlan.yarn_requirement != None,
+                ProductionPlan.yarn_requirement > 0
+            ).all()
+            
+            # Sum total yarn requirement across active plans, average over their target days
+            total_yarn_req = sum(float(p.yarn_requirement or 0) for p in recent_plans)
+            if recent_plans:
+                avg_days_to_target = max(1, sum(
+                    max(1, (p.target_date - date.today()).days) for p in recent_plans
+                ) / len(recent_plans))
+                avg_daily = total_yarn_req / avg_days_to_target / max(1, len(self.db.query(Yarn).count()))
+            else:
+                # Fallback: estimate from stock level (assume 1% daily consumption)
+                avg_daily = stock_qty * 0.01 if stock_qty > 0 else 0
+            
+            forecasted_demand = avg_daily * forecast_days
+            days_to_stockout = stock_qty / avg_daily if avg_daily > 0 else 999
+            recommended = max(0, forecasted_demand - stock_qty + (avg_daily * 14))  # 14 days safety
+            
+            result.append({
+                "yarn_type": f"{y.yarn_type} ({y.yarn_count})",
+                "current_stock": stock_qty,
+                "avg_daily_consumption": round(avg_daily, 2),
+                "forecasted_demand": round(forecasted_demand, 2),
+                "days_until_stockout": round(days_to_stockout, 1),
+                "recommended_order": round(recommended, 2),
+            })
+        
+        return result
+    
     # ==================== FABRIC REPORTS ====================
     
     def fabric_stock_sheet_total(self) -> Dict[str, Any]:

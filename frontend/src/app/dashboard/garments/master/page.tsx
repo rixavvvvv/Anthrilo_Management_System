@@ -1,56 +1,61 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { garmentApi } from '@/lib/api';
 import { useState } from 'react';
-import { GarmentForm } from '@/components/forms/GarmentForm';
+import { useQuery } from '@tanstack/react-query';
+import { ucCatalog } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
-import { PageHeader } from '@/components/ui/Common';
+import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
+
+const PAGE_SIZE = 50;
 
 export default function GarmentMasterPage() {
   const [search, setSearch] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [selectedGarment, setSelectedGarment] = useState(null);
+  const [page, setPage] = useState(0);
 
-  const { data: garments, isLoading } = useQuery({
-    queryKey: ['garments'],
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['uc-catalog', page, search],
     queryFn: async () => {
-      const response = await garmentApi.getAll();
+      const response = await ucCatalog.searchItems({
+        displayStart: page * PAGE_SIZE,
+        displayLength: PAGE_SIZE,
+        getInventorySnapshot: false,
+        keyword: search || undefined,
+      });
       return response.data;
     },
+    staleTime: 60_000,
   });
 
-  const filteredGarments = garments?.filter((g: any) =>
-    g.name?.toLowerCase().includes(search.toLowerCase()) ||
-    g.sku?.toLowerCase().includes(search.toLowerCase())
-  );
+  const items = (data?.elements || []).map((item: any) => ({
+    skuCode: item.skuCode,
+    name: item.name,
+    categoryName: item.categoryName || '-',
+    color: item.color || '-',
+    size: item.size || '-',
+    brand: item.brand || '-',
+    price: item.price || 0,
+    enabled: item.enabled,
+  }));
+
+  const totalRecords = data?.totalRecords || 0;
+  const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
+  const activeCount = items.filter((i: any) => i.enabled).length;
 
   const columns: Column<any>[] = [
-    { key: 'sku', header: 'SKU', width: '15%' },
-    { key: 'name', header: 'Name', width: '20%' },
-    { key: 'category', header: 'Category', width: '12%' },
-    { key: 'size', header: 'Size', width: '8%' },
-    {
-      key: 'mrp',
-      header: 'MRP',
-      render: (value) => <span className="text-gray-900 dark:text-gray-100">₹{value?.toFixed(2)}</span>,
+    { key: 'skuCode', header: 'SKU Code', width: '15%' },
+    { key: 'name', header: 'Product Name', width: '25%' },
+    { key: 'categoryName', header: 'Category', width: '12%' },
+    { key: 'color', header: 'Color', width: '8%' },
+    { key: 'size', header: 'Size', width: '7%',
+      render: (value) => <span className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-medium">{value}</span>,
     },
-    {
-      key: 'selling_price',
-      header: 'Selling Price',
-      render: (value) => <span className="text-gray-900 dark:text-gray-100">₹{value?.toFixed(2)}</span>,
+    { key: 'brand', header: 'Brand', width: '10%' },
+    { key: 'price', header: 'MRP', width: '9%',
+      render: (value) => <span className="text-gray-900 dark:text-gray-100">₹{value?.toFixed(0)}</span>,
     },
-    {
-      key: 'is_active',
-      header: 'Status',
+    { key: 'enabled', header: 'Status', width: '9%',
       render: (value) => (
-        <span
-          className={`px-3 py-1 rounded-full text-xs font-medium ${
-            value
-              ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-              : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-          }`}
-        >
+        <span className={`px-3 py-1 rounded-full text-xs font-medium ${value ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>
           {value ? 'Active' : 'Inactive'}
         </span>
       ),
@@ -59,58 +64,46 @@ export default function GarmentMasterPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Garment Master Data"
-        description="Manage all garment products"
-        action={{
-          label: showForm ? 'Cancel' : '+ Add Garment',
-          onClick: () => {
-            setShowForm(!showForm);
-            setSelectedGarment(null);
-          },
-        }}
-      />
+      <PageHeader title="Product Master" description={`Unicommerce product catalog — ${totalRecords.toLocaleString()} total SKUs`} />
 
-      {showForm && (
-        <div className="card mb-6">
-          <h2 className="mb-4 text-gray-900 dark:text-gray-100">{selectedGarment ? 'Edit' : 'Create'} Garment</h2>
-          <GarmentForm
-            initialData={selectedGarment}
-            onSuccess={() => {
-              setShowForm(false);
-              setSelectedGarment(null);
-            }}
-            onCancel={() => {
-              setShowForm(false);
-              setSelectedGarment(null);
-            }}
-          />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <StatCard title="Total Products" value={totalRecords.toLocaleString()} icon="📦" color="blue" />
+        <StatCard title="Active (this page)" value={activeCount} icon="✅" color="green" />
+        <StatCard title="Showing" value={`${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, totalRecords)}`} icon="📄" color="purple" />
+      </div>
+
+      <div className="card mb-4">
+        <div className="flex gap-4 items-center">
+          <input type="text" placeholder="Search by product name or SKU..." className="input flex-1"
+            value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
+          <span className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{totalRecords.toLocaleString()} items</span>
+        </div>
+      </div>
+
+      {error && (
+        <div className="card bg-red-50 dark:bg-red-900/20 mb-4">
+          <p className="text-red-600 dark:text-red-400">Error: {(error as any)?.message || 'Failed to load catalog'}</p>
         </div>
       )}
 
-      <div className="card mb-4">
-        <input
-          type="text"
-          placeholder="Search by name or SKU..."
-          className="input"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="card">
+        <h2 className="mb-4 text-gray-900 dark:text-gray-100">Product Catalog</h2>
+        {isLoading ? (
+          <LoadingSpinner message="Fetching catalog from Unicommerce..." />
+        ) : (
+          <DataTable data={items} columns={columns} emptyMessage="No products found for this search." />
+        )}
       </div>
 
-      <div className="card">
-        <h2 className="mb-4 text-gray-900 dark:text-gray-100">Garment List</h2>
-        <DataTable
-          data={filteredGarments || []}
-          columns={columns}
-          isLoading={isLoading}
-          emptyMessage="No garments found. Create your first garment to get started."
-          onRowClick={(row) => {
-            setSelectedGarment(row);
-            setShowForm(true);
-          }}
-        />
-      </div>
+      {totalPages > 1 && (
+        <div className="flex justify-between items-center mt-4">
+          <button disabled={page === 0} onClick={() => setPage(page - 1)}
+            className="btn btn-secondary disabled:opacity-40">← Previous</button>
+          <span className="text-sm text-gray-600 dark:text-gray-400">Page {page + 1} of {totalPages}</span>
+          <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}
+            className="btn btn-secondary disabled:opacity-40">Next →</button>
+        </div>
+      )}
     </div>
   );
 }

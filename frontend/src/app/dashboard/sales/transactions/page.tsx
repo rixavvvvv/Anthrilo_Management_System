@@ -199,7 +199,7 @@ export default function SalesTransactionsPage() {
     return sum + (quantity * price);
   }, 0);
 
-  const uniqueSizes = Array.from(new Set(sales?.map((s: any) => s.size) || [])).sort();
+  const uniqueSizes = Array.from(new Set(sales?.map((s: any) => s.size) || [])).sort() as string[];
 
   const clearFilters = () => {
     setFilters({

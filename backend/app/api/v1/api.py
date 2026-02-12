@@ -2,6 +2,12 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import auth, yarns, fabrics, processes, garments, inventory, sales, panels, production, discounts, ads, reports
 # Use optimized integrations for accurate revenue calculation
 from app.api.v1.endpoints import integrations_optimized as integrations
+# Unicommerce API modules
+from app.api.v1.endpoints import (
+    uc_vendors, uc_grn, uc_catalog, uc_inventory,
+    uc_orders, uc_facility, uc_gatepass, uc_returns,
+    uc_shipping, uc_invoices, uc_misc, webhooks,
+)
 
 api_router = APIRouter()
 
@@ -38,6 +44,70 @@ api_router.include_router(ads.router, prefix="/ads",
 api_router.include_router(
     reports.router, prefix="/reports", tags=["Reports & Analytics"])
 
-# External Integrations
+# External Integrations (Sales Dashboard)
 api_router.include_router(
     integrations.router, prefix="/integrations", tags=["External Integrations"])
+
+# =========================================================================
+# Unicommerce API Integrations (All 101 endpoints)
+# =========================================================================
+
+# Vendors & Purchase Orders
+api_router.include_router(
+    uc_vendors.router, prefix="/uc/vendors",
+    tags=["UC - Vendors & Purchase Orders"])
+
+# GRN (Goods Receipt Notes)
+api_router.include_router(
+    uc_grn.router, prefix="/uc/grn",
+    tags=["UC - GRN"])
+
+# Catalog & Products
+api_router.include_router(
+    uc_catalog.router, prefix="/uc/catalog",
+    tags=["UC - Catalog & Products"])
+
+# Inventory Management (UC)
+api_router.include_router(
+    uc_inventory.router, prefix="/uc/inventory",
+    tags=["UC - Inventory"])
+
+# Sale Orders (UC)
+api_router.include_router(
+    uc_orders.router, prefix="/uc/orders",
+    tags=["UC - Sale Orders"])
+
+# Facility Management
+api_router.include_router(
+    uc_facility.router, prefix="/uc/facility",
+    tags=["UC - Facility"])
+
+# Gatepass
+api_router.include_router(
+    uc_gatepass.router, prefix="/uc/gatepass",
+    tags=["UC - Gatepass"])
+
+# Returns & Reverse Pickup
+api_router.include_router(
+    uc_returns.router, prefix="/uc/returns",
+    tags=["UC - Returns & Reverse Pickup"])
+
+# Shipping, Dispatch, Manifests
+api_router.include_router(
+    uc_shipping.router, prefix="/uc/shipping",
+    tags=["UC - Shipping & Dispatch"])
+
+# Invoices
+api_router.include_router(
+    uc_invoices.router, prefix="/uc/invoices",
+    tags=["UC - Invoices"])
+
+# Picklist, Custom UI, Misc
+api_router.include_router(
+    uc_misc.router, prefix="/uc/misc",
+    tags=["UC - Miscellaneous"])
+
+# Webhooks (real-time event system)
+api_router.include_router(
+    webhooks.router, prefix="/webhooks",
+    tags=["Webhooks"])

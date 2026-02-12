@@ -8,6 +8,28 @@ from app.services.reports import ReportsService
 router = APIRouter()
 
 
+# ==================== RAW MATERIALS REPORTS ====================
+
+@router.get("/raw-materials/stock-analysis")
+def get_stock_analysis(
+    category: Optional[str] = Query(None, description="Filter by category: Yarn, Fabric"),
+    db: Session = Depends(get_db)
+):
+    """Get raw materials stock analysis combining yarn and fabric data"""
+    service = ReportsService(db)
+    return service.raw_materials_stock_analysis(category)
+
+
+@router.get("/raw-materials/yarn-forecasting")
+def get_yarn_forecasting(
+    forecast_days: int = Query(30, description="Forecast period in days"),
+    db: Session = Depends(get_db)
+):
+    """Get yarn demand forecasting based on production plans and consumption"""
+    service = ReportsService(db)
+    return service.yarn_forecasting_report(forecast_days)
+
+
 # ==================== FABRIC REPORTS ====================
 
 @router.get("/fabric/stock-sheet/total")

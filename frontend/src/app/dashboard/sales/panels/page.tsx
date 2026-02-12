@@ -24,10 +24,10 @@
 import { useState } from 'react';
 import { PageHeader } from '@/components/ui/Common';
 import {
-  useTodaySales,
-  useYesterdaySales,
-  useLast7DaysSales,
-} from '@/lib/hooks/useUnicommerce';
+  useUnicommerceToday,
+  useUnicommerceYesterday,
+  useUnicommerceLast7Days,
+} from '@/lib/hooks/useUnicommerceSales';
 import {
   KPICard,
   RevenuePanel,
@@ -48,9 +48,9 @@ export default function PanelsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('today');
 
   // Fetch data ONLY for the selected period (PERFORMANCE FIX)
-  const todayData = useTodaySales(selectedPeriod === 'today');
-  const yesterdayData = useYesterdaySales(selectedPeriod === 'yesterday');
-  const last7Data = useLast7DaysSales(selectedPeriod === 'last7');
+  const todayData = useUnicommerceToday(selectedPeriod === 'today');
+  const yesterdayData = useUnicommerceYesterday(selectedPeriod === 'yesterday');
+  const last7Data = useUnicommerceLast7Days(selectedPeriod === 'last7');
   const currentData = {
     today: todayData,
     yesterday: yesterdayData,
@@ -94,7 +94,7 @@ export default function PanelsPage() {
 
       {/* Error Handling */}
       {currentData.error && (
-        <ErrorPanel message={currentData.error} />
+        <ErrorPanel message={currentData.error?.message || String(currentData.error)} />
       )}
 
       {/* Overview KPIs - Phase 1 & Phase 2 Data */}
@@ -105,7 +105,7 @@ export default function PanelsPage() {
           subtitle={`${currentData.data?.summary.valid_orders || 0} valid orders`}
           icon="📦"
           color="blue"
-          loading={currentData.loading}
+          loading={currentData.isLoading}
           dataSource="phase1"
         />
 
@@ -115,7 +115,7 @@ export default function PanelsPage() {
           subtitle="From sellingPrice"
           icon="💰"
           color="green"
-          loading={currentData.loading}
+          loading={currentData.isLoading}
           dataSource="phase2"
         />
 
@@ -125,7 +125,7 @@ export default function PanelsPage() {
           subtitle="Per valid order"
           icon="📊"
           color="purple"
-          loading={currentData.loading}
+          loading={currentData.isLoading}
           dataSource="phase2"
         />
 
@@ -135,14 +135,14 @@ export default function PanelsPage() {
           subtitle="Cancelled, Returned, etc."
           icon="❌"
           color="red"
-          loading={currentData.loading}
+          loading={currentData.isLoading}
           dataSource="phase1"
         />
       </div>
 
       {/* Revenue Deep Dive - Phase 2 Only */}
       <div className="grid grid-cols-1 gap-6">
-        {currentData.loading ? (
+        {currentData.isLoading ? (
           <LoadingPanel />
         ) : (
           <RevenuePanel
@@ -150,18 +150,18 @@ export default function PanelsPage() {
             revenue={currentData.data?.summary.total_revenue || 0}
             orders={currentData.data?.summary.valid_orders || 0}
             averageOrderValue={currentData.data?.summary.avg_order_value || 0}
-            loading={currentData.loading}
+            loading={currentData.isLoading}
           />
         )}
       </div>
 
       {/* Channel Revenue Visualization - Bar Chart */}
       <div className="grid grid-cols-1 gap-6">
-        {currentData.loading ? (
+        {currentData.isLoading ? (
           <LoadingPanel />
         ) : (
           <BarChart
-            data={Object.entries(currentData.data?.summary.channel_breakdown || {}).map(([channel, data]) => ({
+            data={Object.entries(currentData.data?.summary.channel_breakdown || {}).map(([channel, data]: [string, any]) => ({
               label: channel,
               value: data.revenue,
               color: getChannelColor(channel),
@@ -178,15 +178,15 @@ export default function PanelsPage() {
         {/* Channel Details Panel */}
         <ChannelBreakdownPanel
           channels={currentData.data?.summary.channel_breakdown || {}}
-          loading={currentData.loading}
+          loading={currentData.isLoading}
         />
 
         {/* Status Distribution - Donut Chart */}
-        {currentData.loading ? (
+        {currentData.isLoading ? (
           <LoadingPanel />
         ) : (
           <DonutChart
-            data={Object.entries(currentData.data?.summary.status_breakdown || {}).map(([status, count]) => ({
+            data={Object.entries(currentData.data?.summary.status_breakdown || {}).map(([status, count]: [string, any]) => ({
               label: status,
               value: count,
               color: getStatusColor(status),
@@ -202,7 +202,7 @@ export default function PanelsPage() {
       {currentData.data?.fetch_info && (
         <FetchInfoPanel
           fetchInfo={currentData.data.fetch_info}
-          loading={currentData.loading}
+          loading={currentData.isLoading}
         />
       )}
     </div>
