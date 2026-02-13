@@ -55,6 +55,13 @@ export default function GarmentsPage() {
       href: '/dashboard/garments/production',
       color: 'from-purple-500 to-violet-500',
     },
+    {
+      title: 'Best SKUs',
+      description: 'Top-performing SKUs by month',
+      icon: '🏆',
+      href: '/dashboard/garments/best-skus',
+      color: 'from-amber-500 to-orange-500',
+    },
   ];
 
   return (
@@ -95,7 +102,7 @@ export default function GarmentsPage() {
       {/* Management Modules */}
       <div>
         <h2 className="text-xl font-semibold mb-4 text-slate-900 dark:text-white">Management Modules</h2>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {modules.map((module) => (
             <Link
               key={module.href}

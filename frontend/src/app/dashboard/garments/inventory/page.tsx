@@ -60,26 +60,32 @@ export default function GarmentInventoryPage() {
     { key: 'skuCode', header: 'SKU', width: '13%' },
     { key: 'name', header: 'Product Name', width: '22%' },
     { key: 'categoryName', header: 'Category', width: '10%' },
-    { key: 'size', header: 'Size', width: '7%',
+    {
+      key: 'size', header: 'Size', width: '7%',
       render: (value) => <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-xs font-medium">{value}</span>,
     },
     { key: 'color', header: 'Color', width: '7%' },
-    { key: 'inventory', header: 'Good Stock', width: '8%',
+    {
+      key: 'inventory', header: 'Good Stock', width: '8%',
       render: (value) => {
         const c = value === 0 ? 'text-rose-600 dark:text-rose-400' : value <= 10 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400';
         return <span className={`font-bold ${c}`}>{value}</span>;
       },
     },
-    { key: 'virtualInventory', header: 'Virtual', width: '7%',
+    {
+      key: 'virtualInventory', header: 'Virtual', width: '7%',
       render: (value) => <span className="font-semibold text-slate-900 dark:text-slate-100">{value}</span>,
     },
-    { key: 'openSale', header: 'Open Sale', width: '7%',
+    {
+      key: 'openSale', header: 'Open Sale', width: '7%',
       render: (value) => <span className="text-blue-600 dark:text-blue-400 font-medium">{value}</span>,
     },
-    { key: 'badInventory', header: 'Bad Stock', width: '7%',
+    {
+      key: 'badInventory', header: 'Bad Stock', width: '7%',
       render: (value) => value > 0 ? <span className="text-rose-500 font-medium">{value}</span> : <span className="text-slate-400">0</span>,
     },
-    { key: 'price', header: 'MRP', width: '8%',
+    {
+      key: 'price', header: 'MRP', width: '8%',
       render: (value) => <span className="text-slate-900 dark:text-slate-100 font-medium">₹{value?.toFixed(0)}</span>,
     },
   ];
@@ -90,13 +96,13 @@ export default function GarmentInventoryPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <StatCard title="Total SKUs" value={totalRecords.toLocaleString()} icon="📦" color="blue" />
-        <StatCard title="Page" value={`${page + 1} of ${totalPages || 1}`} icon="📄" color="purple" />
+        <StatCard title="Showing" value={`${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, totalRecords)} of ${totalRecords.toLocaleString()}`} icon="📄" color="purple" />
         <StatCard title="Showing" value={`${items.length} of ${totalRecords.toLocaleString()}`} icon="✅" color="green" />
       </div>
 
       <div className="card mb-4">
         <div className="flex gap-4 items-center">
-          <input type="text" placeholder="Search by product name..." className="input flex-1"
+          <input type="text" placeholder="Search by SKU Code..." className="input flex-1"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />

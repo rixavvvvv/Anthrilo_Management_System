@@ -30,6 +30,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { name: 'Master Data', href: '/dashboard/garments/master' },
         { name: 'Inventory', href: '/dashboard/garments/inventory' },
         { name: 'Orders', href: '/dashboard/garments/production' },
+        { name: 'Best SKUs', href: '/dashboard/garments/best-skus' },
       ],
     },
     {
@@ -39,6 +40,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { name: 'Transactions', href: '/dashboard/sales/transactions' },
         { name: 'Panels', href: '/dashboard/sales/panels' },
         { name: 'Reports', href: '/dashboard/sales/reports' },
+        { name: 'COD vs Prepaid', href: '/dashboard/sales/cod-prepaid' },
       ],
     },
     {
@@ -80,9 +82,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             if ('href' in item) {
               return (
                 <Link key={item.name} href={(item as any).href}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${
-                    isActive((item as any).href) ? 'sidebar-active' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-white'
-                  }`}>
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${isActive((item as any).href) ? 'sidebar-active' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-white'
+                    }`}>
                   <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
                     <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
                   </svg>
@@ -92,9 +93,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             }
             return (
               <div key={item.name} className="space-y-0.5">
-                <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium ${
-                  isGroupActive((item as any).children) ? 'text-primary-600 dark:text-primary-400' : 'text-slate-500 dark:text-slate-400'
-                }`}>
+                <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium ${isGroupActive((item as any).children) ? 'text-primary-600 dark:text-primary-400' : 'text-slate-500 dark:text-slate-400'
+                  }`}>
                   <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
                     <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
                   </svg>
@@ -104,9 +104,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <div className="ml-8 space-y-0.5">
                     {(item as any).children.map((child: any) => (
                       <Link key={child.href} href={child.href}
-                        className={`block px-3 py-2 rounded-lg text-[13px] transition-all duration-200 ${
-                          isActive(child.href) ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/30'
-                        }`}>
+                        className={`block px-3 py-2 rounded-lg text-[13px] transition-all duration-200 ${isActive(child.href) ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/30'
+                          }`}>
                         {child.name}
                       </Link>
                     ))}

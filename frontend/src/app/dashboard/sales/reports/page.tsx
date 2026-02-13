@@ -12,6 +12,12 @@ export default function SalesReportsPage() {
       icon: '📊',
     },
     {
+      title: 'Daily Return Report',
+      description: 'RTO & Customer-Initiated Returns breakdown by channel and SKU',
+      href: '/dashboard/sales/reports/returns',
+      icon: '↩️',
+    },
+    {
       title: 'Sales Analytics',
       description: 'Comprehensive sales performance analysis',
       href: '/dashboard/reports/sales',

@@ -502,6 +502,16 @@ class UnicommerceServiceProduction:
                 "statusCode": item.get("statusCode"),
             })
 
+        # Extract COD-related data from shipping packages
+        shipping_packages = order_dto.get("shippingPackages", [])
+        shipping_method = ""
+        collectable_amount = 0.0
+        if shipping_packages and isinstance(shipping_packages, list):
+            first_pkg = shipping_packages[0] if shipping_packages else {}
+            shipping_method = first_pkg.get("shippingMethod", "") or ""
+            collectable_amount = float(
+                first_pkg.get("collectableAmount", 0) or 0)
+
         return {
             "code": order_dto.get("code"),
             "status": order_dto.get("status"),
@@ -511,6 +521,8 @@ class UnicommerceServiceProduction:
             "saleOrderItems": essential_items,
             "totalQuantity": total_quantity,  # NEW: Add total quantity
             "cod": order_dto.get("cod", False),
+            "shippingMethod": shipping_method,
+            "collectableAmount": collectable_amount,
         }
 
     async def fetch_order_details_batch(

@@ -40,8 +40,8 @@ export default function OrdersPage() {
     itemSku: o.items?.[0]?.itemSku || o.item_sku || '-',
   }));
 
-  const totalOrders = ordersData?.total || orders.length;
-  const totalPages = ordersData?.total_pages || Math.ceil(totalOrders / PAGE_SIZE);
+  const totalOrders = ordersData?.pagination?.total_orders || ordersData?.total || orders.length;
+  const totalPages = ordersData?.pagination?.total_pages || ordersData?.total_pages || Math.ceil(totalOrders / PAGE_SIZE) || 1;
 
   // Fix: access summary data correctly
   const summary = summaryData?.summary || summaryData || {};
@@ -58,25 +58,30 @@ export default function OrdersPage() {
 
   const columns: Column<any>[] = [
     { key: 'code', header: 'Order Code', width: '18%' },
-    { key: 'channel', header: 'Channel', width: '14%',
+    {
+      key: 'channel', header: 'Channel', width: '14%',
       render: (value) => (
         <span className="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium">{value}</span>
       ),
     },
-    { key: 'status', header: 'Status', width: '12%',
+    {
+      key: 'status', header: 'Status', width: '12%',
       render: (value) => (
         <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[value] || 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200'}`}>
           {value}
         </span>
       ),
     },
-    { key: 'items', header: 'Items', width: '7%',
+    {
+      key: 'items', header: 'Items', width: '7%',
       render: (value) => <span className="font-semibold">{value}</span>,
     },
-    { key: 'selling_price', header: 'Selling Price', width: '13%',
+    {
+      key: 'selling_price', header: 'Selling Price', width: '13%',
       render: (value) => <span className="text-slate-900 dark:text-slate-100">₹{(value || 0).toFixed(2)}</span>,
     },
-    { key: 'net_revenue', header: 'Net Revenue', width: '13%',
+    {
+      key: 'net_revenue', header: 'Net Revenue', width: '13%',
       render: (value) => <span className="text-emerald-600 dark:text-emerald-400 font-bold">₹{(value || 0).toFixed(2)}</span>,
     },
   ];
