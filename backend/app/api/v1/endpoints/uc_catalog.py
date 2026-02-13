@@ -163,7 +163,43 @@ async def search_items(payload: Dict[str, Any] = Body(...)):
     """
     try:
         svc = get_uc_api_service()
-        return await svc.post("/product/itemType/search", payload)
+        result = await svc.post("/product/itemType/search", payload)
+
+        # Log sample if inventory snapshot requested
+        if payload.get("getInventorySnapshot") and result.get("successful"):
+            elements = result.get("elements", [])
+            if elements:
+                first_item = elements[0]
+                logger.info(f"Sample item structure: SKU={first_item.get('skuCode')}, "
+                            f"has inventorySnapshots: {bool(first_item.get('inventorySnapshots'))}")
+                if first_item.get("inventorySnapshots"):
+                    snap = first_item["inventorySnapshots"][0]
+                    logger.info(
+                        f"Sample inventory snapshot keys: {list(snap.keys())}")
+                    logger.info(f"Sample inventory values: inventory={snap.get('inventory')}, "
+                                f"goodInventory={snap.get('goodInventory')}, "
+                                f"availableInventory={snap.get('availableInventory')}, "
+                                f"virtualInventory={snap.get('virtualInventory')}")
+
+        # Transform response to ensure consistent field naming
+        if result.get("successful") and payload.get("getInventorySnapshot"):
+            elements = result.get("elements", [])
+            for item in elements:
+                snapshots = item.get("inventorySnapshots", [])
+                for snap in snapshots:
+                    # Normalize field names - try multiple possible field names
+                    if "goodInventory" in snap and "inventory" not in snap:
+                        snap["inventory"] = snap["goodInventory"]
+                    if "availableInventory" in snap and "inventory" not in snap:
+                        snap["inventory"] = snap["availableInventory"]
+                    # Ensure numeric values
+                    snap["inventory"] = snap.get("inventory", 0) or 0
+                    snap["virtualInventory"] = snap.get(
+                        "virtualInventory", 0) or 0
+                    snap["badInventory"] = snap.get("badInventory", 0) or 0
+                    snap["openSale"] = snap.get("openSale", 0) or 0
+
+        return result
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)
         return {"successful": False, "error": str(e)}

@@ -1257,6 +1257,13 @@ async def get_cod_vs_prepaid(
         m = month or now.month
         y = year or now.year
 
+        # Check cache first (1 hour TTL for monthly data)
+        cache_key = f"cod_vs_prepaid_{y}_{m:02d}"
+        cached = service._get_from_cache(cache_key)
+        if cached:
+            logger.info(f"COD vs Prepaid cache hit for {y}-{m:02d}")
+            return cached
+
         from_dt = datetime(y, m, 1, 0, 0, 0, tzinfo=timezone.utc)
         if m == 12:
             to_dt = datetime(y + 1, 1, 1, 0, 0, 0,
@@ -1268,7 +1275,11 @@ async def get_cod_vs_prepaid(
         if to_dt > now.replace(tzinfo=timezone.utc):
             to_dt = now.replace(tzinfo=timezone.utc)
 
+        logger.info(
+            f"COD vs Prepaid: fetching orders from {from_dt.date()} to {to_dt.date()}")
         fetch_result = await service.fetch_all_orders_with_revenue(from_dt, to_dt)
+        logger.info(
+            f"COD vs Prepaid: fetched {len(fetch_result.get('orders', []))} orders")
         if not fetch_result.get("successful", False):
             return {"success": False, "error": "Failed to fetch orders"}
 
@@ -1328,6 +1339,9 @@ async def get_cod_vs_prepaid(
         total_orders = cod_orders + prepaid_orders
         total_revenue = cod_revenue + prepaid_revenue
 
+        logger.info(
+            f"COD vs Prepaid: processed {total_orders} orders ({cod_orders} COD, {prepaid_orders} Prepaid) for {y}-{m:02d}")
+
         for ch in channel_breakdown.values():
             ch["cod_revenue"] = round(ch["cod_revenue"], 2)
             ch["prepaid_revenue"] = round(ch["prepaid_revenue"], 2)
@@ -1337,7 +1351,7 @@ async def get_cod_vs_prepaid(
             key=lambda x: x["cod_orders"] + x["prepaid_orders"], reverse=True,
         )
 
-        return {
+        result = {
             "success": True,
             "month": m, "year": y,
             "period": f"{y}-{m:02d}",
@@ -1355,6 +1369,12 @@ async def get_cod_vs_prepaid(
             "total_revenue": round(total_revenue, 2),
             "channels": channels,
         }
+
+        # Cache for 1 hour
+        service._set_cache(cache_key, result)
+        logger.info(f"COD vs Prepaid: cached result for {y}-{m:02d}")
+
+        return result
 
     except Exception as e:
         logger.error(f"Error in cod-vs-prepaid: {e}", exc_info=True)
