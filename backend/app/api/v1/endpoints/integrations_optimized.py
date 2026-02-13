@@ -22,6 +22,8 @@ from app.core.token_manager import get_token_manager
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+IST = timezone(timedelta(hours=5, minutes=30))
+
 
 # =============================================================================
 # SUMMARY ENDPOINTS (For dashboard cards)
@@ -657,7 +659,8 @@ async def check_cache_status():
 
 @router.get("/unicommerce/sales-by-sku")
 async def get_sales_by_sku(
-    period: str = Query("today", description="today, yesterday, last_7_days, last_30_days"),
+    period: str = Query(
+        "today", description="today, yesterday, last_7_days, last_30_days"),
     from_date: str = Query(None, description="Custom start date YYYY-MM-DD"),
     to_date: str = Query(None, description="Custom end date YYYY-MM-DD"),
 ):
@@ -736,20 +739,23 @@ async def get_sales_by_sku(
                     sku_map[sku]["order_count"] += 1
 
                     if channel not in sku_map[sku]["channels"]:
-                        sku_map[sku]["channels"][channel] = {"quantity": 0, "revenue": 0.0}
+                        sku_map[sku]["channels"][channel] = {
+                            "quantity": 0, "revenue": 0.0}
                     sku_map[sku]["channels"][channel]["quantity"] += qty
                     sku_map[sku]["channels"][channel]["revenue"] += selling
 
         # Compute avg selling price and round
         for s in sku_map.values():
             if s["total_quantity"] > 0:
-                s["avg_selling_price"] = round(s["total_revenue"] / s["total_quantity"], 2)
+                s["avg_selling_price"] = round(
+                    s["total_revenue"] / s["total_quantity"], 2)
             s["total_revenue"] = round(s["total_revenue"], 2)
             s["total_discount"] = round(s["total_discount"], 2)
             for ch in s["channels"].values():
                 ch["revenue"] = round(ch["revenue"], 2)
 
-        skus = sorted(sku_map.values(), key=lambda x: x["total_revenue"], reverse=True)
+        skus = sorted(sku_map.values(),
+                      key=lambda x: x["total_revenue"], reverse=True)
         total_revenue = round(sum(s["total_revenue"] for s in skus), 2)
         total_quantity = sum(s["total_quantity"] for s in skus)
         total_discount = round(sum(s["total_discount"] for s in skus), 2)
@@ -776,3 +782,580 @@ async def get_sales_by_sku(
     except Exception as e:
         logger.error(f"Error in sales_by_sku: {e}", exc_info=True)
         return {"success": False, "error": str(e), "skus": []}
+
+
+# =============================================================================
+# DAILY RETURN REPORT (Three-Phase: return/search + return/get + saleorder/get)
+# =============================================================================
+
+@router.get("/unicommerce/daily-return-report")
+async def get_daily_return_report(
+    date: str = Query(..., description="Date for report (YYYY-MM-DD)"),
+    return_type: str = Query("ALL", description="RTO, CIR, or ALL"),
+):
+    """
+    Daily Return Report with channel-wise + SKU breakdown.
+    Uses Unicommerce return/search then return/get then saleorder/get APIs.
+    Supports RTO, CIR, or ALL return types.
+
+    Phase 1: return/search → get return codes (returnOrders[].code)
+    Phase 2: return/get   → get items per return (returnSaleOrderItems)
+    Phase 3: saleorder/get → get channel + sellingPrice for each sale order
+    """
+    import httpx
+
+    try:
+        token_manager = get_token_manager()
+        tenant = token_manager.tenant
+        base_url = f"https://{tenant}.unicommerce.com/services/rest/v1"
+        headers = await token_manager.get_headers()
+        headers["Facility"] = "anthrilo"
+        timeout = httpx.Timeout(90.0, connect=15.0)
+
+        # Unicommerce return/search date format: ISO with T separator
+        created_from = f"{date}T00:00:00"
+        created_to = f"{date}T23:59:59"
+
+        # Determine which return types to fetch
+        types_to_fetch = []
+        if return_type == "ALL":
+            types_to_fetch = ["RTO", "CIR"]
+        else:
+            types_to_fetch = [return_type.upper()]
+
+        all_return_codes = []
+        search_results = {}
+
+        # =====================================================================
+        # Phase 1: Search returns for each type
+        # API: POST /oms/return/search
+        # Response field: returnOrders[] with {code, created, updated}
+        # Strategy: Try createdFrom/To first, then updatedFrom/To as fallback
+        # =====================================================================
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            for rtype in types_to_fetch:
+                search_url = f"{base_url}/oms/return/search"
+
+                # Try with createdFrom/To first
+                search_payload = {
+                    "returnType": rtype,
+                    "createdFrom": created_from,
+                    "createdTo": created_to,
+                }
+                logger.info(
+                    f"Return search {rtype}: POST {search_url} payload={search_payload}")
+
+                found_returns = []
+                try:
+                    resp = await client.post(search_url, json=search_payload, headers=headers)
+                    if resp.status_code == 401:
+                        token = await token_manager.get_valid_token()
+                        if token:
+                            headers = await token_manager.get_headers()
+                            headers["Facility"] = "anthrilo"
+                            resp = await client.post(search_url, json=search_payload, headers=headers)
+                    logger.info(
+                        f"Return search {rtype} response status: {resp.status_code}")
+                    resp.raise_for_status()
+                    data = resp.json()
+                    logger.info(
+                        f"Return search {rtype} response keys: {list(data.keys())}")
+                    if data.get("successful"):
+                        # UC return/search returns "returnOrders" list of
+                        # {code, created, updated} — NOT "reversePickupCodes"
+                        return_orders = data.get("returnOrders", [])
+                        logger.info(
+                            f"Return search {rtype}: found {len(return_orders)} returns (createdFrom/To)")
+                        found_returns = return_orders
+                    else:
+                        errors = data.get("errors", [])
+                        msg = data.get("message", "")
+                        logger.warning(
+                            f"Return search {rtype} not successful: message={msg}, errors={errors}")
+                except Exception as e:
+                    logger.error(
+                        f"Return search {rtype} error (createdFrom/To): {e}")
+
+                # Fallback: try updatedFrom/To if createdFrom/To returned empty
+                if not found_returns:
+                    try:
+                        fallback_payload = {
+                            "returnType": rtype,
+                            "updatedFrom": created_from,
+                            "updatedTo": created_to,
+                        }
+                        logger.info(
+                            f"Return search {rtype}: fallback with updatedFrom/To")
+                        resp = await client.post(search_url, json=fallback_payload, headers=headers)
+                        if resp.status_code == 401:
+                            token = await token_manager.get_valid_token()
+                            if token:
+                                headers = await token_manager.get_headers()
+                                headers["Facility"] = "anthrilo"
+                                resp = await client.post(search_url, json=fallback_payload, headers=headers)
+                        resp.raise_for_status()
+                        data = resp.json()
+                        if data.get("successful"):
+                            found_returns = data.get("returnOrders", [])
+                            logger.info(
+                                f"Return search {rtype}: fallback found {len(found_returns)} returns (updatedFrom/To)")
+                    except Exception as e:
+                        logger.error(
+                            f"Return search {rtype} fallback error: {e}")
+
+                for ro in found_returns:
+                    code = ro.get("code", "") if isinstance(ro, dict) else ro
+                    if code:
+                        all_return_codes.append(
+                            {"code": code, "type": rtype})
+                search_results[rtype] = len(found_returns)
+                logger.info(
+                    f"Return search {rtype}: total codes collected = {len(all_return_codes)}")
+
+        if not all_return_codes:
+            return {
+                "success": True,
+                "date": date,
+                "return_type": return_type,
+                "returns": [],
+                "by_channel": [],
+                "by_sku": [],
+                "totals": {
+                    "total_returns": 0, "total_items": 0,
+                    "total_value": 0, "rto_count": 0, "cir_count": 0,
+                },
+                "search_results": search_results,
+            }
+
+        # =====================================================================
+        # Phase 2: Get details for each return
+        # API: POST /oms/return/get  (with reversePickupCode)
+        # Response fields:
+        #   - returnSaleOrderItems[]: {skuCode, itemName, saleOrderCode,
+        #       saleOrderItemCode, channelProductId, saleOrderItemStatus, ...}
+        #   - returnSaleOrderValue: {returnStatus, saleOrderCode,
+        #       reversePickupCode, returnCreatedDate, ...}
+        # =====================================================================
+        return_details = []
+        sale_order_codes = set()
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            for entry in all_return_codes:
+                get_url = f"{base_url}/oms/return/get"
+                get_payload = {
+                    "reversePickupCode": entry["code"],
+                    "shipmentCode": None,
+                }
+                try:
+                    resp = await client.post(get_url, json=get_payload, headers=headers)
+                    if resp.status_code == 401:
+                        token = await token_manager.get_valid_token()
+                        if token:
+                            headers = await token_manager.get_headers()
+                            headers["Facility"] = "anthrilo"
+                            resp = await client.post(get_url, json=get_payload, headers=headers)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    if data.get("successful"):
+                        # Parse the correct response structure
+                        items = data.get("returnSaleOrderItems", [])
+                        value_info = data.get("returnSaleOrderValue", {})
+                        logger.info(
+                            f"Return get {entry['code']}: "
+                            f"{len(items)} items, "
+                            f"saleOrderCode={value_info.get('saleOrderCode', '')}, "
+                            f"status={value_info.get('returnStatus', '')}"
+                        )
+
+                        detail = {
+                            "_return_type": entry["type"],
+                            "_code": entry["code"],
+                            "status": value_info.get("returnStatus", ""),
+                            "created": value_info.get("returnCreatedDate", ""),
+                            "saleOrderCode": value_info.get("saleOrderCode", ""),
+                            "reversePickupCode": value_info.get("reversePickupCode", entry["code"]),
+                            "items": items,
+                        }
+                        return_details.append(detail)
+
+                        # Collect unique sale order codes for Phase 3
+                        for item in items:
+                            so_code = item.get("saleOrderCode", "")
+                            if so_code:
+                                sale_order_codes.add(so_code)
+                        # Also from value_info
+                        so_code_top = value_info.get("saleOrderCode", "")
+                        if so_code_top:
+                            sale_order_codes.add(so_code_top)
+
+                except Exception as e:
+                    logger.error(f"Return get {entry['code']} error: {e}")
+
+        # =====================================================================
+        # Phase 3: Fetch sale order details for channel + pricing
+        # API: POST /oms/saleorder/get  (with code)
+        # Response: saleOrderDTO.channel, saleOrderDTO.saleOrderItems[].sellingPrice
+        # =====================================================================
+        so_details = {}  # saleOrderCode -> {channel, items: {saleOrderItemCode -> {sellingPrice, itemSku}}}
+
+        if sale_order_codes:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                for so_code in sale_order_codes:
+                    so_url = f"{base_url}/oms/saleorder/get"
+                    so_payload = {"code": so_code}
+                    try:
+                        resp = await client.post(so_url, json=so_payload, headers=headers)
+                        if resp.status_code == 401:
+                            token = await token_manager.get_valid_token()
+                            if token:
+                                headers = await token_manager.get_headers()
+                                headers["Facility"] = "anthrilo"
+                                resp = await client.post(so_url, json=so_payload, headers=headers)
+                        resp.raise_for_status()
+                        data = resp.json()
+                        if data.get("successful"):
+                            so_dto = data.get("saleOrderDTO", {})
+                            channel = so_dto.get("channel", "UNKNOWN")
+
+                            # Map saleOrderItemCode -> pricing info
+                            items_map = {}
+                            for so_item in so_dto.get("saleOrderItems", []):
+                                item_code = so_item.get("code", "")
+                                items_map[item_code] = {
+                                    "sellingPrice": float(so_item.get("sellingPrice", 0) or 0),
+                                    "itemSku": so_item.get("itemSku", ""),
+                                    "itemName": so_item.get("itemName", ""),
+                                    "quantity": so_item.get("quantity", 1) or 1,
+                                }
+                            so_details[so_code] = {
+                                "channel": channel, "items": items_map}
+                    except Exception as e:
+                        logger.error(f"SaleOrder get {so_code} error: {e}")
+
+        # =====================================================================
+        # Aggregate data using return details + sale order details
+        # =====================================================================
+        channel_map = {}
+        sku_map = {}
+        returns_list = []
+        rto_count = 0
+        cir_count = 0
+        total_value = 0.0
+        total_items = 0
+
+        for rp in return_details:
+            rtype = rp.get("_return_type", "UNKNOWN")
+            code = rp.get("_code", "")
+            items = rp.get("items", [])
+
+            if rtype == "RTO":
+                rto_count += 1
+            elif rtype == "CIR":
+                cir_count += 1
+
+            # Determine channel from sale order details
+            so_code = rp.get("saleOrderCode", "")
+            so_info = so_details.get(so_code, {})
+            channel = so_info.get("channel", "UNKNOWN")
+
+            return_entry = {
+                "code": code,
+                "type": rtype,
+                "channel": channel,
+                "status": rp.get("status", ""),
+                "created": rp.get("created", ""),
+                "saleOrderCode": so_code,
+                "items": [],
+                "total_value": 0.0,
+            }
+
+            for item in items:
+                sku = item.get("skuCode", item.get("itemSku", "UNKNOWN"))
+                item_name = item.get("itemName", "")
+                so_item_code = item.get("saleOrderItemCode", "")
+                item_so_code = item.get("saleOrderCode", so_code)
+
+                # Each returnSaleOrderItem represents 1 item
+                qty = 1
+
+                # Look up sellingPrice from Phase 3 sale order data
+                price = 0.0
+                item_so_info = so_details.get(item_so_code, so_info)
+                if item_so_info:
+                    so_items = item_so_info.get("items", {})
+                    if so_item_code and so_item_code in so_items:
+                        price = so_items[so_item_code].get("sellingPrice", 0.0)
+                    else:
+                        # Fallback: match by SKU code across all items
+                        for _, si in so_items.items():
+                            if si.get("itemSku") == sku:
+                                price = si.get("sellingPrice", 0.0)
+                                break
+
+                    # Use channel from item's sale order if different
+                    if channel == "UNKNOWN":
+                        channel = item_so_info.get("channel", "UNKNOWN")
+
+                total_items += qty
+                total_value += price
+                return_entry["total_value"] += price
+                return_entry["items"].append({
+                    "sku": sku, "name": item_name, "quantity": qty, "price": price,
+                })
+
+                # Channel aggregation (per return, not per item — avoid double-counting)
+                # We aggregate channel at the return level below
+
+                # SKU aggregation
+                if sku not in sku_map:
+                    sku_map[sku] = {"sku": sku, "name": item_name,
+                                    "quantity": 0, "value": 0.0, "return_count": 0}
+                sku_map[sku]["quantity"] += qty
+                sku_map[sku]["value"] += price
+                sku_map[sku]["return_count"] += 1
+
+            # Channel aggregation at the return level
+            if channel not in channel_map:
+                channel_map[channel] = {
+                    "channel": channel, "returns": 0, "items": 0,
+                    "value": 0.0, "rto": 0, "cir": 0}
+            channel_map[channel]["returns"] += 1
+            channel_map[channel]["items"] += len(items)
+            channel_map[channel]["value"] += return_entry["total_value"]
+            if rtype == "RTO":
+                channel_map[channel]["rto"] += 1
+            else:
+                channel_map[channel]["cir"] += 1
+
+            returns_list.append(return_entry)
+
+        by_channel = sorted(channel_map.values(),
+                            key=lambda x: x["value"], reverse=True)
+        by_sku = sorted(sku_map.values(),
+                        key=lambda x: x["quantity"], reverse=True)
+
+        for ch in by_channel:
+            ch["value"] = round(ch["value"], 2)
+        for s in by_sku:
+            s["value"] = round(s["value"], 2)
+
+        return {
+            "success": True,
+            "date": date,
+            "return_type": return_type,
+            "returns": returns_list,
+            "by_channel": by_channel,
+            "by_sku": by_sku,
+            "totals": {
+                "total_returns": len(return_details),
+                "total_items": total_items,
+                "total_value": round(total_value, 2),
+                "rto_count": rto_count,
+                "cir_count": cir_count,
+            },
+            "search_results": search_results,
+        }
+
+    except Exception as e:
+        logger.error(f"Error in daily return report: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# BEST PERFORMING SKUs (Monthly)
+# =============================================================================
+
+@router.get("/unicommerce/best-skus-monthly")
+async def get_best_skus_monthly(
+    month: int = Query(None, description="Month (1-12), defaults to current"),
+    year: int = Query(None, description="Year, defaults to current"),
+    limit: int = Query(20, description="Number of top SKUs"),
+):
+    """Get best performing SKUs for a given month."""
+    try:
+        service = get_unicommerce_service()
+        now = datetime.now(IST)
+        m = month or now.month
+        y = year or now.year
+
+        from_dt = datetime(y, m, 1, 0, 0, 0, tzinfo=timezone.utc)
+        if m == 12:
+            to_dt = datetime(y + 1, 1, 1, 0, 0, 0,
+                             tzinfo=timezone.utc) - timedelta(seconds=1)
+        else:
+            to_dt = datetime(y, m + 1, 1, 0, 0, 0,
+                             tzinfo=timezone.utc) - timedelta(seconds=1)
+
+        # Cap to_dt to now if in current month
+        if to_dt > now.replace(tzinfo=timezone.utc):
+            to_dt = now.replace(tzinfo=timezone.utc)
+
+        fetch_result = await service.fetch_all_orders_with_revenue(from_dt, to_dt)
+        if not fetch_result.get("successful", False):
+            return {"success": False, "error": "Failed to fetch orders"}
+
+        raw_orders = fetch_result.get("orders", [])
+
+        # Aggregate by SKU
+        sku_map = {}
+        for order in raw_orders:
+            status = order.get("status", "")
+            if status in service.EXCLUDED_STATUSES:
+                continue
+            channel = order.get("channel", "UNKNOWN")
+            for item in order.get("saleOrderItems", []):
+                sku = item.get("itemSku", "UNKNOWN")
+                qty = item.get("quantity", 1) or 1
+                price = float(item.get("sellingPrice", 0) or 0)
+                if sku not in sku_map:
+                    sku_map[sku] = {
+                        "sku": sku, "name": item.get("itemName", ""),
+                        "quantity": 0, "revenue": 0.0, "order_count": 0, "channels": {},
+                    }
+                sku_map[sku]["quantity"] += qty
+                sku_map[sku]["revenue"] += price
+                sku_map[sku]["order_count"] += 1
+                if channel not in sku_map[sku]["channels"]:
+                    sku_map[sku]["channels"][channel] = 0
+                sku_map[sku]["channels"][channel] += qty
+
+        for s in sku_map.values():
+            s["revenue"] = round(s["revenue"], 2)
+            s["avg_price"] = round(
+                s["revenue"] / s["quantity"], 2) if s["quantity"] > 0 else 0
+
+        top_skus = sorted(sku_map.values(),
+                          key=lambda x: x["quantity"], reverse=True)[:limit]
+
+        return {
+            "success": True,
+            "month": m, "year": y,
+            "period": f"{y}-{m:02d}",
+            "total_skus": len(sku_map),
+            "total_orders": len(raw_orders),
+            "skus": top_skus,
+        }
+
+    except Exception as e:
+        logger.error(f"Error in best-skus-monthly: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# COD vs PREPAID (Monthly)
+# =============================================================================
+
+@router.get("/unicommerce/cod-vs-prepaid")
+async def get_cod_vs_prepaid(
+    month: int = Query(None, description="Month (1-12), defaults to current"),
+    year: int = Query(None, description="Year, defaults to current"),
+):
+    """Get COD vs Prepaid breakdown for a given month."""
+    try:
+        service = get_unicommerce_service()
+        now = datetime.now(IST)
+        m = month or now.month
+        y = year or now.year
+
+        from_dt = datetime(y, m, 1, 0, 0, 0, tzinfo=timezone.utc)
+        if m == 12:
+            to_dt = datetime(y + 1, 1, 1, 0, 0, 0,
+                             tzinfo=timezone.utc) - timedelta(seconds=1)
+        else:
+            to_dt = datetime(y, m + 1, 1, 0, 0, 0,
+                             tzinfo=timezone.utc) - timedelta(seconds=1)
+
+        if to_dt > now.replace(tzinfo=timezone.utc):
+            to_dt = now.replace(tzinfo=timezone.utc)
+
+        fetch_result = await service.fetch_all_orders_with_revenue(from_dt, to_dt)
+        if not fetch_result.get("successful", False):
+            return {"success": False, "error": "Failed to fetch orders"}
+
+        raw_orders = fetch_result.get("orders", [])
+
+        cod_orders = 0
+        cod_revenue = 0.0
+        cod_items = 0
+        prepaid_orders = 0
+        prepaid_revenue = 0.0
+        prepaid_items = 0
+        channel_breakdown = {}
+
+        for order in raw_orders:
+            status = order.get("status", "")
+            if status in service.EXCLUDED_STATUSES:
+                continue
+
+            # Robust multi-signal COD detection:
+            # 1. Direct cod boolean from saleOrderDTO
+            # 2. shippingMethod containing "COD" (e.g. "Standard-COD")
+            # 3. collectableAmount > 0 (amount collected at delivery)
+            cod_flag = order.get("cod", False)
+            shipping_method = (order.get("shippingMethod") or "").upper()
+            collectable = float(order.get("collectableAmount", 0) or 0)
+            is_cod = bool(
+                cod_flag) or "COD" in shipping_method or collectable > 0
+            channel = order.get("channel", "UNKNOWN")
+            order_revenue = 0.0
+            order_items = 0
+
+            for item in order.get("saleOrderItems", []):
+                qty = item.get("quantity", 1) or 1
+                price = float(item.get("sellingPrice", 0) or 0)
+                order_revenue += price
+                order_items += qty
+
+            if is_cod:
+                cod_orders += 1
+                cod_revenue += order_revenue
+                cod_items += order_items
+            else:
+                prepaid_orders += 1
+                prepaid_revenue += order_revenue
+                prepaid_items += order_items
+
+            if channel not in channel_breakdown:
+                channel_breakdown[channel] = {
+                    "cod_orders": 0, "cod_revenue": 0, "prepaid_orders": 0, "prepaid_revenue": 0}
+            if is_cod:
+                channel_breakdown[channel]["cod_orders"] += 1
+                channel_breakdown[channel]["cod_revenue"] += order_revenue
+            else:
+                channel_breakdown[channel]["prepaid_orders"] += 1
+                channel_breakdown[channel]["prepaid_revenue"] += order_revenue
+
+        total_orders = cod_orders + prepaid_orders
+        total_revenue = cod_revenue + prepaid_revenue
+
+        for ch in channel_breakdown.values():
+            ch["cod_revenue"] = round(ch["cod_revenue"], 2)
+            ch["prepaid_revenue"] = round(ch["prepaid_revenue"], 2)
+
+        channels = sorted(
+            [{"channel": k, **v} for k, v in channel_breakdown.items()],
+            key=lambda x: x["cod_orders"] + x["prepaid_orders"], reverse=True,
+        )
+
+        return {
+            "success": True,
+            "month": m, "year": y,
+            "period": f"{y}-{m:02d}",
+            "cod": {
+                "orders": cod_orders, "revenue": round(cod_revenue, 2), "items": cod_items,
+                "percentage": round(cod_orders / total_orders * 100, 1) if total_orders > 0 else 0,
+                "avg_order_value": round(cod_revenue / cod_orders, 2) if cod_orders > 0 else 0,
+            },
+            "prepaid": {
+                "orders": prepaid_orders, "revenue": round(prepaid_revenue, 2), "items": prepaid_items,
+                "percentage": round(prepaid_orders / total_orders * 100, 1) if total_orders > 0 else 0,
+                "avg_order_value": round(prepaid_revenue / prepaid_orders, 2) if prepaid_orders > 0 else 0,
+            },
+            "total_orders": total_orders,
+            "total_revenue": round(total_revenue, 2),
+            "channels": channels,
+        }
+
+    except Exception as e:
+        logger.error(f"Error in cod-vs-prepaid: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}

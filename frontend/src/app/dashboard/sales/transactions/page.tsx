@@ -14,6 +14,9 @@ export default function SalesTransactionsPage() {
   const [search, setSearch] = useState('');
   const [sizeFilter, setSizeFilter] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('all'); // all, prepaid, cod
+  const [channelFilter, setChannelFilter] = useState('');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
 
   // Fetch summary data (reuses cache from dashboard)
   const { data: summaryData, isLoading: loadingSummary } = useQuery({
@@ -36,11 +39,16 @@ export default function SalesTransactionsPage() {
 
   // Fetch paginated orders from UC
   const { data: ordersData, isLoading: loadingOrders, error } = useQuery({
-    queryKey: ['uc-transactions', period, page],
+    queryKey: ['uc-transactions', period, page, customFrom, customTo],
     queryFn: async () => {
+      if (period === 'custom' && customFrom && customTo) {
+        const response = await ucSales.getOrders({ period: 'custom', from_date: customFrom, to_date: customTo, page, page_size: 100 });
+        return response.data;
+      }
       const response = await ucSales.getOrders({ period, page, page_size: 100 }); // fetch larger batch for client filtering
       return response.data;
     },
+    enabled: period !== 'custom' || (!!customFrom && !!customTo),
     staleTime: 60_000,
   });
 
@@ -89,6 +97,15 @@ export default function SalesTransactionsPage() {
     return Array.from(sizes).sort();
   }, [allRows]);
 
+  // Extract unique channels for filter
+  const uniqueChannels = useMemo(() => {
+    const channels = new Set<string>();
+    allRows.forEach((r) => {
+      if (r.channel && r.channel !== '-') channels.add(r.channel);
+    });
+    return Array.from(channels).sort();
+  }, [allRows]);
+
   // Apply client-side filters
   const filtered = useMemo(() => {
     return allRows.filter((row) => {
@@ -96,8 +113,8 @@ export default function SalesTransactionsPage() {
       if (search) {
         const term = search.toLowerCase();
         if (!row.code?.toLowerCase().includes(term) &&
-            !row.sku?.toLowerCase().includes(term) &&
-            !row.channel?.toLowerCase().includes(term)) {
+          !row.sku?.toLowerCase().includes(term) &&
+          !row.channel?.toLowerCase().includes(term)) {
           return false;
         }
       }
@@ -106,9 +123,11 @@ export default function SalesTransactionsPage() {
       // Payment filter
       if (paymentFilter === 'cod' && !row.cashOnDelivery) return false;
       if (paymentFilter === 'prepaid' && row.cashOnDelivery) return false;
+      // Channel filter
+      if (channelFilter && row.channel !== channelFilter) return false;
       return true;
     });
-  }, [allRows, search, sizeFilter, paymentFilter]);
+  }, [allRows, search, sizeFilter, paymentFilter, channelFilter]);
 
   // Client-side pagination of filtered results
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
@@ -129,28 +148,36 @@ export default function SalesTransactionsPage() {
   };
 
   const columns: Column<any>[] = [
-    { key: 'date', header: 'Date', width: '14%',
+    {
+      key: 'date', header: 'Date', width: '14%',
       render: (value) => value ? new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-',
     },
-    { key: 'code', header: 'Order Code', width: '15%',
+    {
+      key: 'code', header: 'Order Code', width: '15%',
       render: (value) => <span className="font-mono text-xs font-semibold text-primary-700 dark:text-primary-300">{value}</span>,
     },
-    { key: 'channel', header: 'Channel', width: '11%',
+    {
+      key: 'channel', header: 'Channel', width: '11%',
       render: (value) => <span className="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium">{value}</span>,
     },
-    { key: 'status', header: 'Status', width: '10%',
+    {
+      key: 'status', header: 'Status', width: '10%',
       render: (value) => <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[value] || 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>{value}</span>,
     },
-    { key: 'sku', header: 'SKU', width: '15%',
+    {
+      key: 'sku', header: 'SKU', width: '15%',
       render: (value) => <span className="font-mono text-xs text-slate-700 dark:text-slate-300">{value}</span>,
     },
-    { key: 'size', header: 'Size', width: '7%',
+    {
+      key: 'size', header: 'Size', width: '7%',
       render: (value) => <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-xs font-medium">{value}</span>,
     },
-    { key: 'price', header: 'Price', width: '10%',
+    {
+      key: 'price', header: 'Price', width: '10%',
       render: (value) => <span className="text-emerald-600 dark:text-emerald-400 font-semibold">₹{(value || 0).toFixed(0)}</span>,
     },
-    { key: 'cashOnDelivery', header: 'Payment', width: '9%',
+    {
+      key: 'cashOnDelivery', header: 'Payment', width: '9%',
       render: (value) => (
         <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${value ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200'}`}>
           {value ? 'COD' : 'Prepaid'}
@@ -179,7 +206,7 @@ export default function SalesTransactionsPage() {
             {[
               { key: 'today', label: 'Today' },
               { key: 'yesterday', label: 'Yesterday' },
-              { key: 'last_7_days', label: '7 Days' },
+              { key: 'custom', label: 'Custom' },
             ].map((p) => (
               <button key={p.key} onClick={() => { setPeriod(p.key); setPage(1); }}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${period === p.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
@@ -187,6 +214,26 @@ export default function SalesTransactionsPage() {
               </button>
             ))}
           </div>
+
+          {/* Custom Date Range */}
+          {period === 'custom' && (
+            <div className="flex gap-2 items-center">
+              <input type="date" value={customFrom} onChange={(e) => { setCustomFrom(e.target.value); setPage(1); }}
+                max={new Date().toISOString().split('T')[0]}
+                className="input w-auto text-sm" />
+              <span className="text-sm text-slate-500">to</span>
+              <input type="date" value={customTo} onChange={(e) => { setCustomTo(e.target.value); setPage(1); }}
+                max={new Date().toISOString().split('T')[0]}
+                className="input w-auto text-sm" />
+            </div>
+          )}
+
+          {/* Channel */}
+          <select value={channelFilter} onChange={(e) => { setChannelFilter(e.target.value); setPage(1); }}
+            className="input w-auto">
+            <option value="">All Channels</option>
+            {uniqueChannels.map((ch) => <option key={ch} value={ch}>{ch}</option>)}
+          </select>
 
           {/* Payment */}
           <select value={paymentFilter} onChange={(e) => { setPaymentFilter(e.target.value); setPage(1); }}

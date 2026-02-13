@@ -55,14 +55,17 @@ export default function GarmentMasterPage() {
     { key: 'name', header: 'Product Name', width: '25%' },
     { key: 'categoryName', header: 'Category', width: '12%' },
     { key: 'color', header: 'Color', width: '8%' },
-    { key: 'size', header: 'Size', width: '7%',
+    {
+      key: 'size', header: 'Size', width: '7%',
       render: (value) => <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-xs font-medium">{value}</span>,
     },
     { key: 'brand', header: 'Brand', width: '10%' },
-    { key: 'price', header: 'MRP', width: '9%',
+    {
+      key: 'price', header: 'MRP', width: '9%',
       render: (value) => <span className="text-slate-900 dark:text-slate-100 font-medium">₹{value?.toFixed(0)}</span>,
     },
-    { key: 'enabled', header: 'Status', width: '9%',
+    {
+      key: 'enabled', header: 'Status', width: '9%',
       render: (value) => (
         <span className={`px-3 py-1 rounded-full text-xs font-medium ${value ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
           {value ? 'Active' : 'Inactive'}
@@ -77,13 +80,13 @@ export default function GarmentMasterPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <StatCard title="Total Products" value={totalRecords.toLocaleString()} icon="📦" color="blue" />
-        <StatCard title="Page" value={`${page + 1} of ${totalPages || 1}`} icon="📄" color="purple" />
+        <StatCard title="Showing" value={`${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, totalRecords)} of ${totalRecords.toLocaleString()}`} icon="📄" color="purple" />
         <StatCard title="Showing" value={`${items.length} of ${totalRecords.toLocaleString()}`} icon="✅" color="green" />
       </div>
 
       <div className="card mb-4">
         <div className="flex gap-4 items-center">
-          <input type="text" placeholder="Search by product name..." className="input flex-1"
+          <input type="text" placeholder="Search by SKU Code..." className="input flex-1"
             value={search} onChange={(e) => setSearch(e.target.value)} />
           <span className="text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">{totalRecords.toLocaleString()} items</span>
         </div>
