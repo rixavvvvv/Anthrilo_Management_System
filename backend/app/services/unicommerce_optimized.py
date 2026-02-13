@@ -1018,16 +1018,56 @@ class UnicommerceServiceProduction:
             processed_all = []
             for order in all_orders:
                 calc = self.calculate_order_revenue(order)
+                # Extract items with SKU and size information
+                items = []
+                for item in order.get("saleOrderItems", []):
+                    item_name = item.get("itemName", "")
+                    # Extract size from itemName - common patterns: "SIZE YEARS/MONTHS", "XS/S/M/L/XL", numbers
+                    size = ""
+                    if item_name:
+                        # Try to extract size from end of name (e.g., "- 3-4 YEARS", "- XL", "- 10")
+                        import re
+                        # Pattern 1: X-Y YEARS/MONTHS (e.g., "3-4 YEARS", "6-9 MONTHS")
+                        match = re.search(
+                            r'-?\s*(\d+-\d+\s+(?:YEARS?|MONTHS?))\s*$', item_name, re.IGNORECASE)
+                        if not match:
+                            # Pattern 2: Single size (e.g., "XS", "S", "M", "L", "XL", "XXL", "XXXL")
+                            match = re.search(
+                                r'-?\s*(XXX?L|XX?L|[SMLX])\s*$', item_name, re.IGNORECASE)
+                        if not match:
+                            # Pattern 3: Number size (e.g., "- 2", "- 10", "- 12-14")
+                            match = re.search(
+                                r'-?\s*(\d+(?:-\d+)?)\s*$', item_name)
+                        if match:
+                            size = match.group(1).strip()
+
+                    items.append({
+                        "itemSku": item.get("itemSku", ""),
+                        "itemName": item_name,
+                        # Alias for compatibility
+                        "sku": item.get("itemSku", ""),
+                        "sellingPrice": item.get("sellingPrice", 0),
+                        "selling_price": item.get("sellingPrice", 0),  # Alias
+                        "quantity": item.get("quantity", 1),
+                        # Fallback to SKU
+                        "size": size if size else item.get("itemSku", "").split("-")[-1],
+                    })
                 processed_all.append({
                     "code": calc["order_code"],
+                    "displayOrderCode": calc["order_code"],  # Alias
                     "status": calc["status"],
                     "channel": calc["channel"],
                     "selling_price": calc["selling_price"],
+                    "total_selling_price": calc["selling_price"],  # Alias
                     "net_revenue": calc["net_revenue"],
                     "created": calc["created"],
+                    "displayOrderDateTime": calc["created"],  # Alias
                     "item_count": calc["item_count"],
-                    "quantity": calc["quantity"],  # NEW: Add quantity
+                    "quantity": calc["quantity"],
                     "include_in_revenue": calc["include_in_revenue"],
+                    "cashOnDelivery": order.get("cod", False),
+                    "cod": order.get("cod", False),
+                    "items": items,  # Add items array with SKU and size
                 })
 
             # Cache the processed orders
