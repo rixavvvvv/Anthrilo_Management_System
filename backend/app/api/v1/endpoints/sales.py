@@ -6,6 +6,7 @@ from decimal import Decimal
 from pydantic import BaseModel
 from app.db.session import get_db
 from app.db.models import Sale, Garment, Panel
+from app.services.sales_service import invalidate_daily_sales_cache
 
 router = APIRouter()
 
@@ -35,7 +36,7 @@ class SaleSchema(SaleBase):
 
     class Config:
         from_attributes = True
-        
+
     @classmethod
     def from_orm(cls, obj):
         # Map transaction_date to sale_date
@@ -65,15 +66,19 @@ def create_sale(sale: SaleCreate, db: Session = Depends(get_db)):
     garment = db.query(Garment).filter(Garment.id == sale.garment_id).first()
     if not garment:
         raise HTTPException(status_code=404, detail="Garment not found")
-    
+
     panel = db.query(Panel).filter(Panel.id == sale.panel_id).first()
     if not panel:
         raise HTTPException(status_code=404, detail="Panel not found")
-    
+
     db_sale = Sale(**sale.model_dump())
     db.add(db_sale)
     db.commit()
     db.refresh(db_sale)
+
+    # Invalidate cache for the sale date
+    invalidate_daily_sales_cache(sale.transaction_date)
+
     return db_sale
 
 
@@ -94,13 +99,15 @@ def list_sales(
         query = query.filter(Sale.transaction_date <= end_date)
     if panel_id:
         query = query.filter(Sale.panel_id == panel_id)
-    
-    sales = query.order_by(Sale.transaction_date.desc()).offset(skip).limit(limit).all()
+
+    sales = query.order_by(Sale.transaction_date.desc()
+                           ).offset(skip).limit(limit).all()
     return [SaleSchema.from_orm(sale) for sale in sales]
 
 
 @router.get("/daily/{transaction_date}", response_model=List[SaleSchema])
 def get_daily_sales(transaction_date: date, db: Session = Depends(get_db)):
     """Get sales for a specific date."""
-    sales = db.query(Sale).join(Garment).filter(Sale.transaction_date == transaction_date).all()
+    sales = db.query(Sale).join(Garment).filter(
+        Sale.transaction_date == transaction_date).all()
     return [SaleSchema.from_orm(sale) for sale in sales]

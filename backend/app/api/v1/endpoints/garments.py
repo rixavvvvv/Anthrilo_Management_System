@@ -4,6 +4,7 @@ from typing import List
 from app.db.session import get_db
 from app.db.models import Garment
 from app.schemas.garment import Garment as GarmentSchema, GarmentCreate, GarmentUpdate
+from app.services.cache_service import CacheService
 
 router = APIRouter()
 
@@ -12,14 +13,19 @@ router = APIRouter()
 def create_garment(garment: GarmentCreate, db: Session = Depends(get_db)):
     """Create a new garment."""
     # Check if SKU already exists
-    existing = db.query(Garment).filter(Garment.style_sku == garment.style_sku).first()
+    existing = db.query(Garment).filter(
+        Garment.style_sku == garment.style_sku).first()
     if existing:
         raise HTTPException(status_code=400, detail="Style SKU already exists")
-    
+
     db_garment = Garment(**garment.model_dump())
     db.add(db_garment)
     db.commit()
     db.refresh(db_garment)
+
+    # Invalidate garments cache
+    CacheService.invalidate_garment_cache()
+
     return db_garment
 
 
@@ -31,22 +37,43 @@ def list_garments(
     is_active: bool = None,
     db: Session = Depends(get_db)
 ):
-    """List all garments with optional filtering."""
+    """List all garments with optional filtering and Redis caching."""
+    # Try cache first
+    cache_key = f"garments:list:{skip}:{limit}:{category}:{is_active}"
+    cached = CacheService.get(cache_key)
+    if cached:
+        return cached
+
+    # Fetch from DB
     query = db.query(Garment)
     if category:
         query = query.filter(Garment.category == category)
     if is_active is not None:
         query = query.filter(Garment.is_active == is_active)
     garments = query.offset(skip).limit(limit).all()
+
+    # Cache the result
+    CacheService.set(cache_key, garments, CacheService.TTL_LONG)
+
     return garments
 
 
 @router.get("/{garment_id}", response_model=GarmentSchema)
 def get_garment(garment_id: int, db: Session = Depends(get_db)):
-    """Get a specific garment."""
+    """Get a specific garment with Redis caching."""
+    # Try cache first
+    cached = CacheService.get_garment_cache(garment_id)
+    if cached:
+        return cached
+
+    # Fetch from DB
     garment = db.query(Garment).filter(Garment.id == garment_id).first()
     if not garment:
         raise HTTPException(status_code=404, detail="Garment not found")
+
+    # Cache the result
+    CacheService.set_garment_cache(garment, garment_id, CacheService.TTL_LONG)
+
     return garment
 
 
@@ -65,11 +92,11 @@ def update_garment(garment_id: int, garment_update: GarmentUpdate, db: Session =
     db_garment = db.query(Garment).filter(Garment.id == garment_id).first()
     if not db_garment:
         raise HTTPException(status_code=404, detail="Garment not found")
-    
+
     update_data = garment_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(db_garment, field, value)
-    
+
     db.commit()
     db.refresh(db_garment)
     return db_garment
@@ -81,7 +108,7 @@ def delete_garment(garment_id: int, db: Session = Depends(get_db)):
     db_garment = db.query(Garment).filter(Garment.id == garment_id).first()
     if not db_garment:
         raise HTTPException(status_code=404, detail="Garment not found")
-    
+
     db.delete(db_garment)
     db.commit()
     return None

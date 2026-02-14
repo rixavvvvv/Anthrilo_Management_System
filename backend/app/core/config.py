@@ -33,7 +33,7 @@ class Settings(BaseSettings):
         "http://localhost:3000", "http://localhost:3001"]
 
     # Pagination
-    DEFAULT_PAGE_SIZE: int = 20
+    DEFAULT_PAGE_SIZE: int = 15
     MAX_PAGE_SIZE: int = 100
 
     # Unicommerce API Configuration
