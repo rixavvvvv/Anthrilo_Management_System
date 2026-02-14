@@ -7,7 +7,9 @@ const reportCategories = [
   {
     category: 'Sales & Discounts',
     icon: '💰',
-    color: 'yellow',
+    gradient: 'from-amber-500 to-orange-500',
+    iconBg: 'bg-amber-100 dark:bg-amber-900/30',
+    borderColor: 'border-amber-500/30',
     reports: [
       {
         title: 'Sales Analytics',
@@ -37,7 +39,9 @@ const reportCategories = [
   {
     category: 'Panel Management',
     icon: '🏪',
-    color: 'purple',
+    gradient: 'from-purple-500 to-violet-500',
+    iconBg: 'bg-purple-100 dark:bg-purple-900/30',
+    borderColor: 'border-purple-500/30',
     reports: [
       {
         title: 'Panel Performance',
@@ -60,7 +64,9 @@ const reportCategories = [
   {
     category: 'Raw Materials & Processing',
     icon: '📦',
-    color: 'blue',
+    gradient: 'from-blue-500 to-cyan-500',
+    iconBg: 'bg-blue-100 dark:bg-blue-900/30',
+    borderColor: 'border-blue-500/30',
     reports: [
       {
         title: 'Stock Analysis',
@@ -77,7 +83,9 @@ const reportCategories = [
   {
     category: 'Financial Reports',
     icon: '📊',
-    color: 'indigo',
+    gradient: 'from-indigo-500 to-primary-500',
+    iconBg: 'bg-indigo-100 dark:bg-indigo-900/30',
+    borderColor: 'border-indigo-500/30',
     reports: [
       {
         title: 'Purchase Analysis',
@@ -103,54 +111,96 @@ const reportCategories = [
   },
 ];
 
+const totalReports = reportCategories.reduce((sum, cat) => sum + cat.reports.length, 0);
+
 export default function ReportsPage() {
   return (
-    <div>
+    <div className="space-y-8">
       <PageHeader
         title="Reports & Analytics"
-        description="Access comprehensive business intelligence and reporting tools (19 reports available)"
+        description={`Access comprehensive business intelligence and reporting tools — ${totalReports} reports available`}
       />
 
+      {/* Category Summary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {reportCategories.map((category) => (
+          <div
+            key={category.category}
+            className="card flex items-center gap-3 py-4"
+          >
+            <div className={`h-10 w-10 rounded-xl ${category.iconBg} flex items-center justify-center flex-shrink-0`}>
+              <span className="text-xl">{category.icon}</span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
+                {category.category}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {category.reports.length} reports
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Report Categories */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {reportCategories.map((category) => (
-          <div key={category.category} className="card">
-            <div className="flex items-center mb-4">
-              <span className="text-3xl mr-3">{category.icon}</span>
-              <h2 className="text-xl font-bold">{category.category}</h2>
+          <div
+            key={category.category}
+            className={`card overflow-hidden border ${category.borderColor}`}
+          >
+            {/* Category Header */}
+            <div className="flex items-center gap-3 mb-5 pb-4 border-b border-slate-100 dark:border-slate-700/50">
+              <div className={`h-12 w-12 rounded-xl bg-gradient-to-br ${category.gradient} flex items-center justify-center shadow-lg`}>
+                <span className="text-2xl">{category.icon}</span>
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                  {category.category}
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {category.reports.length} reports available
+                </p>
+              </div>
             </div>
-            <div className="space-y-3">
+
+            {/* Report Links */}
+            <div className="space-y-2">
               {category.reports.map((report) => (
                 <Link
-                  key={report.title}
+                  key={report.title + report.href}
                   href={report.href}
-                  className="block p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:shadow-md transition-all"
+                  className="group flex items-center justify-between p-3.5 rounded-xl border border-slate-100 dark:border-slate-700/50 hover:border-primary-300 dark:hover:border-primary-600 hover:bg-primary-50/50 dark:hover:bg-primary-900/10 transition-all duration-200"
                 >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-semibold text-gray-900 mb-1">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
                         {report.title}
-                        {report.badge && (
-                          <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-bold">
-                            {report.badge}
-                          </span>
-                        )}
                       </h3>
-                      <p className="text-sm text-gray-600">{report.description}</p>
+                      {report.badge && (
+                        <span className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[10px] rounded-md font-bold uppercase tracking-wide">
+                          {report.badge}
+                        </span>
+                      )}
                     </div>
-                    <svg
-                      className="w-5 h-5 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {report.description}
+                    </p>
                   </div>
+                  <svg
+                    className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-primary-500 dark:group-hover:text-primary-400 flex-shrink-0 ml-3 transform group-hover:translate-x-0.5 transition-all"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
                 </Link>
               ))}
             </div>

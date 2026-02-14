@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useMemo } from 'react';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { ucCatalog } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
@@ -33,6 +33,7 @@ export default function GarmentInventoryPage() {
       return response.data;
     },
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
   });
 
   const items = (data?.elements || []).map((item: any) => {
@@ -55,6 +56,16 @@ export default function GarmentInventoryPage() {
 
   const totalRecords = data?.totalRecords || 0;
   const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
+
+  const { totalGoodStock, totalBadStock } = useMemo(() => {
+    return items.reduce(
+      (acc: { totalGoodStock: number; totalBadStock: number }, item: any) => ({
+        totalGoodStock: acc.totalGoodStock + (item.inventory || 0),
+        totalBadStock: acc.totalBadStock + (item.badInventory || 0),
+      }),
+      { totalGoodStock: 0, totalBadStock: 0 }
+    );
+  }, [items]);
 
   const columns: Column<any>[] = [
     { key: 'skuCode', header: 'SKU', width: '13%' },
@@ -96,8 +107,8 @@ export default function GarmentInventoryPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <StatCard title="Total SKUs" value={totalRecords.toLocaleString()} icon="📦" color="blue" />
-        <StatCard title="Showing" value={`${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, totalRecords)} of ${totalRecords.toLocaleString()}`} icon="📄" color="purple" />
-        <StatCard title="Showing" value={`${items.length} of ${totalRecords.toLocaleString()}`} icon="✅" color="green" />
+        <StatCard title="Good Inventory" value={totalGoodStock.toLocaleString()} icon="✅" color="green" />
+        <StatCard title="Bad Inventory" value={totalBadStock.toLocaleString()} icon="⚠️" color="red" />
       </div>
 
       <div className="card mb-4">
