@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useDailySales } from "@/lib/hooks/useDailySales";
+
 
 export default function DashboardPage() {
   const [refreshInterval, setRefreshInterval] = useState<'1min' | '5min' | '10min'>('1min');
@@ -50,6 +52,14 @@ export default function DashboardPage() {
     },
     staleTime: 5 * 60 * 1000,
   });
+
+const todayDate = new Date().toISOString().split("T")[0];
+
+const {
+  data: erpDailySales,
+  isLoading: erpLoading,
+  error: erpError,
+} = useDailySales(todayDate);
 
   // Real-time Unicommerce stats
   const todayOrders = todayData?.summary?.total_orders || 0;

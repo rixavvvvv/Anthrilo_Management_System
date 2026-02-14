@@ -4,30 +4,31 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from app.db.models import (
-    Fabric, Yarn, Garment, Inventory, Sale, 
+    Fabric, Yarn, Garment, Inventory, Sale,
     ProductionPlan, ProductionActivity, Panel, PaidAd, Discount
 )
 
 
 class ReportsService:
     """Service for generating all business reports"""
-    
+
     def __init__(self, db: Session):
         self.db = db
-    
+
     # ==================== RAW MATERIALS REPORTS ====================
-    
+
     def raw_materials_stock_analysis(self, category: Optional[str] = None) -> list:
         """Combined raw materials stock analysis for yarn + fabric"""
         items = []
-        
+
         if not category or category.lower() == 'yarn':
             yarns = self.db.query(Yarn).all()
             for y in yarns:
                 stock_qty = float(y.stock_quantity or 0)
                 unit_price = float(y.unit_price or 0)
                 value = stock_qty * unit_price
-                status = 'Low' if stock_qty < 50 else ('High' if stock_qty > 500 else 'Normal')
+                status = 'Low' if stock_qty < 50 else (
+                    'High' if stock_qty > 500 else 'Normal')
                 items.append({
                     "item_name": f"{y.yarn_type} ({y.yarn_count})",
                     "category": "Yarn",
@@ -36,14 +37,15 @@ class ReportsService:
                     "value": value,
                     "stock_status": status,
                 })
-        
+
         if not category or category.lower() == 'fabric':
             fabrics = self.db.query(Fabric).all()
             for f in fabrics:
                 stock_qty = float(f.stock_quantity or 0)
                 cpu = float(f.cost_per_unit or 0)
                 value = stock_qty * cpu
-                status = 'Low' if stock_qty < 50 else ('High' if stock_qty > 500 else 'Normal')
+                status = 'Low' if stock_qty < 50 else (
+                    'High' if stock_qty > 500 else 'Normal')
                 items.append({
                     "item_name": f"{f.fabric_type} - {f.subtype} ({f.gsm} GSM)",
                     "category": "Fabric",
@@ -52,19 +54,19 @@ class ReportsService:
                     "value": value,
                     "stock_status": status,
                 })
-        
+
         return items
-    
+
     def yarn_forecasting_report(self, forecast_days: int = 30) -> list:
         """Yarn demand forecasting based on production plans and historical data"""
         from datetime import timedelta
-        
+
         yarns = self.db.query(Yarn).all()
         result = []
-        
+
         for y in yarns:
             stock_qty = float(y.stock_quantity or 0)
-            
+
             # Estimate daily consumption from production plans that need yarn
             # Use recent production plans' yarn_requirement as a proxy
             recent_plans = self.db.query(ProductionPlan).filter(
@@ -72,22 +74,25 @@ class ReportsService:
                 ProductionPlan.yarn_requirement != None,
                 ProductionPlan.yarn_requirement > 0
             ).all()
-            
+
             # Sum total yarn requirement across active plans, average over their target days
-            total_yarn_req = sum(float(p.yarn_requirement or 0) for p in recent_plans)
+            total_yarn_req = sum(float(p.yarn_requirement or 0)
+                                 for p in recent_plans)
             if recent_plans:
                 avg_days_to_target = max(1, sum(
                     max(1, (p.target_date - date.today()).days) for p in recent_plans
                 ) / len(recent_plans))
-                avg_daily = total_yarn_req / avg_days_to_target / max(1, len(self.db.query(Yarn).count()))
+                avg_daily = total_yarn_req / avg_days_to_target / \
+                    max(1, len(self.db.query(Yarn).count()))
             else:
                 # Fallback: estimate from stock level (assume 1% daily consumption)
                 avg_daily = stock_qty * 0.01 if stock_qty > 0 else 0
-            
+
             forecasted_demand = avg_daily * forecast_days
             days_to_stockout = stock_qty / avg_daily if avg_daily > 0 else 999
-            recommended = max(0, forecasted_demand - stock_qty + (avg_daily * 14))  # 14 days safety
-            
+            recommended = max(0, forecasted_demand - stock_qty +
+                              (avg_daily * 14))  # 14 days safety
+
             result.append({
                 "yarn_type": f"{y.yarn_type} ({y.yarn_count})",
                 "current_stock": stock_qty,
@@ -96,21 +101,21 @@ class ReportsService:
                 "days_until_stockout": round(days_to_stockout, 1),
                 "recommended_order": round(recommended, 2),
             })
-        
+
         return result
-    
+
     # ==================== FABRIC REPORTS ====================
-    
+
     def fabric_stock_sheet_total(self) -> Dict[str, Any]:
         """Generate total fabric stock sheet across all types"""
         fabrics = self.db.query(Fabric).all()
-        
+
         total_stock = sum(float(f.stock_quantity) for f in fabrics)
         total_value = sum(
-            float(f.stock_quantity * (f.cost_per_unit or 0)) 
+            float(f.stock_quantity * (f.cost_per_unit or 0))
             for f in fabrics
         )
-        
+
         fabric_data = [
             {
                 "id": f.id,
@@ -126,7 +131,7 @@ class ReportsService:
             }
             for f in fabrics
         ]
-        
+
         return {
             "report_type": "Fabric Stock Sheet - Total",
             "generated_at": datetime.utcnow().isoformat(),
@@ -138,19 +143,19 @@ class ReportsService:
             },
             "fabrics": fabric_data
         }
-    
+
     def fabric_stock_sheet_by_type(self, fabric_type: str) -> Dict[str, Any]:
         """Generate fabric stock sheet filtered by fabric type"""
         fabrics = self.db.query(Fabric).filter(
             Fabric.fabric_type == fabric_type
         ).all()
-        
+
         total_stock = sum(float(f.stock_quantity) for f in fabrics)
         total_value = sum(
-            float(f.stock_quantity * (f.cost_per_unit or 0)) 
+            float(f.stock_quantity * (f.cost_per_unit or 0))
             for f in fabrics
         )
-        
+
         fabric_data = [
             {
                 "id": f.id,
@@ -166,7 +171,7 @@ class ReportsService:
             }
             for f in fabrics
         ]
-        
+
         return {
             "report_type": f"Fabric Stock Sheet - {fabric_type}",
             "fabric_type": fabric_type,
@@ -179,10 +184,10 @@ class ReportsService:
             },
             "fabrics": fabric_data
         }
-    
+
     def fabric_stock_sheet_by_period(
-        self, 
-        start_date: date, 
+        self,
+        start_date: date,
         end_date: date
     ) -> Dict[str, Any]:
         """
@@ -195,13 +200,13 @@ class ReportsService:
                 Fabric.updated_at <= end_date
             )
         ).all()
-        
+
         total_stock = sum(float(f.stock_quantity) for f in fabrics)
         total_value = sum(
-            float(f.stock_quantity * (f.cost_per_unit or 0)) 
+            float(f.stock_quantity * (f.cost_per_unit or 0))
             for f in fabrics
         )
-        
+
         fabric_data = [
             {
                 "id": f.id,
@@ -215,7 +220,7 @@ class ReportsService:
             }
             for f in fabrics
         ]
-        
+
         return {
             "report_type": "Fabric Stock Sheet - Time Period",
             "period": {
@@ -230,17 +235,17 @@ class ReportsService:
             },
             "fabrics": fabric_data
         }
-    
+
     def fabric_cost_sheet(self) -> Dict[str, Any]:
         """Generate fabric cost sheet with cost breakdown"""
         fabrics = self.db.query(Fabric).all()
-        
+
         cost_data = []
         for f in fabrics:
             stock_qty = float(f.stock_quantity)
             cost_per_unit = float(f.cost_per_unit) if f.cost_per_unit else 0
             total_value = stock_qty * cost_per_unit
-            
+
             cost_data.append({
                 "fabric_type": f.fabric_type,
                 "subtype": f.subtype,
@@ -250,7 +255,7 @@ class ReportsService:
                 "cost_per_unit": cost_per_unit,
                 "total_value": total_value
             })
-        
+
         # Group by fabric type
         type_summary = {}
         for item in cost_data:
@@ -264,7 +269,7 @@ class ReportsService:
             type_summary[ftype]["total_quantity"] += item["stock_quantity"]
             type_summary[ftype]["total_value"] += item["total_value"]
             type_summary[ftype]["count"] += 1
-        
+
         return {
             "report_type": "Fabric Cost Sheet",
             "generated_at": datetime.utcnow().isoformat(),
@@ -272,25 +277,25 @@ class ReportsService:
             "total_stock_value": sum(item["total_value"] for item in cost_data),
             "detailed_costs": cost_data
         }
-    
+
     # ==================== SALES REPORTS ====================
-    
+
     def daily_sales_report(self, report_date: date) -> Dict[str, Any]:
         """Generate daily sales report for a specific date"""
         sales = self.db.query(Sale).filter(
             Sale.transaction_date == report_date
         ).all()
-        
+
         returns = [s for s in sales if s.is_return]
         actual_sales = [s for s in sales if not s.is_return]
-        
+
         total_sales_value = sum(float(s.total_amount) for s in actual_sales)
         total_returns_value = sum(float(s.total_amount) for s in returns)
         net_sales = total_sales_value - total_returns_value
-        
+
         total_units_sold = sum(s.quantity for s in actual_sales)
         total_units_returned = sum(s.quantity for s in returns)
-        
+
         sales_data = [
             {
                 "id": s.id,
@@ -306,7 +311,7 @@ class ReportsService:
             }
             for s in sales
         ]
-        
+
         return {
             "report_type": "Daily Sales Report",
             "report_date": report_date.isoformat(),
@@ -324,10 +329,10 @@ class ReportsService:
             },
             "transactions": sales_data
         }
-    
+
     def daily_sales_report_single_sku(
-        self, 
-        report_date: date, 
+        self,
+        report_date: date,
         garment_id: int
     ) -> Dict[str, Any]:
         """Generate daily sales report for a single SKU"""
@@ -337,9 +342,10 @@ class ReportsService:
                 Sale.garment_id == garment_id
             )
         ).all()
-        
-        garment = self.db.query(Garment).filter(Garment.id == garment_id).first()
-        
+
+        garment = self.db.query(Garment).filter(
+            Garment.id == garment_id).first()
+
         # Group by size
         size_breakdown = {}
         for s in sales:
@@ -350,14 +356,15 @@ class ReportsService:
                     "sales_value": 0,
                     "returns_value": 0
                 }
-            
+
             if s.is_return:
                 size_breakdown[s.size]["quantity_returned"] += s.quantity
-                size_breakdown[s.size]["returns_value"] += float(s.total_amount)
+                size_breakdown[s.size]["returns_value"] += float(
+                    s.total_amount)
             else:
                 size_breakdown[s.size]["quantity_sold"] += s.quantity
                 size_breakdown[s.size]["sales_value"] += float(s.total_amount)
-        
+
         # Calculate net for each size
         for size_data in size_breakdown.values():
             size_data["net_quantity"] = (
@@ -366,7 +373,7 @@ class ReportsService:
             size_data["net_value"] = (
                 size_data["sales_value"] - size_data["returns_value"]
             )
-        
+
         return {
             "report_type": "Daily Sales Report - Single SKU",
             "report_date": report_date.isoformat(),
@@ -393,10 +400,10 @@ class ReportsService:
                 )
             }
         }
-    
+
     def panel_wise_sales_report(
-        self, 
-        start_date: date, 
+        self,
+        start_date: date,
         end_date: date
     ) -> Dict[str, Any]:
         """Generate panel-wise sales report for a date range"""
@@ -406,15 +413,15 @@ class ReportsService:
                 Sale.transaction_date <= end_date
             )
         ).all()
-        
+
         panels = self.db.query(Panel).all()
-        
+
         panel_data = {}
         for panel in panels:
             panel_sales = [s for s in sales if s.panel_id == panel.id]
             actual_sales = [s for s in panel_sales if not s.is_return]
             returns = [s for s in panel_sales if s.is_return]
-            
+
             panel_data[panel.id] = {
                 "panel_name": panel.panel_name,
                 "panel_type": panel.panel_type,
@@ -430,7 +437,7 @@ class ReportsService:
                     float(s.total_amount) for s in actual_sales
                 ) - sum(float(s.total_amount) for s in returns)
             }
-        
+
         return {
             "report_type": "Panel-Wise Sales Report",
             "period": {
@@ -445,22 +452,22 @@ class ReportsService:
                 "net_sales_value": sum(p["net_sales_value"] for p in panel_data.values())
             }
         }
-    
+
     def inactive_panel_report(self, days_threshold: int = 30) -> Dict[str, Any]:
         """Report on panels with no activity in the last N days"""
         from datetime import timedelta
-        
+
         cutoff_date = date.today() - timedelta(days=days_threshold)
-        
+
         all_panels = self.db.query(Panel).all()
         inactive_panels = []
-        
+
         for panel in all_panels:
             # Check last sale date
             last_sale = self.db.query(Sale).filter(
                 Sale.panel_id == panel.id
             ).order_by(Sale.transaction_date.desc()).first()
-            
+
             if not last_sale or last_sale.transaction_date < cutoff_date:
                 inactive_panels.append({
                     "id": panel.id,
@@ -469,11 +476,11 @@ class ReportsService:
                     "is_active": panel.is_active,
                     "last_sale_date": last_sale.transaction_date.isoformat() if last_sale else None,
                     "days_since_last_sale": (
-                        (date.today() - last_sale.transaction_date).days 
+                        (date.today() - last_sale.transaction_date).days
                         if last_sale else None
                     )
                 })
-        
+
         return {
             "report_type": "Inactive Panel Report",
             "criteria": f"No sales in last {days_threshold} days",
@@ -481,19 +488,19 @@ class ReportsService:
             "inactive_panels_count": len(inactive_panels),
             "inactive_panels": inactive_panels
         }
-    
+
     # ==================== INVENTORY REPORTS ====================
-    
+
     def slow_moving_inventory_report(self, days_period: int = 90) -> Dict[str, Any]:
         """Identify slow-moving inventory based on sales velocity"""
         from datetime import timedelta
-        
+
         start_date = date.today() - timedelta(days=days_period)
-        
+
         # Get all inventory items
         inventory_items = self.db.query(Inventory).all()
         slow_movers = []
-        
+
         for inv in inventory_items:
             # Calculate sales for this garment-size in the period
             sales_count = self.db.query(func.sum(Sale.quantity)).filter(
@@ -504,16 +511,17 @@ class ReportsService:
                     Sale.is_return == False
                 )
             ).scalar() or 0
-            
+
             # Calculate turnover rate (sales per day)
-            turnover_rate = float(sales_count) / days_period if sales_count > 0 else 0
-            
+            turnover_rate = float(sales_count) / \
+                days_period if sales_count > 0 else 0
+
             # Consider slow if turnover rate < 0.1 units/day and stock > 10
             if turnover_rate < 0.1 and inv.good_stock > 10:
                 garment = self.db.query(Garment).filter(
                     Garment.id == inv.garment_id
                 ).first()
-                
+
                 slow_movers.append({
                     "garment_id": inv.garment_id,
                     "garment_name": garment.name if garment else "Unknown",
@@ -525,7 +533,7 @@ class ReportsService:
                     "turnover_rate_per_day": round(turnover_rate, 3),
                     "days_of_stock": round(inv.good_stock / turnover_rate, 1) if turnover_rate > 0 else float('inf')
                 })
-        
+
         return {
             "report_type": "Slow Moving Inventory Report",
             "period_days": days_period,
@@ -534,16 +542,16 @@ class ReportsService:
             "slow_moving_items_count": len(slow_movers),
             "slow_moving_items": slow_movers
         }
-    
+
     def fast_moving_inventory_report(self, days_period: int = 90) -> Dict[str, Any]:
         """Identify fast-moving inventory based on sales velocity"""
         from datetime import timedelta
-        
+
         start_date = date.today() - timedelta(days=days_period)
-        
+
         inventory_items = self.db.query(Inventory).all()
         fast_movers = []
-        
+
         for inv in inventory_items:
             sales_count = self.db.query(func.sum(Sale.quantity)).filter(
                 and_(
@@ -553,19 +561,20 @@ class ReportsService:
                     Sale.is_return == False
                 )
             ).scalar() or 0
-            
-            turnover_rate = float(sales_count) / days_period if sales_count > 0 else 0
-            
+
+            turnover_rate = float(sales_count) / \
+                days_period if sales_count > 0 else 0
+
             # Consider fast if turnover rate > 1 unit/day
             if turnover_rate > 1.0:
                 garment = self.db.query(Garment).filter(
                     Garment.id == inv.garment_id
                 ).first()
-                
+
                 # Calculate reorder recommendation
                 days_of_stock = inv.good_stock / turnover_rate if turnover_rate > 0 else 0
                 needs_reorder = days_of_stock < 30  # Less than 30 days of stock
-                
+
                 fast_movers.append({
                     "garment_id": inv.garment_id,
                     "garment_name": garment.name if garment else "Unknown",
@@ -578,10 +587,11 @@ class ReportsService:
                     "needs_reorder": needs_reorder,
                     "recommended_order_quantity": round(turnover_rate * 60, 0) if needs_reorder else 0
                 })
-        
+
         # Sort by turnover rate descending
-        fast_movers.sort(key=lambda x: x["turnover_rate_per_day"], reverse=True)
-        
+        fast_movers.sort(
+            key=lambda x: x["turnover_rate_per_day"], reverse=True)
+
         return {
             "report_type": "Fast Moving Inventory Report",
             "period_days": days_period,
@@ -591,51 +601,51 @@ class ReportsService:
             "items_needing_reorder": sum(1 for item in fast_movers if item["needs_reorder"]),
             "fast_moving_items": fast_movers
         }
-    
+
     # ==================== PRODUCTION REPORTS ====================
-    
+
     def production_plan_report(
-        self, 
-        start_date: Optional[date] = None, 
+        self,
+        start_date: Optional[date] = None,
         end_date: Optional[date] = None
     ) -> Dict[str, Any]:
         """Generate production plan status report"""
         query = self.db.query(ProductionPlan)
-        
+
         if start_date:
             query = query.filter(ProductionPlan.target_date >= start_date)
         if end_date:
             query = query.filter(ProductionPlan.target_date <= end_date)
-        
+
         plans = query.all()
-        
+
         # Group by status
         status_summary = {
             "PLANNED": [],
             "IN_PROGRESS": [],
             "COMPLETED": []
         }
-        
+
         for plan in plans:
             garment = self.db.query(Garment).filter(
                 Garment.id == plan.garment_id
             ).first()
-            
+
             # Get activities for this plan
             activities = self.db.query(ProductionActivity).filter(
                 ProductionActivity.production_plan_id == plan.id
             ).all()
-            
+
             actual_quantity = sum(
-                float(a.quantity) for a in activities 
+                float(a.quantity) for a in activities
                 if a.activity_type == "CUTTING"
             )
-            
+
             completion_percentage = (
-                (actual_quantity / plan.planned_quantity * 100) 
+                (actual_quantity / plan.planned_quantity * 100)
                 if plan.planned_quantity > 0 else 0
             )
-            
+
             plan_data = {
                 "id": plan.id,
                 "plan_name": plan.plan_name,
@@ -649,9 +659,9 @@ class ReportsService:
                 "yarn_requirement": float(plan.yarn_requirement) if plan.yarn_requirement else 0,
                 "activities_count": len(activities)
             }
-            
+
             status_summary[plan.status].append(plan_data)
-        
+
         return {
             "report_type": "Production Plan Report",
             "period": {
@@ -667,27 +677,28 @@ class ReportsService:
             },
             "plans_by_status": status_summary
         }
-    
+
     def daily_production_variance_report(self, report_date: date) -> Dict[str, Any]:
         """Generate daily production report with gross weight variance"""
         activities = self.db.query(ProductionActivity).filter(
             ProductionActivity.activity_date == report_date
         ).all()
-        
+
         variance_data = []
         total_variance = 0
-        
+
         for activity in activities:
             if activity.gross_weight_calculated and activity.gross_weight_actual:
                 calculated = float(activity.gross_weight_calculated)
                 actual = float(activity.gross_weight_actual)
                 variance = actual - calculated
-                variance_percentage = (variance / calculated * 100) if calculated > 0 else 0
-                
+                variance_percentage = (
+                    variance / calculated * 100) if calculated > 0 else 0
+
                 plan = self.db.query(ProductionPlan).filter(
                     ProductionPlan.id == activity.production_plan_id
                 ).first()
-                
+
                 variance_data.append({
                     "activity_id": activity.id,
                     "production_plan": plan.plan_name if plan else "Unknown",
@@ -699,9 +710,9 @@ class ReportsService:
                     "variance_percentage": round(variance_percentage, 2),
                     "notes": activity.notes
                 })
-                
+
                 total_variance += abs(variance)
-        
+
         return {
             "report_type": "Daily Production Variance Report",
             "report_date": report_date.isoformat(),
@@ -716,9 +727,9 @@ class ReportsService:
             },
             "variance_details": variance_data
         }
-    
+
     # ==================== BUNDLE SKU REPORTS ====================
-    
+
     def bundle_sku_sales_report(
         self,
         start_date: Optional[date] = None,
@@ -730,12 +741,12 @@ class ReportsService:
         For now, identifying bundles by category or naming convention.
         """
         query = self.db.query(Sale).join(Garment)
-        
+
         if start_date:
             query = query.filter(Sale.sale_date >= start_date)
         if end_date:
             query = query.filter(Sale.sale_date <= end_date)
-        
+
         # Identify bundles - products with "BUNDLE", "COMBO", "SET" in category or name
         query = query.filter(
             or_(
@@ -747,9 +758,9 @@ class ReportsService:
                 Garment.name.ilike('%set%')
             )
         )
-        
+
         sales = query.all()
-        
+
         bundle_data = {}
         for sale in sales:
             garment_id = sale.garment_id
@@ -767,28 +778,28 @@ class ReportsService:
                     "net_revenue": 0,
                     "sizes_sold": {}
                 }
-            
+
             qty = sale.quantity if not sale.is_return else -sale.quantity
             amount = float(sale.total_amount or 0)
-            
+
             bundle_data[garment_id]["total_sales"] += sale.quantity if not sale.is_return else 0
             bundle_data[garment_id]["total_returns"] += sale.quantity if sale.is_return else 0
             bundle_data[garment_id]["net_units"] += qty
             bundle_data[garment_id]["gross_revenue"] += amount if not sale.is_return else 0
             bundle_data[garment_id]["net_revenue"] += amount
-            
+
             # Track size-wise sales
             size = sale.size
             if size not in bundle_data[garment_id]["sizes_sold"]:
                 bundle_data[garment_id]["sizes_sold"][size] = 0
             bundle_data[garment_id]["sizes_sold"][size] += qty
-        
+
         bundles_list = list(bundle_data.values())
         bundles_list.sort(key=lambda x: x["net_revenue"], reverse=True)
-        
+
         total_net_revenue = sum(b["net_revenue"] for b in bundles_list)
         total_net_units = sum(b["net_units"] for b in bundles_list)
-        
+
         return {
             "report_type": "Bundle SKU Sales Report",
             "generated_at": datetime.utcnow().isoformat(),
@@ -803,9 +814,9 @@ class ReportsService:
             },
             "bundles": bundles_list
         }
-    
+
     # ==================== DISCOUNT REPORTS ====================
-    
+
     def discount_report_general(
         self,
         start_date: Optional[date] = None,
@@ -813,14 +824,14 @@ class ReportsService:
     ) -> Dict[str, Any]:
         """Generate general discount report across all sales"""
         query = self.db.query(Sale).join(Garment)
-        
+
         if start_date:
             query = query.filter(Sale.sale_date >= start_date)
         if end_date:
             query = query.filter(Sale.sale_date <= end_date)
-        
+
         sales = query.all()
-        
+
         total_mrp_value = 0
         total_selling_price = 0
         total_discount_amount = 0
@@ -831,23 +842,23 @@ class ReportsService:
             "30-40%": 0,
             "40%+": 0
         }
-        
+
         sales_data = []
-        
+
         for sale in sales:
             mrp = float(sale.garment.mrp or 0)
             unit_price = float(sale.unit_price or 0)
             qty = sale.quantity
             discount_pct = float(sale.discount_percentage or 0)
-            
+
             mrp_value = mrp * qty
             selling_value = unit_price * qty
             discount_amt = mrp_value - selling_value
-            
+
             total_mrp_value += mrp_value
             total_selling_price += selling_value
             total_discount_amount += discount_amt
-            
+
             # Categorize discount
             if discount_pct < 10:
                 discount_buckets["0-10%"] += 1
@@ -859,7 +870,7 @@ class ReportsService:
                 discount_buckets["30-40%"] += 1
             else:
                 discount_buckets["40%+"] += 1
-            
+
             if not sale.is_return:  # Only include actual sales
                 sales_data.append({
                     "sale_id": sale.id,
@@ -874,11 +885,12 @@ class ReportsService:
                     "total_mrp_value": round(mrp_value, 2),
                     "total_selling_value": round(selling_value, 2)
                 })
-        
+
         overall_discount_pct = (
-            (total_discount_amount / total_mrp_value * 100) if total_mrp_value > 0 else 0
+            (total_discount_amount / total_mrp_value *
+             100) if total_mrp_value > 0 else 0
         )
-        
+
         return {
             "report_type": "Discount Report - General",
             "generated_at": datetime.utcnow().isoformat(),
@@ -896,7 +908,7 @@ class ReportsService:
             },
             "sales": sales_data
         }
-    
+
     def discount_report_by_panel(
         self,
         start_date: Optional[date] = None,
@@ -904,20 +916,20 @@ class ReportsService:
     ) -> Dict[str, Any]:
         """Generate discount report grouped by sales panel"""
         query = self.db.query(Sale).join(Garment).join(Panel)
-        
+
         if start_date:
             query = query.filter(Sale.sale_date >= start_date)
         if end_date:
             query = query.filter(Sale.sale_date <= end_date)
-        
+
         sales = query.all()
-        
+
         panel_data = {}
-        
+
         for sale in sales:
             if sale.is_return:
                 continue
-                
+
             panel_id = sale.panel_id
             if panel_id not in panel_data:
                 panel_data[panel_id] = {
@@ -930,33 +942,36 @@ class ReportsService:
                     "total_discount_amount": 0,
                     "average_discount_percentage": 0
                 }
-            
+
             mrp = float(sale.garment.mrp or 0)
             unit_price = float(sale.unit_price or 0)
             qty = sale.quantity
-            
+
             mrp_value = mrp * qty
             selling_value = unit_price * qty
             discount_amt = mrp_value - selling_value
-            
+
             panel_data[panel_id]["total_transactions"] += 1
             panel_data[panel_id]["total_mrp_value"] += mrp_value
             panel_data[panel_id]["total_selling_value"] += selling_value
             panel_data[panel_id]["total_discount_amount"] += discount_amt
-        
+
         # Calculate average discount percentage for each panel
         for panel_id, data in panel_data.items():
             if data["total_mrp_value"] > 0:
                 data["average_discount_percentage"] = round(
-                    (data["total_discount_amount"] / data["total_mrp_value"]) * 100, 2
+                    (data["total_discount_amount"] /
+                     data["total_mrp_value"]) * 100, 2
                 )
             data["total_mrp_value"] = round(data["total_mrp_value"], 2)
             data["total_selling_value"] = round(data["total_selling_value"], 2)
-            data["total_discount_amount"] = round(data["total_discount_amount"], 2)
-        
+            data["total_discount_amount"] = round(
+                data["total_discount_amount"], 2)
+
         panels_list = list(panel_data.values())
-        panels_list.sort(key=lambda x: x["total_discount_amount"], reverse=True)
-        
+        panels_list.sort(
+            key=lambda x: x["total_discount_amount"], reverse=True)
+
         return {
             "report_type": "Discount Report - By Panel",
             "generated_at": datetime.utcnow().isoformat(),
@@ -972,7 +987,7 @@ class ReportsService:
             },
             "panels": panels_list
         }
-    
+
     def settlement_report(
         self,
         panel_id: Optional[int] = None,
@@ -983,18 +998,18 @@ class ReportsService:
         Generate settlement report for panels showing amounts due/payable.
         """
         query = self.db.query(Sale).join(Garment).join(Panel)
-        
+
         if panel_id:
             query = query.filter(Sale.panel_id == panel_id)
         if start_date:
             query = query.filter(Sale.sale_date >= start_date)
         if end_date:
             query = query.filter(Sale.sale_date <= end_date)
-        
+
         sales = query.all()
-        
+
         panel_settlements = {}
-        
+
         for sale in sales:
             pid = sale.panel_id
             if pid not in panel_settlements:
@@ -1011,46 +1026,48 @@ class ReportsService:
                     "amount_payable_to_panel": 0,
                     "transaction_count": 0
                 }
-            
+
             amount = float(sale.total_amount or 0)
-            
+
             if sale.is_return:
                 panel_settlements[pid]["total_returns_value"] += amount
             else:
                 panel_settlements[pid]["total_sales_value"] += amount
                 panel_settlements[pid]["transaction_count"] += 1
-            
+
             panel_settlements[pid]["net_sales_value"] = (
-                panel_settlements[pid]["total_sales_value"] - 
+                panel_settlements[pid]["total_sales_value"] -
                 panel_settlements[pid]["total_returns_value"]
             )
-        
+
         # Calculate commissions and payables
         for pid, data in panel_settlements.items():
             net_sales = data["net_sales_value"]
-            
+
             # Assuming 10% platform commission (should be configurable per panel)
             data["platform_commission"] = round(net_sales * 0.10, 2)
-            
+
             # Assuming 5% logistics (should be actual data)
             data["logistics_charges"] = round(net_sales * 0.05, 2)
-            
+
             # Calculate final payable amount
             data["amount_payable_to_panel"] = round(
-                net_sales - data["platform_commission"] - data["logistics_charges"] - data["other_deductions"],
+                net_sales - data["platform_commission"] -
+                data["logistics_charges"] - data["other_deductions"],
                 2
             )
-            
+
             # Round other values
             data["total_sales_value"] = round(data["total_sales_value"], 2)
             data["total_returns_value"] = round(data["total_returns_value"], 2)
             data["net_sales_value"] = round(data["net_sales_value"], 2)
-        
+
         settlements_list = list(panel_settlements.values())
         settlements_list.sort(key=lambda x: x["net_sales_value"], reverse=True)
-        
-        total_payable = sum(s["amount_payable_to_panel"] for s in settlements_list)
-        
+
+        total_payable = sum(s["amount_payable_to_panel"]
+                            for s in settlements_list)
+
         return {
             "report_type": "Settlement Report",
             "generated_at": datetime.utcnow().isoformat(),

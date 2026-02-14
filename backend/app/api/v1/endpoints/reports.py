@@ -4,6 +4,7 @@ from datetime import date
 from typing import Optional
 from app.db.session import get_db
 from app.services.reports import ReportsService
+from app.services.sales_service import get_daily_sales
 
 router = APIRouter()
 
@@ -12,7 +13,8 @@ router = APIRouter()
 
 @router.get("/raw-materials/stock-analysis")
 def get_stock_analysis(
-    category: Optional[str] = Query(None, description="Filter by category: Yarn, Fabric"),
+    category: Optional[str] = Query(
+        None, description="Filter by category: Yarn, Fabric"),
     db: Session = Depends(get_db)
 ):
     """Get raw materials stock analysis combining yarn and fabric data"""
@@ -74,9 +76,8 @@ def get_daily_sales_report(
     report_date: date,
     db: Session = Depends(get_db)
 ):
-    """Get daily sales report for a specific date"""
-    service = ReportsService(db)
-    return service.daily_sales_report(report_date)
+    """Get daily sales report for a specific date (with Redis caching)"""
+    return get_daily_sales(report_date, db)
 
 
 @router.get("/sales/daily/{report_date}/sku/{garment_id}")
@@ -103,7 +104,8 @@ def get_panel_wise_sales_report(
 
 @router.get("/sales/inactive-panels")
 def get_inactive_panel_report(
-    days_threshold: int = Query(30, description="Days of inactivity threshold"),
+    days_threshold: int = Query(
+        30, description="Days of inactivity threshold"),
     db: Session = Depends(get_db)
 ):
     """Get report on panels with no activity in the last N days"""
@@ -162,10 +164,10 @@ def get_daily_production_variance_report(
 def get_summary_report(db: Session = Depends(get_db)):
     """Get a comprehensive summary report combining key metrics"""
     service = ReportsService(db)
-    
+
     from datetime import timedelta
     today = date.today()
-    
+
     return {
         "report_type": "Comprehensive Summary Report",
         "generated_at": today.isoformat(),
@@ -181,8 +183,10 @@ def get_summary_report(db: Session = Depends(get_db)):
 
 @router.get("/sales/bundle-sku")
 def get_bundle_sku_sales_report(
-    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    start_date: Optional[date] = Query(
+        None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(
+        None, description="End date (YYYY-MM-DD)"),
     db: Session = Depends(get_db)
 ):
     """Get sales report for bundle/combo SKUs"""
@@ -194,8 +198,10 @@ def get_bundle_sku_sales_report(
 
 @router.get("/discounts/general")
 def get_discount_report_general(
-    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    start_date: Optional[date] = Query(
+        None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(
+        None, description="End date (YYYY-MM-DD)"),
     db: Session = Depends(get_db)
 ):
     """Get general discount report across all sales"""
@@ -205,8 +211,10 @@ def get_discount_report_general(
 
 @router.get("/discounts/by-panel")
 def get_discount_report_by_panel(
-    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    start_date: Optional[date] = Query(
+        None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(
+        None, description="End date (YYYY-MM-DD)"),
     db: Session = Depends(get_db)
 ):
     """Get discount report grouped by sales panel"""
@@ -218,9 +226,12 @@ def get_discount_report_by_panel(
 
 @router.get("/settlements/panel-settlement")
 def get_settlement_report(
-    panel_id: Optional[int] = Query(None, description="Filter by specific panel ID"),
-    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    panel_id: Optional[int] = Query(
+        None, description="Filter by specific panel ID"),
+    start_date: Optional[date] = Query(
+        None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(
+        None, description="End date (YYYY-MM-DD)"),
     db: Session = Depends(get_db)
 ):
     """Get settlement report for panels showing amounts due/payable"""
