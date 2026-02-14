@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui/Common';
-import { unicommerceApi } from '@/lib/api';
+import { ucSales } from '@/lib/api/uc';
 
 export default function DailySalesReportPage() {
     const [reportDate, setReportDate] = useState<string>(() => {
@@ -17,7 +17,7 @@ export default function DailySalesReportPage() {
     const { data: dailyReportData, isLoading: reportLoading, refetch: refetchReport } = useQuery({
         queryKey: ['daily-sales-report', reportDate],
         queryFn: async () => {
-            const response = await unicommerceApi.getDailySalesReport(reportDate);
+            const response = await ucSales.getDailySalesReport(reportDate);
             return response.data;
         },
         enabled: showReport,
