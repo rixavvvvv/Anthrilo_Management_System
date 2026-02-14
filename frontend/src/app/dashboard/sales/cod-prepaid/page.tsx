@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { unicommerceApi } from '@/lib/api';
+import { ucSales } from '@/lib/api/uc';
 import { PageHeader, StatCard, LoadingSpinner } from '@/components/ui/Common';
 
 export default function CodVsPrepaidPage() {
@@ -13,7 +13,7 @@ export default function CodVsPrepaidPage() {
     const { data, isLoading, error } = useQuery({
         queryKey: ['cod-vs-prepaid', month, year],
         queryFn: async () => {
-            const response = await unicommerceApi.getCodVsPrepaid({ month, year });
+            const response = await ucSales.getCodVsPrepaid({ month, year });
             return response.data;
         },
         staleTime: 5 * 60 * 1000,
