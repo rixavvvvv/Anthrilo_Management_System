@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ucCatalog } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
@@ -34,7 +34,6 @@ export default function GarmentMasterPage() {
       return response.data;
     },
     staleTime: 60_000,
-    placeholderData: keepPreviousData,
   });
 
   const items = (data?.elements || []).map((item: any) => ({
@@ -50,16 +49,6 @@ export default function GarmentMasterPage() {
 
   const totalRecords = data?.totalRecords || 0;
   const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
-
-  const { activeCount, inactiveCount } = useMemo(() => {
-    return items.reduce(
-      (acc: { activeCount: number; inactiveCount: number }, item: any) => ({
-        activeCount: acc.activeCount + (item.enabled ? 1 : 0),
-        inactiveCount: acc.inactiveCount + (item.enabled ? 0 : 1),
-      }),
-      { activeCount: 0, inactiveCount: 0 }
-    );
-  }, [items]);
 
   const columns: Column<any>[] = [
     { key: 'skuCode', header: 'SKU Code', width: '15%' },
@@ -91,8 +80,8 @@ export default function GarmentMasterPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <StatCard title="Total Products" value={totalRecords.toLocaleString()} icon="📦" color="blue" />
-        <StatCard title="Active Products" value={activeCount.toLocaleString()} icon="✅" color="green" />
-        <StatCard title="Inactive Products" value={inactiveCount.toLocaleString()} icon="🚫" color="red" />
+        <StatCard title="Current Page" value={`${page + 1} of ${totalPages || 1}`} icon="📄" color="purple" />
+        <StatCard title="Showing Items" value={`${items.length} items`} icon="✅" color="green" />
       </div>
 
       <div className="card mb-4">

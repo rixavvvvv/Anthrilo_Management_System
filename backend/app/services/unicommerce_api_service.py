@@ -36,7 +36,8 @@ class UnicommerceAPIService:
         self.base_url = f"https://{self.tenant}.unicommerce.com"
         self.api_base = f"{self.base_url}/services/rest/v1"
         self.timeout = httpx.Timeout(60.0, connect=15.0)
-        self.limits = httpx.Limits(max_connections=50, max_keepalive_connections=20)
+        self.limits = httpx.Limits(
+            max_connections=50, max_keepalive_connections=20)
 
     async def _get_headers(self, facility_code: Optional[str] = None) -> Dict[str, str]:
         """Get authenticated headers, optionally with Facility header."""
@@ -70,11 +71,19 @@ class UnicommerceAPIService:
 
                 # Retry once on 401 (token expired)
                 if response.status_code == 401:
-                    logger.warning("Got 401, refreshing token and retrying...")
-                    token = await self.token_manager.get_valid_token()
-                    if token:
+                    logger.warning(
+                        "Got 401, invalidating and refreshing token...")
+                    # Invalidate current token to force refresh
+                    self.token_manager.invalidate_token()
+                    # Get new token
+                    new_token = await self.token_manager.get_valid_token()
+                    if new_token:
+                        # Get fresh headers with new token
                         headers = await self._get_headers(facility_code)
+                        # Retry with new token
                         response = await client.post(url, json=payload, headers=headers)
+                    else:
+                        logger.error("Failed to refresh token")
 
                 response.raise_for_status()
                 return response.json()
@@ -85,7 +94,8 @@ class UnicommerceAPIService:
                     error_body = e.response.text[:500]
                 except Exception:
                     pass
-                logger.error(f"HTTP {e.response.status_code} for {endpoint}: {error_body}")
+                logger.error(
+                    f"HTTP {e.response.status_code} for {endpoint}: {error_body}")
                 return {
                     "successful": False,
                     "error": f"HTTP {e.response.status_code}",
@@ -123,10 +133,15 @@ class UnicommerceAPIService:
 
                 # Retry on 401
                 if response.status_code == 401:
-                    logger.warning("Got 401, refreshing token and retrying...")
-                    await self.token_manager.get_valid_token()
-                    headers = await self._get_headers(facility_code)
-                    response = await client.get(url, params=params, headers=headers)
+                    logger.warning(
+                        "Got 401, invalidating and refreshing token...")
+                    self.token_manager.invalidate_token()
+                    new_token = await self.token_manager.get_valid_token()
+                    if new_token:
+                        headers = await self._get_headers(facility_code)
+                        response = await client.get(url, params=params, headers=headers)
+                    else:
+                        logger.error("Failed to refresh token")
 
                 response.raise_for_status()
 
@@ -154,7 +169,8 @@ class UnicommerceAPIService:
                     error_body = e.response.text[:500]
                 except Exception:
                     pass
-                logger.error(f"HTTP {e.response.status_code} for {endpoint}: {error_body}")
+                logger.error(
+                    f"HTTP {e.response.status_code} for {endpoint}: {error_body}")
                 return {
                     "successful": False,
                     "error": f"HTTP {e.response.status_code}",
