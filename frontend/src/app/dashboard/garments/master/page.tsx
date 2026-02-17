@@ -22,6 +22,17 @@ export default function GarmentMasterPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  // Fetch inventory summary ONCE on page load - for Active SKU Count
+  const { data: summaryData, isLoading: summaryLoading } = useQuery({
+    queryKey: ['uc-inventory-summary'],
+    queryFn: async () => {
+      const response = await ucCatalog.getInventorySummary();
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+  });
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['uc-catalog', page, debouncedSearch],
     queryFn: async () => {
@@ -49,6 +60,10 @@ export default function GarmentMasterPage() {
 
   const totalRecords = data?.totalRecords || 0;
   const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
+
+  // Use summary data for Active SKU Count
+  const activeSKUs = summaryData?.activeSKUs || 0;
+  const summaryLoaded = summaryData?.successful || false;
 
   const columns: Column<any>[] = [
     { key: 'skuCode', header: 'SKU Code', width: '15%' },
@@ -78,10 +93,14 @@ export default function GarmentMasterPage() {
     <div>
       <PageHeader title="Product Master" description={`Unicommerce product catalog — ${totalRecords.toLocaleString()} total SKUs`} />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <StatCard title="Total Products" value={totalRecords.toLocaleString()} icon="📦" color="blue" />
-        <StatCard title="Current Page" value={`${page + 1} of ${totalPages || 1}`} icon="📄" color="purple" />
-        <StatCard title="Showing Items" value={`${items.length} items`} icon="✅" color="green" />
+        <StatCard
+          title="Active SKU Count"
+          value={summaryLoaded ? activeSKUs.toLocaleString() : (summaryLoading ? 'Loading...' : '-')}
+          icon="✅"
+          color="green"
+        />
       </div>
 
       <div className="card mb-4">
