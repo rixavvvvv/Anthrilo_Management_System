@@ -80,8 +80,8 @@ export default function GarmentMasterPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <StatCard title="Total Products" value={totalRecords.toLocaleString()} icon="📦" color="blue" />
-        <StatCard title="Showing" value={`${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, totalRecords)} of ${totalRecords.toLocaleString()}`} icon="📄" color="purple" />
-        <StatCard title="Showing" value={`${items.length} of ${totalRecords.toLocaleString()}`} icon="✅" color="green" />
+        <StatCard title="Current Page" value={`${page + 1} of ${totalPages || 1}`} icon="📄" color="purple" />
+        <StatCard title="Showing Items" value={`${items.length} items`} icon="✅" color="green" />
       </div>
 
       <div className="card mb-4">

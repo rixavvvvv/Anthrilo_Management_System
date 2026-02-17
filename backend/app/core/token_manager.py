@@ -334,6 +334,14 @@ class TokenManager:
     # Headers & Status
     # =========================================================================
 
+    def invalidate_token(self):
+        """
+        Invalidate the current token to force re-authentication.
+        Called when we get a 401 from the server, indicating the token is invalid.
+        """
+        logger.warning("Invalidating current token to force refresh")
+        self._token_expires_at = datetime.utcnow() - timedelta(seconds=1)
+
     async def get_headers(self) -> Dict[str, str]:
         """Get authenticated headers with a valid token."""
         token = await self.get_valid_token()

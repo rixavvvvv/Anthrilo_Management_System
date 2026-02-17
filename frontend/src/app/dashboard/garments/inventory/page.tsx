@@ -21,6 +21,7 @@ export default function GarmentInventoryPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  // Fetch data with aggregates
   const { data, isLoading, error } = useQuery({
     queryKey: ['uc-inventory', page, debouncedSearch],
     queryFn: async () => {
@@ -28,6 +29,7 @@ export default function GarmentInventoryPage() {
         displayStart: page * PAGE_SIZE,
         displayLength: PAGE_SIZE,
         getInventorySnapshot: true,
+        getAggregates: page === 0, // Only fetch aggregates on first page
         keyword: debouncedSearch || undefined,
       });
       return response.data;
@@ -55,6 +57,12 @@ export default function GarmentInventoryPage() {
 
   const totalRecords = data?.totalRecords || 0;
   const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
+
+  // Get aggregates from first page load
+  const aggregates = data?.aggregates || null;
+  const totalInventory = aggregates?.totalInventory || 0;
+  const totalVirtualInventory = aggregates?.totalVirtualInventory || 0;
+  const totalValue = aggregates?.totalValue || 0;
 
   const columns: Column<any>[] = [
     { key: 'skuCode', header: 'SKU', width: '13%' },
@@ -94,10 +102,26 @@ export default function GarmentInventoryPage() {
     <div>
       <PageHeader title="Garment Inventory" description={`Live inventory from Unicommerce — ${totalRecords.toLocaleString()} total SKUs`} />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
         <StatCard title="Total SKUs" value={totalRecords.toLocaleString()} icon="📦" color="blue" />
-        <StatCard title="Showing" value={`${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, totalRecords)} of ${totalRecords.toLocaleString()}`} icon="📄" color="purple" />
-        <StatCard title="Showing" value={`${items.length} of ${totalRecords.toLocaleString()}`} icon="✅" color="green" />
+        <StatCard
+          title="Total Real Inventory"
+          value={aggregates ? totalInventory.toLocaleString() : 'Loading...'}
+          icon="📊"
+          color="emerald"
+        />
+        <StatCard
+          title="Total Virtual Inventory"
+          value={aggregates ? totalVirtualInventory.toLocaleString() : 'Loading...'}
+          icon="🔢"
+          color="purple"
+        />
+        <StatCard
+          title="Total Stock Value"
+          value={aggregates ? `₹${(totalValue / 1000000).toFixed(2)}M` : 'Loading...'}
+          icon="💰"
+          color="amber"
+        />
       </div>
 
       <div className="card mb-4">
@@ -107,7 +131,7 @@ export default function GarmentInventoryPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
           <span className="text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">
-            {totalRecords.toLocaleString()} items
+            Page {page + 1} of {totalPages || 1}
           </span>
         </div>
       </div>

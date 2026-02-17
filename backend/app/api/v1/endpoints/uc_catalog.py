@@ -158,11 +158,14 @@ async def search_items(payload: Dict[str, Any] = Body(...)):
     Payload: {
         keyword?, productCode?, categoryCode?,
         getInventorySnapshot?, updatedSinceInHour?, skuType?,
-        searchOptions?: { searchKey?, displayLength?, displayStart?, ... }
+        searchOptions?: { searchKey?, displayLength?, displayStart?, ... },
+        getAggregates?: boolean (to fetch totals across all pages)
     }
     """
     try:
         svc = get_uc_api_service()
+        get_aggregates = payload.pop("getAggregates", False)
+
         result = await svc.post("/product/itemType/search", payload)
 
         # Log sample if inventory snapshot requested
@@ -199,7 +202,107 @@ async def search_items(payload: Dict[str, Any] = Body(...)):
                     snap["badInventory"] = snap.get("badInventory", 0) or 0
                     snap["openSale"] = snap.get("openSale", 0) or 0
 
+        # Compute aggregates if requested
+        if get_aggregates and result.get("successful") and payload.get("getInventorySnapshot"):
+            logger.info("Computing aggregates across all pages...")
+            aggregates = await _compute_inventory_aggregates(svc, payload)
+            result["aggregates"] = aggregates
+
         return result
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)
         return {"successful": False, "error": str(e)}
+
+
+async def _compute_inventory_aggregates(svc, base_payload: Dict[str, Any]) -> Dict[str, int]:
+    """
+    Fetch all pages and compute aggregate totals.
+    Returns totals for: inventory, virtualInventory, openSale, badInventory, etc.
+    """
+    try:
+        # First, get total records count
+        initial_payload = {
+            **base_payload,
+            "searchOptions": {
+                **base_payload.get("searchOptions", {}),
+                "displayStart": 0,
+                "displayLength": 1
+            }
+        }
+        initial_result = await svc.post("/product/itemType/search", initial_payload)
+
+        if not initial_result.get("successful"):
+            logger.warning(f"Initial aggregate query failed: {initial_result}")
+            return {}
+
+        total_records = initial_result.get("totalRecords", 0)
+        logger.info(f"Total records for aggregates: {total_records}")
+
+        if total_records == 0:
+            return {
+                "totalInventory": 0,
+                "totalVirtualInventory": 0,
+                "totalOpenSale": 0,
+                "totalBadInventory": 0,
+                "totalPutawayPending": 0,
+                "totalValue": 0
+            }
+
+        # Fetch in batches of 100
+        batch_size = 100
+        totals = {
+            "totalInventory": 0,
+            "totalVirtualInventory": 0,
+            "totalOpenSale": 0,
+            "totalBadInventory": 0,
+            "totalPutawayPending": 0,
+            "totalValue": 0
+        }
+
+        # Limit to first 1000 items for performance (configurable)
+        max_items = min(total_records, 1000)
+
+        for start in range(0, max_items, batch_size):
+            batch_payload = {
+                **base_payload,
+                "searchOptions": {
+                    **base_payload.get("searchOptions", {}),
+                    "displayStart": start,
+                    "displayLength": min(batch_size, max_items - start)
+                }
+            }
+
+            batch_result = await svc.post("/product/itemType/search", batch_payload)
+
+            if not batch_result.get("successful"):
+                logger.warning(f"Batch query failed at start={start}")
+                continue
+
+            elements = batch_result.get("elements", [])
+            for item in elements:
+                snapshots = item.get("inventorySnapshots", [])
+                if snapshots:
+                    snap = snapshots[0]
+                    # Normalize inventory field
+                    inv = snap.get("inventory", 0) or snap.get(
+                        "goodInventory", 0) or snap.get("availableInventory", 0) or 0
+
+                    totals["totalInventory"] += inv
+                    totals["totalVirtualInventory"] += snap.get(
+                        "virtualInventory", 0) or 0
+                    totals["totalOpenSale"] += snap.get("openSale", 0) or 0
+                    totals["totalBadInventory"] += snap.get(
+                        "badInventory", 0) or 0
+                    totals["totalPutawayPending"] += snap.get(
+                        "putawayPending", 0) or 0
+
+                    # Calculate value (inventory * price)
+                    price = item.get("price", 0) or 0
+                    totals["totalValue"] += inv * price
+
+        logger.info(f"Aggregates computed: {totals}")
+        return totals
+
+    except Exception as e:
+        logger.error(f"Error computing aggregates: {e}", exc_info=True)
+        return {}
