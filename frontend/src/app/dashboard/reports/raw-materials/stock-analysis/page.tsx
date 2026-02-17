@@ -130,7 +130,7 @@ export default function InventoryAnalysisPage() {
           title="Total Stock Value"
           value={aggregates ? `₹${(totalValue / 1000000).toFixed(2)}M` : 'Loading...'}
           icon="💰"
-          color="amber"
+          color="yellow"
         />
       </div>
 

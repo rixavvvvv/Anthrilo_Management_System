@@ -7,12 +7,13 @@ from app.db.session import get_db
 from app.db.models import Inventory, Garment
 from app.schemas.garment import Inventory as InventorySchema, InventoryCreate, InventoryUpdate
 from app.services.cache_service import CacheService
+from app.services.websocket_manager import broadcast_inventory_update
 
 router = APIRouter()
 
 
 @router.post("/", response_model=InventorySchema, status_code=status.HTTP_201_CREATED)
-def create_inventory(inventory: InventoryCreate, db: Session = Depends(get_db)):
+async def create_inventory(inventory: InventoryCreate, db: Session = Depends(get_db)):
     """Create a new inventory record."""
     # Check if garment exists
     garment = db.query(Garment).filter(
@@ -36,6 +37,14 @@ def create_inventory(inventory: InventoryCreate, db: Session = Depends(get_db)):
 
     # Invalidate inventory cache
     CacheService.invalidate_inventory_cache()
+    
+    # Broadcast update
+    await broadcast_inventory_update({
+        "action": "inventory_created",
+        "inventory_id": db_inventory.id,
+        "garment_id": inventory.garment_id,
+        "timestamp": datetime.now().isoformat()
+    })
 
     return db_inventory
 
@@ -68,7 +77,7 @@ def get_inventory_by_garment(garment_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{inventory_id}", response_model=InventorySchema)
-def update_inventory(inventory_id: int, inventory_update: InventoryUpdate, db: Session = Depends(get_db)):
+async def update_inventory(inventory_id: int, inventory_update: InventoryUpdate, db: Session = Depends(get_db)):
     """Update an inventory record."""
     db_inventory = db.query(Inventory).filter(
         Inventory.id == inventory_id).first()
@@ -82,6 +91,19 @@ def update_inventory(inventory_id: int, inventory_update: InventoryUpdate, db: S
     db_inventory.last_updated = datetime.utcnow()
     db.commit()
     db.refresh(db_inventory)
+    
+    # Invalidate cache
+    CacheService.invalidate_inventory_cache()
+    
+    # Broadcast update
+    await broadcast_inventory_update({
+        "action": "inventory_updated",
+        "inventory_id": inventory_id,
+        "garment_id": db_inventory.garment_id,
+        "good_stock": db_inventory.good_stock,
+        "timestamp": datetime.now().isoformat()
+    })
+    
     return db_inventory
 
 

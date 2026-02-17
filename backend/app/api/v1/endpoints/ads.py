@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import date, datetime
@@ -6,6 +6,7 @@ from decimal import Decimal
 from pydantic import BaseModel
 from app.db.session import get_db
 from app.db.models import PaidAd, Panel
+from app.services.cache_service import CacheService
 
 router = APIRouter()
 
@@ -46,19 +47,32 @@ def create_paid_ad(ad: PaidAdCreate, db: Session = Depends(get_db)):
     db.add(db_ad)
     db.commit()
     db.refresh(db_ad)
+    
+    # Invalidate cache
+    CacheService.invalidate_ads_cache()
+    
     return db_ad
 
 
 @router.get("/", response_model=List[PaidAdSchema])
 def list_paid_ads(
-    skip: int = 0,
-    limit: int = 100,
-    start_date: date = None,
-    end_date: date = None,
-    panel_id: int = None,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
+    start_date: date = Query(None, description="Filter from date"),
+    end_date: date = Query(None, description="Filter to date"),
+    panel_id: int = Query(None, description="Filter by panel"),
     db: Session = Depends(get_db)
 ):
-    """List all paid ads with optional filtering."""
+    """List all paid ads with pagination and Redis caching."""
+    skip = (page - 1) * page_size
+    
+    # Check cache
+    cache_key = f"ads:list:{page}:{page_size}:{start_date}:{end_date}:{panel_id}"
+    cached = CacheService.get(cache_key)
+    if cached:
+        return cached
+    
+    # Build query
     query = db.query(PaidAd)
     if start_date:
         query = query.filter(PaidAd.ad_date >= start_date)
@@ -67,8 +81,21 @@ def list_paid_ads(
     if panel_id:
         query = query.filter(PaidAd.panel_id == panel_id)
     
-    ads = query.order_by(PaidAd.ad_date.desc()).offset(skip).limit(limit).all()
-    return ads
+    total = query.count()
+    ads = query.order_by(PaidAd.ad_date.desc()).offset(skip).limit(page_size).all()
+    
+    result = {
+        "items": [PaidAdSchema.from_orm(ad) for ad in ads],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size
+    }
+    
+    # Cache result
+    CacheService.set(cache_key, result, CacheService.TTL_MEDIUM)
+    
+    return result
 
 
 @router.get("/roi/{panel_id}")
@@ -78,7 +105,13 @@ def calculate_roi(
     end_date: date,
     db: Session = Depends(get_db)
 ):
-    """Calculate ROI for a panel's paid ads within a date range."""
+    """Calculate ROI for a panel's paid ads within a date range with Redis caching."""
+    # Check cache
+    cache_key = f"ads:roi:{panel_id}:{start_date}:{end_date}"
+    cached = CacheService.get(cache_key)
+    if cached:
+        return cached
+    
     ads = db.query(PaidAd).filter(
         PaidAd.panel_id == panel_id,
         PaidAd.ad_date >= start_date,
@@ -90,7 +123,7 @@ def calculate_roi(
     
     roi = ((total_revenue - total_spend) / total_spend * 100) if total_spend > 0 else 0
     
-    return {
+    result = {
         "panel_id": panel_id,
         "start_date": start_date,
         "end_date": end_date,
@@ -98,3 +131,8 @@ def calculate_roi(
         "total_revenue": total_revenue,
         "roi_percentage": round(roi, 2)
     }
+    
+    # Cache for 1 hour
+    CacheService.set(cache_key, result, CacheService.TTL_VERY_LONG)
+    
+    return result
