@@ -3,12 +3,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import Link from 'next/link';
-import { useState } from 'react';
-import { useDailySales } from "@/lib/hooks/useDailySales";
 
 
 export default function DashboardPage() {
-  const [refreshInterval, setRefreshInterval] = useState<'1min' | '5min' | '10min'>('1min');
 
   // Real-time Unicommerce data with auto-refresh
   const { data: todayData, isLoading: loadingToday, dataUpdatedAt: updatedToday } = useQuery({
@@ -52,14 +49,6 @@ export default function DashboardPage() {
     },
     staleTime: 5 * 60 * 1000,
   });
-
-const todayDate = new Date().toISOString().split("T")[0];
-
-const {
-  data: erpDailySales,
-  isLoading: erpLoading,
-  error: erpError,
-} = useDailySales(todayDate);
 
   // Real-time Unicommerce stats
   const todayOrders = todayData?.summary?.total_orders || 0;
@@ -157,37 +146,6 @@ const {
                 Enterprise ERP for textile manufacturing and garment production management
               </p>
             </div>
-            {/* Refresh Interval Selector */}
-            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg p-2">
-              <span className="text-xs text-white/80 px-2">Auto-refresh:</span>
-              <button
-                onClick={() => setRefreshInterval('1min')}
-                className={`px-3 py-1 text-xs rounded transition-all ${refreshInterval === '1min'
-                  ? 'bg-white text-primary-600 font-semibold shadow-lg'
-                  : 'text-white/80 hover:bg-white/20'
-                  }`}
-              >
-                1 min
-              </button>
-              <button
-                onClick={() => setRefreshInterval('5min')}
-                className={`px-3 py-1 text-xs rounded transition-all ${refreshInterval === '5min'
-                  ? 'bg-white text-primary-600 font-semibold shadow-lg'
-                  : 'text-white/80 hover:bg-white/20'
-                  }`}
-              >
-                5 min
-              </button>
-              <button
-                onClick={() => setRefreshInterval('10min')}
-                className={`px-3 py-1 text-xs rounded transition-all ${refreshInterval === '10min'
-                  ? 'bg-white text-primary-600 font-semibold shadow-lg'
-                  : 'text-white/80 hover:bg-white/20'
-                  }`}
-              >
-                10 min
-              </button>
-            </div>
           </div>
 
           {/* Real-time Status Indicator */}
@@ -213,9 +171,6 @@ const {
           <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             🔥 Real-time Sales (Unicommerce)
           </h2>
-          <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">
-            Revenue: sellingPrice only
-          </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -1213,7 +1213,7 @@ async def get_best_skus_monthly(
                         "quantity": 0, "revenue": 0.0, "order_count": 0, "channels": {},
                     }
                 sku_map[sku]["quantity"] += qty
-                sku_map[sku]["revenue"] += price
+                sku_map[sku]["revenue"] += price * qty
                 sku_map[sku]["order_count"] += 1
                 if channel not in sku_map[sku]["channels"]:
                     sku_map[sku]["channels"][channel] = 0

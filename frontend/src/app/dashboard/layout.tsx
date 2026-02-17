@@ -134,14 +134,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <header className="h-16 flex-shrink-0 flex items-center justify-between px-6 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-700/80 sticky top-0 z-30">
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-1.5 text-sm text-slate-400">
-              {pathname.split('/').filter(Boolean).map((seg, i, arr) => (
-                <span key={i} className="flex items-center gap-1.5">
-                  {i > 0 && <span>/</span>}
-                  <span className={i === arr.length - 1 ? 'text-slate-700 dark:text-slate-200 font-medium capitalize' : 'capitalize'}>
-                    {seg.replace(/-/g, ' ')}
+              {pathname.split('/').filter(Boolean).map((seg, i, arr) => {
+                const href = '/' + arr.slice(0, i + 1).join('/');
+                const isLast = i === arr.length - 1;
+                return (
+                  <span key={i} className="flex items-center gap-1.5">
+                    {i > 0 && <span>/</span>}
+                    {isLast ? (
+                      <span className="text-slate-700 dark:text-slate-200 font-medium capitalize">
+                        {seg.replace(/-/g, ' ')}
+                      </span>
+                    ) : (
+                      <Link href={href} className="capitalize hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                        {seg.replace(/-/g, ' ')}
+                      </Link>
+                    )}
                   </span>
-                </span>
-              ))}
+                );
+              })}
             </div>
           </div>
           <div className="flex items-center gap-3">

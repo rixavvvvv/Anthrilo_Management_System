@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { unicommerceApi } from '@/lib/api';
-import { PageHeader, StatCard, LoadingSpinner } from '@/components/ui/Common';
+import { PageHeader, LoadingSpinner } from '@/components/ui/Common';
 import { DataTable, Column } from '@/components/ui/DataTable';
 
 export default function BestSkusPage() {
@@ -22,7 +22,6 @@ export default function BestSkusPage() {
     });
 
     const skus = (data?.skus || []).map((s: any, i: number) => ({ ...s, rank: i + 1 }));
-    const summary = data?.summary || {};
 
     const columns: Column<any>[] = [
         {
@@ -87,16 +86,6 @@ export default function BestSkusPage() {
                     </div>
                 </div>
             </div>
-
-            {/* Summary Cards */}
-            {data?.success && (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <StatCard title="Total Orders" value={summary.total_orders || 0} icon="🛒" color="blue" />
-                    <StatCard title="Total Revenue" value={`₹${((summary.total_revenue || 0) / 1000).toFixed(1)}K`} icon="💰" color="green" />
-                    <StatCard title="Unique SKUs" value={summary.unique_skus || 0} icon="📦" color="purple" />
-                    <StatCard title="Period" value={`${monthNames[month - 1]} ${year}`} icon="📅" color="yellow" />
-                </div>
-            )}
 
             {/* Error */}
             {error && (
