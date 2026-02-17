@@ -195,12 +195,13 @@ async def search_items(payload: Dict[str, Any] = Body(...)):
                         snap["inventory"] = snap["goodInventory"]
                     if "availableInventory" in snap and "inventory" not in snap:
                         snap["inventory"] = snap["availableInventory"]
-                    # Ensure numeric values
+                    # Ensure numeric values for all inventory fields
                     snap["inventory"] = snap.get("inventory", 0) or 0
-                    snap["virtualInventory"] = snap.get(
-                        "virtualInventory", 0) or 0
+                    snap["virtualInventory"] = snap.get("virtualInventory", 0) or 0
                     snap["badInventory"] = snap.get("badInventory", 0) or 0
                     snap["openSale"] = snap.get("openSale", 0) or 0
+                    snap["inventoryBlocked"] = snap.get("inventoryBlocked", 0) or 0
+                    snap["putawayPending"] = snap.get("putawayPending", 0) or 0
 
         # Compute aggregates if requested
         if get_aggregates and result.get("successful") and payload.get("getInventorySnapshot"):
@@ -245,7 +246,9 @@ async def _compute_inventory_aggregates(svc, base_payload: Dict[str, Any]) -> Di
                 "totalOpenSale": 0,
                 "totalBadInventory": 0,
                 "totalPutawayPending": 0,
-                "totalValue": 0
+                "totalValue": 0,
+                "skusWithStock": 0,
+                "skusOutOfStock": 0
             }
 
         # Fetch in batches of 100
@@ -256,7 +259,9 @@ async def _compute_inventory_aggregates(svc, base_payload: Dict[str, Any]) -> Di
             "totalOpenSale": 0,
             "totalBadInventory": 0,
             "totalPutawayPending": 0,
-            "totalValue": 0
+            "totalValue": 0,
+            "skusWithStock": 0,
+            "skusOutOfStock": 0
         }
 
         # Limit to first 1000 items for performance (configurable)
@@ -295,6 +300,12 @@ async def _compute_inventory_aggregates(svc, base_payload: Dict[str, Any]) -> Di
                         "badInventory", 0) or 0
                     totals["totalPutawayPending"] += snap.get(
                         "putawayPending", 0) or 0
+
+                    # Count SKUs with/without stock
+                    if inv > 0:
+                        totals["skusWithStock"] += 1
+                    else:
+                        totals["skusOutOfStock"] += 1
 
                     # Calculate value (inventory * price)
                     price = item.get("price", 0) or 0

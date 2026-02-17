@@ -3,9 +3,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import Link from 'next/link';
+import { useWebSocket } from '@/lib/hooks/useWebSocket';
 
 
 export default function DashboardPage() {
+
+  // WebSocket for real-time updates (auto-updates React Query cache)
+  const { isConnected: wsConnected, lastUpdate: wsLastUpdate } = useWebSocket();
 
   // Real-time Unicommerce data with auto-refresh
   const { data: todayData, isLoading: loadingToday, dataUpdatedAt: updatedToday } = useQuery({
@@ -156,9 +160,15 @@ export default function DashboardPage() {
                 {isUnicommerceLoading ? 'Updating...' : 'Live Data'}
               </span>
             </div>
-            {updatedToday && (
+            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
+              <span className={`h-2 w-2 rounded-full ${wsConnected ? 'bg-emerald-400' : 'bg-red-400'}`}></span>
+              <span className="text-xs text-white">
+                {wsConnected ? 'WebSocket' : 'WS Offline'}
+              </span>
+            </div>
+            {(wsLastUpdate || updatedToday) && (
               <div className="text-xs text-white/70 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
-                Last update: {timeAgo(updatedToday)}
+                Last update: {wsLastUpdate ? timeAgo(wsLastUpdate.getTime()) : updatedToday ? timeAgo(updatedToday) : '—'}
               </div>
             )}
           </div>

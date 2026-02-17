@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import date, datetime
@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from app.db.session import get_db
 from app.db.models import Sale, Garment, Panel
 from app.services.sales_service import invalidate_daily_sales_cache
+from app.services.cache_service import CacheService
+from app.services.websocket_manager import broadcast_sales_update
 
 router = APIRouter()
 
@@ -60,7 +62,7 @@ class SaleSchema(SaleBase):
 
 
 @router.post("/", response_model=SaleSchema, status_code=status.HTTP_201_CREATED)
-def create_sale(sale: SaleCreate, db: Session = Depends(get_db)):
+async def create_sale(sale: SaleCreate, db: Session = Depends(get_db)):
     """Create a new sale record."""
     # Verify garment and panel exist
     garment = db.query(Garment).filter(Garment.id == sale.garment_id).first()
@@ -78,20 +80,40 @@ def create_sale(sale: SaleCreate, db: Session = Depends(get_db)):
 
     # Invalidate cache for the sale date
     invalidate_daily_sales_cache(sale.transaction_date)
+    CacheService.invalidate_sales_cache()
+    
+    # Broadcast update
+    await broadcast_sales_update({
+        "action": "sale_created",
+        "sale_id": db_sale.id,
+        "garment_id": sale.garment_id,
+        "panel_id": sale.panel_id,
+        "total_amount": float(sale.total_amount),
+        "timestamp": datetime.now().isoformat()
+    })
 
     return db_sale
 
 
 @router.get("/", response_model=List[SaleSchema])
 def list_sales(
-    skip: int = 0,
-    limit: int = 100,
-    start_date: date = None,
-    end_date: date = None,
-    panel_id: int = None,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
+    start_date: date = Query(None, description="Filter from date"),
+    end_date: date = Query(None, description="Filter to date"),
+    panel_id: int = Query(None, description="Filter by panel"),
     db: Session = Depends(get_db)
 ):
-    """List all sales with optional filtering."""
+    """List all sales with pagination and Redis caching."""
+    skip = (page - 1) * page_size
+    
+    # Check cache
+    cache_key = f"sales:list:{page}:{page_size}:{start_date}:{end_date}:{panel_id}"
+    cached = CacheService.get(cache_key)
+    if cached:
+        return cached
+    
+    # Build query
     query = db.query(Sale).join(Garment)  # Join garment to get SKU
     if start_date:
         query = query.filter(Sale.transaction_date >= start_date)
@@ -100,14 +122,38 @@ def list_sales(
     if panel_id:
         query = query.filter(Sale.panel_id == panel_id)
 
-    sales = query.order_by(Sale.transaction_date.desc()
-                           ).offset(skip).limit(limit).all()
-    return [SaleSchema.from_orm(sale) for sale in sales]
+    total = query.count()
+    sales = query.order_by(Sale.transaction_date.desc()).offset(skip).limit(page_size).all()
+    
+    result = {
+        "items": [SaleSchema.from_orm(sale) for sale in sales],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size
+    }
+    
+    # Cache result
+    CacheService.set(cache_key, result, CacheService.TTL_SHORT)
+    
+    return result
 
 
 @router.get("/daily/{transaction_date}", response_model=List[SaleSchema])
 def get_daily_sales(transaction_date: date, db: Session = Depends(get_db)):
-    """Get sales for a specific date."""
+    """Get sales for a specific date with Redis caching."""
+    # Check cache
+    cache_key = f"sales:daily:{transaction_date}"
+    cached = CacheService.get(cache_key)
+    if cached:
+        return cached
+    
     sales = db.query(Sale).join(Garment).filter(
         Sale.transaction_date == transaction_date).all()
-    return [SaleSchema.from_orm(sale) for sale in sales]
+    
+    result = [SaleSchema.from_orm(sale) for sale in sales]
+    
+    # Cache result
+    CacheService.set(cache_key, result, CacheService.TTL_MEDIUM)
+    
+    return result

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import date, datetime
@@ -6,6 +6,7 @@ from decimal import Decimal
 from pydantic import BaseModel
 from app.db.session import get_db
 from app.db.models import Discount
+from app.services.cache_service import CacheService
 
 router = APIRouter()
 
@@ -43,29 +44,67 @@ def create_discount(discount: DiscountCreate, db: Session = Depends(get_db)):
     db.add(db_discount)
     db.commit()
     db.refresh(db_discount)
+    
+    # Invalidate cache
+    CacheService.invalidate_discounts_cache()
+    
     return db_discount
 
 
 @router.get("/", response_model=List[DiscountSchema])
 def list_discounts(
-    skip: int = 0,
-    limit: int = 100,
-    is_active: bool = None,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
+    is_active: bool = Query(None, description="Filter by active status"),
     db: Session = Depends(get_db)
 ):
-    """List all discounts with optional filtering."""
+    """List all discounts with pagination and Redis caching."""
+    skip = (page - 1) * page_size
+    
+    # Check cache
+    cache_key = f"discounts:list:{page}:{page_size}:{is_active}"
+    cached = CacheService.get(cache_key)
+    if cached:
+        return cached
+    
+    # Build query
     query = db.query(Discount)
     if is_active is not None:
         query = query.filter(Discount.is_active == is_active)
     
-    discounts = query.offset(skip).limit(limit).all()
-    return discounts
+    total = query.count()
+    discounts = query.offset(skip).limit(page_size).all()
+    
+    result = {
+        "items": [DiscountSchema.from_orm(d) for d in discounts],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size
+    }
+    
+    # Cache result
+    CacheService.set(cache_key, result, CacheService.TTL_MEDIUM)
+    
+    return result
 
 
 @router.get("/{discount_id}", response_model=DiscountSchema)
 def get_discount(discount_id: int, db: Session = Depends(get_db)):
-    """Get a specific discount."""
+    """Get a specific discount with Redis caching."""
+    # Check cache
+    cache_key = f"discounts:{discount_id}"
+    cached = CacheService.get(cache_key)
+    if cached:
+        return cached
+    
     discount = db.query(Discount).filter(Discount.id == discount_id).first()
     if not discount:
         raise HTTPException(status_code=404, detail="Discount not found")
-    return discount
+    
+    result = DiscountSchema.from_orm(discount)
+    
+    # Cache result
+    CacheService.set(cache_key, result, CacheService.TTL_LONG)
+    
+    return result

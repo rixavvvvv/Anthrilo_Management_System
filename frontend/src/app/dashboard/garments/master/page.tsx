@@ -62,7 +62,7 @@ export default function GarmentMasterPage() {
   const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
 
   // Use summary data for Active SKU Count
-  const activeSKUs = summaryData?.activeSKUs || 0;
+  const activeSKUs = summaryData?.totalRecords || totalRecords;
   const summaryLoaded = summaryData?.successful || false;
 
   const columns: Column<any>[] = [

@@ -12,12 +12,15 @@ Includes:
 - Revenue validation
 """
 
-from fastapi import APIRouter, Query, BackgroundTasks
+from fastapi import APIRouter, Query, BackgroundTasks, WebSocket, WebSocketDisconnect
 import logging
+import asyncio
+import json as json_module
 from datetime import datetime, timezone, timedelta
 from app.services.unicommerce_optimized import get_unicommerce_service
 from app.services.sync_service import get_sync_service
 from app.core.token_manager import get_token_manager
+from app.services.cache_service import CacheService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -26,14 +29,57 @@ IST = timezone(timedelta(hours=5, minutes=30))
 
 
 # =============================================================================
+# WEBSOCKET CONNECTION MANAGER
+# =============================================================================
+
+class ConnectionManager:
+    """Manages WebSocket connections for real-time dashboard updates."""
+
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        logger.info(f"WebSocket connected. Total: {len(self.active_connections)}")
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        logger.info(f"WebSocket disconnected. Total: {len(self.active_connections)}")
+
+    async def broadcast(self, message: dict):
+        """Send data to all connected clients."""
+        disconnected = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                disconnected.append(connection)
+        for conn in disconnected:
+            self.disconnect(conn)
+
+
+ws_manager = ConnectionManager()
+
+
+# =============================================================================
 # SUMMARY ENDPOINTS (For dashboard cards)
 # =============================================================================
 
 @router.get("/unicommerce/today")
 async def get_today_sales():
-    """Get today's sales summary using two-phase approach."""
+    """Get today's sales summary using two-phase approach with Redis caching."""
     try:
-        logger.info("Fetching TODAY sales")
+        # Check Redis cache (short TTL for today)
+        cache_key = f"uc:today:{datetime.now(IST).strftime('%Y-%m-%d')}"
+        cached = CacheService.get(cache_key)
+        if cached:
+            logger.info("TODAY sales: Redis cache hit")
+            cached["_cached"] = True
+            return cached
+
+        logger.info("Fetching TODAY sales (cache miss)")
         service = get_unicommerce_service()
         result = await service.get_today_sales()
 
@@ -43,6 +89,12 @@ async def get_today_sales():
                 f"TODAY: {summary.get('total_orders', 0)} orders, "
                 f"INR {summary.get('total_revenue', 0):,.2f}"
             )
+            # Cache for 3 minutes (today changes frequently)
+            CacheService.set(cache_key, result, 180)
+
+            # Broadcast to WebSocket clients
+            await ws_manager.broadcast({"type": "today_sales", "data": result})
+
         return result
 
     except Exception as e:
@@ -52,9 +104,18 @@ async def get_today_sales():
 
 @router.get("/unicommerce/yesterday")
 async def get_yesterday_sales():
-    """Get yesterday's sales summary."""
+    """Get yesterday's sales summary with Redis caching."""
     try:
-        logger.info("Fetching YESTERDAY sales")
+        now_ist = datetime.now(IST)
+        yesterday = (now_ist - timedelta(days=1)).strftime('%Y-%m-%d')
+        cache_key = f"uc:yesterday:{yesterday}"
+        cached = CacheService.get(cache_key)
+        if cached:
+            logger.info("YESTERDAY sales: Redis cache hit")
+            cached["_cached"] = True
+            return cached
+
+        logger.info("Fetching YESTERDAY sales (cache miss)")
         service = get_unicommerce_service()
         result = await service.get_yesterday_sales()
 
@@ -64,6 +125,8 @@ async def get_yesterday_sales():
                 f"YESTERDAY: {summary.get('total_orders', 0)} orders, "
                 f"INR {summary.get('total_revenue', 0):,.2f}"
             )
+            # Yesterday data is stable - cache for 30 min
+            CacheService.set(cache_key, result, CacheService.TTL_LONG)
         return result
 
     except Exception as e:
@@ -73,9 +136,16 @@ async def get_yesterday_sales():
 
 @router.get("/unicommerce/last-7-days")
 async def get_last_7_days():
-    """Get last 7 complete days sales (not including today)."""
+    """Get last 7 complete days sales with Redis caching."""
     try:
-        logger.info("Fetching LAST 7 DAYS sales")
+        cache_key = f"uc:last7:{datetime.now(IST).strftime('%Y-%m-%d')}"
+        cached = CacheService.get(cache_key)
+        if cached:
+            logger.info("LAST 7 DAYS: Redis cache hit")
+            cached["_cached"] = True
+            return cached
+
+        logger.info("Fetching LAST 7 DAYS sales (cache miss)")
         service = get_unicommerce_service()
         result = await service.get_last_7_days_sales()
 
@@ -85,6 +155,8 @@ async def get_last_7_days():
                 f"7 DAYS: {summary.get('total_orders', 0)} orders, "
                 f"INR {summary.get('total_revenue', 0):,.2f}"
             )
+            # Cache for 15 minutes
+            CacheService.set(cache_key, result, CacheService.TTL_MEDIUM)
         return result
 
     except Exception as e:
@@ -182,8 +254,15 @@ async def get_sales_report(
     period: str = Query(
         "today", description="Preset: today, yesterday, last_7_days, custom")
 ):
-    """Get comprehensive sales report."""
+    """Get comprehensive sales report with Redis caching."""
     try:
+        # Check Redis cache
+        cache_key = f"uc:report:{period}:{from_date or 'na'}:{to_date or 'na'}"
+        cached = CacheService.get(cache_key)
+        if cached:
+            cached["_cached"] = True
+            return cached
+
         service = get_unicommerce_service()
 
         if period == "today":
@@ -202,6 +281,11 @@ async def get_sales_report(
             result = await service.get_custom_range_sales(from_dt, to_dt)
         else:
             result = await service.get_today_sales()
+
+        # Cache result
+        ttl = 180 if period == "today" else CacheService.TTL_MEDIUM
+        if result and result.get("success"):
+            CacheService.set(cache_key, result, ttl)
 
         return result
 
@@ -318,8 +402,16 @@ async def get_channel_revenue(
     period: str = Query(
         "last_7_days", description="Period for channel breakdown")
 ):
-    """Get revenue breakdown by channel/marketplace."""
+    """Get revenue breakdown by channel/marketplace with Redis caching."""
     try:
+        # Check Redis cache
+        cache_key = f"uc:channels:{period}:{datetime.now(IST).strftime('%Y-%m-%d')}"
+        cached = CacheService.get(cache_key)
+        if cached:
+            logger.info(f"Channel revenue {period}: Redis cache hit")
+            cached["_cached"] = True
+            return cached
+
         service = get_unicommerce_service()
 
         if period == "today":
@@ -356,7 +448,7 @@ async def get_channel_revenue(
         channel_sum = sum(ch["revenue"] for ch in channels)
         validation_passed = abs(channel_sum - total_revenue) < 1
 
-        return {
+        response = {
             "success": True,
             "period": period,
             "total_revenue": total_revenue,
@@ -369,6 +461,10 @@ async def get_channel_revenue(
             },
             "revenue_method": "sellingPrice_only"
         }
+
+        # Cache channels for 10 min
+        CacheService.set(cache_key, response, CacheService.TTL_MEDIUM)
+        return response
 
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)
@@ -1171,12 +1267,25 @@ async def get_best_skus_monthly(
     year: int = Query(None, description="Year, defaults to current"),
     limit: int = Query(20, description="Number of top SKUs"),
 ):
-    """Get best performing SKUs for a given month."""
+    """
+    Get best performing SKUs for a given month.
+    Uses Redis cache: current month=1hr TTL, historical=24hr TTL.
+    """
     try:
         service = get_unicommerce_service()
         now = datetime.now(IST)
         m = month or now.month
         y = year or now.year
+
+        # Check Redis cache first
+        cache_key = f"uc:best_skus:{y}:{m}:{limit}"
+        cached = CacheService.get(cache_key)
+        if cached:
+            logger.info(f"BEST SKUs {y}-{m:02d}: Redis cache hit")
+            cached["_cached"] = True
+            return cached
+
+        logger.info(f"BEST SKUs {y}-{m:02d}: Cache miss, fetching from API...")
 
         from_dt = datetime(y, m, 1, 0, 0, 0, tzinfo=timezone.utc)
         if m == 12:
@@ -1227,7 +1336,7 @@ async def get_best_skus_monthly(
         top_skus = sorted(sku_map.values(),
                           key=lambda x: x["quantity"], reverse=True)[:limit]
 
-        return {
+        result = {
             "success": True,
             "month": m, "year": y,
             "period": f"{y}-{m:02d}",
@@ -1235,6 +1344,14 @@ async def get_best_skus_monthly(
             "total_orders": len(raw_orders),
             "skus": top_skus,
         }
+
+        # Cache: current month 1hr, historical 24hr
+        is_current = (y == now.year and m == now.month)
+        ttl = CacheService.TTL_VERY_LONG if is_current else 86400
+        CacheService.set(cache_key, result, ttl)
+        logger.info(f"BEST SKUs {y}-{m:02d}: Cached (TTL={ttl}s)")
+
+        return result
 
     except Exception as e:
         logger.error(f"Error in best-skus-monthly: {e}", exc_info=True)
@@ -1250,18 +1367,19 @@ async def get_cod_vs_prepaid(
     month: int = Query(None, description="Month (1-12), defaults to current"),
     year: int = Query(None, description="Year, defaults to current"),
 ):
-    """Get COD vs Prepaid breakdown for a given month."""
+    """Get COD vs Prepaid breakdown for a given month with Redis caching."""
     try:
         service = get_unicommerce_service()
         now = datetime.now(IST)
         m = month or now.month
         y = year or now.year
 
-        # Check cache first (1 hour TTL for monthly data)
-        cache_key = f"cod_vs_prepaid_{y}_{m:02d}"
-        cached = service._get_from_cache(cache_key)
+        # Check Redis cache (persistent across workers/restarts)
+        cache_key = f"uc:cod_prepaid:{y}:{m}"
+        cached = CacheService.get(cache_key)
         if cached:
-            logger.info(f"COD vs Prepaid cache hit for {y}-{m:02d}")
+            logger.info(f"COD vs Prepaid {y}-{m:02d}: Redis cache hit")
+            cached["_cached"] = True
             return cached
 
         from_dt = datetime(y, m, 1, 0, 0, 0, tzinfo=timezone.utc)
@@ -1370,12 +1488,193 @@ async def get_cod_vs_prepaid(
             "channels": channels,
         }
 
-        # Cache for 1 hour
-        service._set_cache(cache_key, result)
-        logger.info(f"COD vs Prepaid: cached result for {y}-{m:02d}")
+        # Redis cache: current month 1hr, historical 24hr
+        is_current = (y == now.year and m == now.month)
+        ttl = CacheService.TTL_VERY_LONG if is_current else 86400
+        CacheService.set(cache_key, result, ttl)
+        logger.info(f"COD vs Prepaid: cached result for {y}-{m:02d} (TTL={ttl}s)")
 
         return result
 
     except Exception as e:
         logger.error(f"Error in cod-vs-prepaid: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# WEBSOCKET ENDPOINTS (Real-time updates for different event types)
+# =============================================================================
+
+@router.websocket("/ws/sales")
+async def websocket_sales(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time sales dashboard updates.
+    Sends today's sales summary every 60 seconds automatically.
+    Clients can also send requests: {"action": "refresh"} to trigger immediate update.
+    """
+    await ws_manager.connect(websocket)
+    try:
+        # Send initial data immediately
+        try:
+            service = get_unicommerce_service()
+            today_key = f"uc:today:{datetime.now(IST).strftime('%Y-%m-%d')}"
+            cached = CacheService.get(today_key)
+            if cached:
+                await websocket.send_json({"type": "today_sales", "data": cached})
+        except Exception:
+            pass
+
+        while True:
+            try:
+                # Wait for client message (with timeout for periodic push)
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
+                msg = json_module.loads(data)
+
+                if msg.get("action") == "refresh":
+                    # Client requests fresh data
+                    service = get_unicommerce_service()
+                    result = await service.get_today_sales()
+                    if result.get("success"):
+                        today_key = f"uc:today:{datetime.now(IST).strftime('%Y-%m-%d')}"
+                        CacheService.set(today_key, result, 180)
+                        await websocket.send_json({"type": "today_sales", "data": result})
+
+                elif msg.get("action") == "subscribe":
+                    await websocket.send_json({"type": "subscribed", "message": "Connected to live feed"})
+
+            except asyncio.TimeoutError:
+                # Periodic push: send cached data every 60s
+                try:
+                    today_key = f"uc:today:{datetime.now(IST).strftime('%Y-%m-%d')}"
+                    cached = CacheService.get(today_key)
+                    if cached:
+                        await websocket.send_json({"type": "today_sales", "data": cached})
+                except Exception:
+                    pass
+
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        ws_manager.disconnect(websocket)
+
+
+@router.websocket("/ws/inventory")
+async def websocket_inventory(websocket: WebSocket):
+    """WebSocket endpoint for real-time inventory updates."""
+    from app.services.websocket_manager import ws_manager as global_ws_manager
+    await global_ws_manager.connect(websocket, "inventory")
+    try:
+        await websocket.send_json({"type": "connected", "message": "Connected to inventory updates"})
+        while True:
+            # Wait for client pings or messages
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        global_ws_manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket inventory error: {e}")
+        global_ws_manager.disconnect(websocket)
+
+
+@router.websocket("/ws/orders")
+async def websocket_orders(websocket: WebSocket):
+    """WebSocket endpoint for real-time order status updates."""
+    from app.services.websocket_manager import ws_manager as global_ws_manager
+    await global_ws_manager.connect(websocket, "orders")
+    try:
+        await websocket.send_json({"type": "connected", "message": "Connected to order updates"})
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        global_ws_manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket orders error: {e}")
+        global_ws_manager.disconnect(websocket)
+
+
+@router.websocket("/ws/production")
+async def websocket_production(websocket: WebSocket):
+    """WebSocket endpoint for real-time production plan updates."""
+    from app.services.websocket_manager import ws_manager as global_ws_manager
+    await global_ws_manager.connect(websocket, "production")
+    try:
+        await websocket.send_json({"type": "connected", "message": "Connected to production updates"})
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        global_ws_manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket production error: {e}")
+        global_ws_manager.disconnect(websocket)
+
+
+@router.websocket("/ws/all")
+async def websocket_all(websocket: WebSocket):
+    """WebSocket endpoint subscribing to all event types."""
+    from app.services.websocket_manager import ws_manager as global_ws_manager
+    await global_ws_manager.connect(websocket, "all")
+    try:
+        await websocket.send_json({"type": "connected", "message": "Connected to all updates"})
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        global_ws_manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket all events error: {e}")
+        global_ws_manager.disconnect(websocket)
+
+
+# =============================================================================
+# REDIS CACHE MANAGEMENT ENDPOINTS
+# =============================================================================
+
+@router.get("/cache/redis/stats")
+async def get_redis_cache_stats():
+    """Get Redis cache statistics and keys info."""
+    try:
+        from app.core.redis import redis_client
+
+        if not redis_client:
+            return {"success": False, "error": "Redis not connected"}
+
+        keys = redis_client.keys("uc:*")
+        cache_keys = {}
+        for key in keys:
+            try:
+                ttl = redis_client.ttl(key)
+                cache_keys[key] = {
+                    "ttl_seconds": ttl,
+                    "expires_in": f"{ttl // 3600}h {(ttl % 3600) // 60}m" if ttl > 0 else "no-expiry"
+                }
+            except Exception:
+                cache_keys[key] = {"error": "Could not read"}
+
+        info = redis_client.info("stats")
+        hits = info.get("keyspace_hits", 0)
+        misses = info.get("keyspace_misses", 0)
+        total = hits + misses
+
+        return {
+            "success": True,
+            "total_keys": len(keys),
+            "keys": cache_keys,
+            "stats": {
+                "hits": hits,
+                "misses": misses,
+                "hit_rate": round((hits / total * 100) if total > 0 else 0, 2)
+            }
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.delete("/cache/redis/invalidate")
+async def invalidate_redis_cache(
+    pattern: str = Query("uc:*", description="Key pattern to invalidate")
+):
+    """Invalidate Redis cache keys matching a pattern."""
+    try:
+        result = CacheService.delete_pattern(pattern)
+        return {"success": True, "message": f"Invalidated keys matching: {pattern}"}
+    except Exception as e:
         return {"success": False, "error": str(e)}
