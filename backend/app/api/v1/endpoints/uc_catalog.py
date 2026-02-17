@@ -306,3 +306,165 @@ async def _compute_inventory_aggregates(svc, base_payload: Dict[str, Any]) -> Di
     except Exception as e:
         logger.error(f"Error computing aggregates: {e}", exc_info=True)
         return {}
+
+
+# =============================================================================
+# INVENTORY SUMMARY (DEDICATED ENDPOINT FOR TOTALS)
+# =============================================================================
+
+@router.get("/inventory/summary")
+async def get_inventory_summary():
+    """
+    Get aggregated inventory summary across all SKUs.
+    This endpoint uses the inventory snapshot API for accurate totals.
+    Returns:
+        totalProducts: Total number of products in catalog
+        totalSKUs: Total number of SKUs with inventory
+        activeSKUs: Number of active (enabled) SKUs
+        skusWithStock: Number of SKUs with inventory > 0
+        skusOutOfStock: Number of SKUs with inventory = 0
+        outOfStockPercent: Percentage of SKUs out of stock
+        totalRealInventory: SUM of all inventory values
+        totalVirtualInventory: SUM of all virtualInventory values
+        totalStockValue: Total stock value (inventory * price)
+    """
+    try:
+        svc = get_uc_api_service()
+
+        # First get total record count from catalog
+        initial_payload = {
+            "getInventorySnapshot": True,
+            "searchOptions": {
+                "displayStart": 0,
+                "displayLength": 1
+            }
+        }
+        initial_result = await svc.post("/product/itemType/search", initial_payload)
+
+        if not initial_result.get("successful"):
+            logger.warning(f"Initial summary query failed: {initial_result}")
+            return {
+                "successful": False,
+                "error": "Failed to fetch initial data"
+            }
+
+        total_catalog_records = initial_result.get("totalRecords", 0)
+        logger.info(
+            f"Computing inventory summary for {total_catalog_records} catalog records")
+
+        if total_catalog_records == 0:
+            return {
+                "successful": True,
+                "totalProducts": 0,
+                "totalSKUs": 0,
+                "activeSKUs": 0,
+                "skusWithStock": 0,
+                "skusOutOfStock": 0,
+                "outOfStockPercent": 0,
+                "totalRealInventory": 0,
+                "totalVirtualInventory": 0,
+                "totalStockValue": 0
+            }
+
+        # Fetch ALL records in batches for accurate totals
+        batch_size = 500
+        totals = {
+            "totalRealInventory": 0,
+            "totalVirtualInventory": 0,
+            "totalStockValue": 0,
+            "activeSKUs": 0,
+            "skusWithStock": 0,
+            "skusOutOfStock": 0
+        }
+
+        # Fetch all pages
+        for start in range(0, total_catalog_records, batch_size):
+            batch_payload = {
+                "getInventorySnapshot": True,
+                "searchOptions": {
+                    "displayStart": start,
+                    "displayLength": min(batch_size, total_catalog_records - start)
+                }
+            }
+
+            batch_result = await svc.post("/product/itemType/search", batch_payload)
+
+            if not batch_result.get("successful"):
+                logger.warning(f"Batch query failed at start={start}")
+                continue
+
+            elements = batch_result.get("elements", [])
+
+            for item in elements:
+                is_enabled = item.get("enabled", False)
+
+                # Count active SKUs
+                if is_enabled:
+                    totals["activeSKUs"] += 1
+
+                snapshots = item.get("inventorySnapshots", [])
+                if snapshots:
+                    snap = snapshots[0]
+
+                    # Get inventory - try multiple field names
+                    inv = 0
+                    for field in ["inventory", "goodInventory", "availableInventory"]:
+                        val = snap.get(field)
+                        if val is not None and val != 0:
+                            inv = int(val)
+                            break
+
+                    # Count SKUs with/without stock
+                    if inv > 0:
+                        totals["skusWithStock"] += 1
+                    else:
+                        totals["skusOutOfStock"] += 1
+
+                    # Get virtual inventory
+                    virtual_inv = snap.get("virtualInventory", 0)
+                    if virtual_inv is None:
+                        virtual_inv = 0
+                    virtual_inv = int(virtual_inv)
+
+                    totals["totalRealInventory"] += inv
+                    totals["totalVirtualInventory"] += virtual_inv
+
+                    # Calculate value
+                    price = item.get("price", 0) or 0
+                    totals["totalStockValue"] += inv * price
+                else:
+                    # No inventory snapshot = out of stock
+                    totals["skusOutOfStock"] += 1
+
+            # Log progress for large datasets
+            if start % 10000 == 0 and start > 0:
+                logger.info(f"Summary progress: processed {start}/{total_catalog_records} records. "
+                            f"Running totals - Inventory: {totals['totalRealInventory']}, "
+                            f"With Stock: {totals['skusWithStock']}")
+
+        # Calculate out of stock percentage
+        total_checked = totals["skusWithStock"] + totals["skusOutOfStock"]
+        out_of_stock_percent = 0
+        if total_checked > 0:
+            out_of_stock_percent = round(
+                (totals["skusOutOfStock"] / total_checked) * 100)
+
+        logger.info(
+            f"Inventory summary computed: {totals}, outOfStockPercent: {out_of_stock_percent}")
+
+        return {
+            "successful": True,
+            "totalProducts": total_catalog_records,
+            "totalSKUs": total_catalog_records,
+            "activeSKUs": totals["activeSKUs"],
+            "skusWithStock": totals["skusWithStock"],
+            "skusOutOfStock": totals["skusOutOfStock"],
+            "outOfStockPercent": out_of_stock_percent,
+            "totalRealInventory": totals["totalRealInventory"],
+            "totalVirtualInventory": totals["totalVirtualInventory"],
+            "totalStockValue": totals["totalStockValue"]
+        }
+
+    except Exception as e:
+        logger.error(f"Error computing inventory summary: {e}", exc_info=True)
+        return {"successful": False, "error": str(e)}
