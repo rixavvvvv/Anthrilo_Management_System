@@ -21,7 +21,18 @@ export default function GarmentInventoryPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Fetch data with aggregates
+  // Fetch inventory summary ONCE on page load - independent of pagination
+  const { data: summaryData, isLoading: summaryLoading } = useQuery({
+    queryKey: ['uc-inventory-summary'],
+    queryFn: async () => {
+      const response = await ucCatalog.getInventorySummary();
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+  });
+
+  // Fetch paginated data for table - no aggregates needed
   const { data, isLoading, error } = useQuery({
     queryKey: ['uc-inventory', page, debouncedSearch],
     queryFn: async () => {
@@ -29,7 +40,7 @@ export default function GarmentInventoryPage() {
         displayStart: page * PAGE_SIZE,
         displayLength: PAGE_SIZE,
         getInventorySnapshot: true,
-        getAggregates: page === 0, // Only fetch aggregates on first page
+        getAggregates: false, // No longer need aggregates from paginated query
         keyword: debouncedSearch || undefined,
       });
       return response.data;
@@ -58,11 +69,14 @@ export default function GarmentInventoryPage() {
   const totalRecords = data?.totalRecords || 0;
   const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
 
-  // Get aggregates from first page load
-  const aggregates = data?.aggregates || null;
-  const totalInventory = aggregates?.totalInventory || 0;
-  const totalVirtualInventory = aggregates?.totalVirtualInventory || 0;
-  const totalValue = aggregates?.totalValue || 0;
+  // Use summary data for totals (fetched once, independent of pagination)
+  const totalSKUs = summaryData?.totalSKUs || totalRecords;
+  const totalRealInventory = summaryData?.totalRealInventory || 0;
+  const totalVirtualInventory = summaryData?.totalVirtualInventory || 0;
+  const totalStockValue = summaryData?.totalStockValue || 0;
+  const skusWithStock = summaryData?.skusWithStock || 0;
+  const outOfStockPercent = summaryData?.outOfStockPercent || 0;
+  const summaryLoaded = summaryData?.successful || false;
 
   const columns: Column<any>[] = [
     { key: 'skuCode', header: 'SKU', width: '13%' },
@@ -100,25 +114,31 @@ export default function GarmentInventoryPage() {
 
   return (
     <div>
-      <PageHeader title="Garment Inventory" description={`Live inventory from Unicommerce — ${totalRecords.toLocaleString()} total SKUs`} />
+      <PageHeader title="Garment Inventory" description={`Live inventory from Unicommerce — ${totalSKUs.toLocaleString()} total SKUs`} />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <StatCard title="Total SKUs" value={totalRecords.toLocaleString()} icon="📦" color="blue" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
+        <StatCard title="Total SKUs" value={totalSKUs.toLocaleString()} icon="📦" color="blue" />
         <StatCard
-          title="Total Real Inventory"
-          value={aggregates ? totalInventory.toLocaleString() : 'Loading...'}
-          icon="📊"
+          title="SKUs with Stock"
+          value={summaryLoaded ? skusWithStock.toLocaleString() : (summaryLoading ? 'Loading...' : '-')}
+          icon="✅"
           color="emerald"
         />
         <StatCard
-          title="Total Virtual Inventory"
-          value={aggregates ? totalVirtualInventory.toLocaleString() : 'Loading...'}
-          icon="🔢"
+          title="Out of Stock %"
+          value={summaryLoaded ? `${outOfStockPercent}%` : (summaryLoading ? 'Loading...' : '-')}
+          icon="⚠️"
+          color="rose"
+        />
+        <StatCard
+          title="Total Inventory"
+          value={summaryLoaded ? totalRealInventory.toLocaleString() : (summaryLoading ? 'Loading...' : '-')}
+          icon="📊"
           color="purple"
         />
         <StatCard
-          title="Total Stock Value"
-          value={aggregates ? `₹${(totalValue / 1000000).toFixed(2)}M` : 'Loading...'}
+          title="Stock Value"
+          value={summaryLoaded ? `₹${(totalStockValue / 100000).toFixed(2)}L` : (summaryLoading ? 'Loading...' : '-')}
           icon="💰"
           color="amber"
         />
