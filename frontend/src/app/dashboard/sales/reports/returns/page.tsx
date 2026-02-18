@@ -194,10 +194,71 @@ export default function DailyReturnReportPage() {
                         </div>
                     )}
 
+                    {/* Debug Info */}
+                    {data.search_results && (
+                        <div className="card bg-gray-50 dark:bg-gray-800/50">
+                            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">🔍 API Debug Information</h3>
+                            
+                            <div className="space-y-3">
+                                <div>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Phase 1: Search Results</p>
+                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                        {Object.entries(data.search_results).map(([type, count]: [string, any]) => (
+                                            <div key={type} className="flex justify-between bg-white dark:bg-gray-700 p-2 rounded">
+                                                <span className="text-gray-600 dark:text-gray-400">{type} found in search:</span>
+                                                <span className="font-semibold text-gray-900 dark:text-white">{count}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {data.debug_info && (data.debug_info.total_failed_rto > 0 || data.debug_info.total_failed_cir > 0) && (
+                                    <div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Phase 2: Failed to Get Details</p>
+                                        <div className="space-y-2">
+                                            {data.debug_info.total_failed_rto > 0 && (
+                                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3 rounded text-sm">
+                                                    <p className="font-semibold text-red-800 dark:text-red-200">
+                                                        ⚠️ {data.debug_info.total_failed_rto} RTOs failed to fetch details
+                                                    </p>
+                                                    {data.debug_info.failed_rto_codes && data.debug_info.failed_rto_codes.length > 0 && (
+                                                        <p className="text-xs text-red-700 dark:text-red-300 mt-1 font-mono">
+                                                            Sample codes: {data.debug_info.failed_rto_codes.join(', ')}
+                                                        </p>
+                                                    )}
+                                                    <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+                                                        Possible reasons: RTO returns may not have complete data in Unicommerce, or the API returns unsuccessful responses for RTOs.
+                                                    </p>
+                                                </div>
+                                            )}
+                                            {data.debug_info.total_failed_cir > 0 && (
+                                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-3 rounded text-sm">
+                                                    <p className="font-semibold text-yellow-800 dark:text-yellow-200">
+                                                        ⚠️ {data.debug_info.total_failed_cir} CIRs failed to fetch details
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {data.totals.rto_count === 0 && data.search_results.RTO > 0 && (
+                                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded p-3 text-xs text-yellow-800 dark:text-yellow-200">
+                                        <p className="font-semibold mb-1">📊 RTO Analysis:</p>
+                                        <p>• Found {data.search_results.RTO} RTOs in search (Phase 1)</p>
+                                        <p>• But {data.debug_info?.total_failed_rto || data.search_results.RTO} failed to get detailed data (Phase 2)</p>
+                                        <p>• This is likely because Unicommerce's return/get API doesn't return complete data for RTO-type returns.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {data.totals.total_returns === 0 && (
                         <div className="card text-center py-8">
                             <p className="text-2xl mb-2">✅</p>
                             <p className="text-gray-600 dark:text-gray-400">No returns found for {reportDate} ({returnType})</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">Try selecting a different date or check Unicommerce data.</p>
                         </div>
                     )}
                 </>
