@@ -4,6 +4,7 @@ from typing import List
 from app.db.session import get_db
 from app.db.models import Fabric
 from app.schemas.fabric import Fabric as FabricSchema, FabricCreate, FabricUpdate
+from app.schemas.pagination import PaginatedResponse
 from app.services.cache_service import CacheService
 from app.services.websocket_manager import broadcast_inventory_update
 from datetime import datetime
@@ -32,7 +33,7 @@ async def create_fabric(fabric: FabricCreate, db: Session = Depends(get_db)):
     return db_fabric
 
 
-@router.get("/", response_model=List[FabricSchema])
+@router.get("/", response_model=PaginatedResponse[FabricSchema])
 def list_fabrics(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
@@ -47,7 +48,7 @@ def list_fabrics(
     cache_key = f"fabric:list:{page}:{page_size}:{fabric_type}"
     cached = CacheService.get(cache_key)
     if cached:
-        return cached
+        return PaginatedResponse[FabricSchema](**cached)
     
     # Query database
     query = db.query(Fabric)
@@ -68,7 +69,7 @@ def list_fabrics(
     # Cache result
     CacheService.set(cache_key, result, CacheService.TTL_LONG)
     
-    return result
+    return PaginatedResponse[FabricSchema](**result)
 
 
 @router.get("/{fabric_id}", response_model=FabricSchema)

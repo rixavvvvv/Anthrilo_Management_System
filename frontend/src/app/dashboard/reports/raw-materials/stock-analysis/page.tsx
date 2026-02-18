@@ -22,6 +22,17 @@ export default function InventoryAnalysisPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  // Fetch summary data ONCE for totals across ALL SKUs
+  const { data: summaryData, isLoading: summaryLoading } = useQuery({
+    queryKey: ['uc-inventory-summary'],
+    queryFn: async () => {
+      const response = await ucCatalog.getInventorySummary();
+      return response.data;
+    },
+    staleTime: 30 * 60 * 1000, // Cache for 30 minutes (matches backend cache)
+    refetchOnWindowFocus: false,
+  });
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['uc-stock-analysis', page, debouncedSearch],
     queryFn: async () => {
@@ -29,7 +40,7 @@ export default function InventoryAnalysisPage() {
         displayStart: page * PAGE_SIZE,
         displayLength: PAGE_SIZE,
         getInventorySnapshot: true,
-        getAggregates: page === 0, // Only fetch aggregates on first page
+        getAggregates: false, // Get aggregates from summary endpoint instead
         keyword: debouncedSearch || undefined,
       });
       return response.data;
@@ -65,11 +76,12 @@ export default function InventoryAnalysisPage() {
   const totalRecords = data?.totalRecords || 0;
   const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
 
-  // Get aggregates from first page load
-  const aggregates = data?.aggregates || null;
-  const totalInventory = aggregates?.totalInventory || 0;
-  const totalVirtualInventory = aggregates?.totalVirtualInventory || 0;
-  const totalValue = aggregates?.totalValue || 0;
+  // Get REAL aggregates from summary endpoint (ALL SKUs)
+  const totalSKUs = summaryData?.totalSKUs || 0;
+  const totalInventory = summaryData?.totalRealInventory || 0;
+  const totalVirtualInventory = summaryData?.totalVirtualInventory || 0;
+  const totalValue = summaryData?.totalStockValue || 0;
+  const summaryLoaded = summaryData?.successful || false;
 
   const statusColors: Record<string, string> = {
     'Out of Stock': 'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200',
@@ -110,25 +122,25 @@ export default function InventoryAnalysisPage() {
 
   return (
     <div>
-      <PageHeader title="Inventory Stock Analysis" description={`Unicommerce stock levels — ${totalRecords.toLocaleString()} total SKUs`} />
+      <PageHeader title="Inventory Stock Analysis" description={`Unicommerce stock levels — ${totalSKUs.toLocaleString()} total SKUs`} />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <StatCard title="Total SKUs" value={totalRecords.toLocaleString()} icon="📦" color="blue" />
+        <StatCard title="Total SKUs" value={summaryLoaded ? totalSKUs.toLocaleString() : (summaryLoading ? 'Loading...' : '-')} icon="📦" color="blue" />
         <StatCard
           title="Total Real Inventory"
-          value={aggregates ? totalInventory.toLocaleString() : 'Loading...'}
+          value={summaryLoaded ? totalInventory.toLocaleString() : (summaryLoading ? 'Loading...' : '-')}
           icon="📊"
           color="emerald"
         />
         <StatCard
           title="Total Virtual Inventory"
-          value={aggregates ? totalVirtualInventory.toLocaleString() : 'Loading...'}
+          value={summaryLoaded ? totalVirtualInventory.toLocaleString() : (summaryLoading ? 'Loading...' : '-')}
           icon="🔢"
           color="purple"
         />
         <StatCard
           title="Total Stock Value"
-          value={aggregates ? `₹${(totalValue / 1000000).toFixed(2)}M` : 'Loading...'}
+          value={summaryLoaded ? `₹${(totalValue / 1000000).toFixed(2)}M` : (summaryLoading ? 'Loading...' : '-')}
           icon="💰"
           color="yellow"
         />

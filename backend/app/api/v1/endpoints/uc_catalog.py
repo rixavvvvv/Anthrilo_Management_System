@@ -264,8 +264,9 @@ async def _compute_inventory_aggregates(svc, base_payload: Dict[str, Any]) -> Di
             "skusOutOfStock": 0
         }
 
-        # Limit to first 1000 items for performance (configurable)
-        max_items = min(total_records, 1000)
+        # Limit to first 10,000 items for performance (configurable)
+        # NOTE: For accurate totals across ALL SKUs, use /inventory/summary endpoint instead
+        max_items = min(total_records, 10000)
 
         for start in range(0, max_items, batch_size):
             batch_payload = {
@@ -328,6 +329,7 @@ async def get_inventory_summary():
     """
     Get aggregated inventory summary across all SKUs.
     This endpoint uses the inventory snapshot API for accurate totals.
+    Uses Redis caching with 30-minute TTL for performance.
     Returns:
         totalProducts: Total number of products in catalog
         totalSKUs: Total number of SKUs with inventory
@@ -339,6 +341,16 @@ async def get_inventory_summary():
         totalVirtualInventory: SUM of all virtualInventory values
         totalStockValue: Total stock value (inventory * price)
     """
+    from app.services.cache_service import CacheService
+    
+    cache_key = "uc:inventory:summary:all"
+    
+    # Try to get from cache first
+    cached = CacheService.get(cache_key)
+    if cached:
+        logger.info("Returning cached inventory summary")
+        return cached
+    
     try:
         svc = get_uc_api_service()
 
@@ -364,7 +376,7 @@ async def get_inventory_summary():
             f"Computing inventory summary for {total_catalog_records} catalog records")
 
         if total_catalog_records == 0:
-            return {
+            result = {
                 "successful": True,
                 "totalProducts": 0,
                 "totalSKUs": 0,
@@ -376,9 +388,11 @@ async def get_inventory_summary():
                 "totalVirtualInventory": 0,
                 "totalStockValue": 0
             }
+            CacheService.set(cache_key, result, CacheService.TTL_LONG)
+            return result
 
-        # Fetch ALL records in batches for accurate totals
-        batch_size = 500
+        # Fetch ALL records in large batches for speed
+        batch_size = 1000  # Larger batches = fewer API calls = faster
         totals = {
             "totalRealInventory": 0,
             "totalVirtualInventory": 0,
@@ -463,7 +477,7 @@ async def get_inventory_summary():
         logger.info(
             f"Inventory summary computed: {totals}, outOfStockPercent: {out_of_stock_percent}")
 
-        return {
+        result = {
             "successful": True,
             "totalProducts": total_catalog_records,
             "totalSKUs": total_catalog_records,
@@ -475,6 +489,11 @@ async def get_inventory_summary():
             "totalVirtualInventory": totals["totalVirtualInventory"],
             "totalStockValue": totals["totalStockValue"]
         }
+        
+        # Cache for 30 minutes
+        CacheService.set(cache_key, result, CacheService.TTL_LONG)
+        
+        return result
 
     except Exception as e:
         logger.error(f"Error computing inventory summary: {e}", exc_info=True)

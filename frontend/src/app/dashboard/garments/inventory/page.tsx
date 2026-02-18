@@ -28,8 +28,10 @@ export default function GarmentInventoryPage() {
       const response = await ucCatalog.getInventorySummary();
       return response.data;
     },
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    staleTime: 30 * 60 * 1000, // Cache for 30 minutes (matches backend cache)
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
     refetchOnWindowFocus: false, // Don't refetch on window focus
+    retry: 1, // Only retry once on failure
   });
 
   // Fetch paginated data for table - no aggregates needed
@@ -68,17 +70,16 @@ export default function GarmentInventoryPage() {
   const totalRecords = data?.totalRecords || 0;
   const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
 
-  // Use summary data for totals (fetched once, independent of pagination)
-  const aggregates = summaryData?.aggregates || {};
-  const totalSKUs = summaryData?.totalRecords || totalRecords;
-  const totalRealInventory = aggregates?.totalInventory || 0;
-  const totalVirtualInventory = aggregates?.totalVirtualInventory || 0;
-  const totalStockValue = aggregates?.totalValue || 0;
+  // Use REAL data from /inventory/summary endpoint (processes ALL 61k+ SKUs with Redis cache)
+  const totalSKUs = summaryData?.totalSKUs || 0;
+  const totalRealInventory = summaryData?.totalRealInventory || 0;
+  const totalVirtualInventory = summaryData?.totalVirtualInventory || 0;
+  const totalStockValue = summaryData?.totalStockValue || 0;
   
-  // Use REAL data from API - not estimates!
-  const skusWithStock = aggregates?.skusWithStock || 0;
-  const skusOutOfStock = aggregates?.skusOutOfStock || 0;
-  const outOfStockPercent = totalSKUs > 0 ? Math.round((skusOutOfStock / totalSKUs) * 100) : 0;
+  // Real counts across ALL SKUs
+  const skusWithStock = summaryData?.skusWithStock || 0;
+  const skusOutOfStock = summaryData?.skusOutOfStock || 0;
+  const outOfStockPercent = summaryData?.outOfStockPercent || 0;
   
   const summaryLoaded = summaryData?.successful || false;
 
