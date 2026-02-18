@@ -155,8 +155,8 @@ async def get_last_7_days():
                 f"7 DAYS: {summary.get('total_orders', 0)} orders, "
                 f"INR {summary.get('total_revenue', 0):,.2f}"
             )
-            # Cache for 15 minutes
-            CacheService.set(cache_key, result, CacheService.TTL_MEDIUM)
+            # Cache for 30 minutes (historical data changes less frequently)
+            CacheService.set(cache_key, result, CacheService.TTL_LONG)
         return result
 
     except Exception as e:

@@ -44,11 +44,12 @@ export default function DashboardPage() {
       const response = await ucSales.getLast7Days();
       return response.data;
     },
-    refetchInterval: 10 * 60 * 1000,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
+    refetchInterval: 30 * 60 * 1000, // Match backend cache TTL (30 minutes)
+    staleTime: 30 * 60 * 1000, // Keep data fresh for 30 minutes
+    gcTime: 60 * 60 * 1000, // Keep in cache for 1 hour
     refetchOnMount: false,
     refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData, // Show old data while refetching
   });
 
   const { data: channelData } = useQuery({
@@ -78,8 +79,10 @@ export default function DashboardPage() {
   const last7DaysRevenue = last7Days?.summary?.total_revenue || 0;
   const last7DaysItems = last7Days?.summary?.total_items || 0;  // NEW
 
-  const isLoading = loadingToday || loading7d;
-  const isUnicommerceLoading = loadingToday || loadingYesterday || loading7d;
+  // Smart loading: only show loading when there's NO data at all (first load)
+  const showLoading7d = loading7d && !last7Days;
+  const isLoading = loadingToday || showLoading7d; // Don't block page for cached data
+  const isUnicommerceLoading = loadingToday || loadingYesterday || showLoading7d;
 
   // Helper function to format time ago
   const timeAgo = (timestamp: number) => {
@@ -284,7 +287,7 @@ export default function DashboardPage() {
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Complete days</p>
               </div>
-              {loading7d && (
+              {showLoading7d && (
                 <div className="h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
               )}
             </div>
@@ -292,19 +295,19 @@ export default function DashboardPage() {
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Orders</p>
                 <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  {loading7d ? '...' : last7DaysOrders.toLocaleString()}
+                  {showLoading7d ? '...' : last7DaysOrders.toLocaleString()}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Items</p>
                 <p className="text-2xl font-semibold text-gray-700 dark:text-gray-300">
-                  {loading7d ? '...' : last7DaysItems.toLocaleString()}
+                  {showLoading7d ? '...' : last7DaysItems.toLocaleString()}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Revenue</p>
                 <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {loading7d ? '...' : `₹${last7DaysRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+                  {showLoading7d ? '...' : `₹${last7DaysRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
                 </p>
               </div>
               {last7Days?.fetch_info?.fetch_time_seconds && (
