@@ -21,6 +21,8 @@ export default function DashboardPage() {
     refetchInterval: 5 * 60 * 1000,
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: yesterdayData, isLoading: loadingYesterday } = useQuery({
@@ -32,6 +34,8 @@ export default function DashboardPage() {
     refetchInterval: 10 * 60 * 1000,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: last7Days, isLoading: loading7d, dataUpdatedAt: updated7d } = useQuery({
@@ -43,6 +47,8 @@ export default function DashboardPage() {
     refetchInterval: 10 * 60 * 1000,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: channelData } = useQuery({
@@ -52,6 +58,8 @@ export default function DashboardPage() {
       return response.data;
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   // Real-time Unicommerce stats
