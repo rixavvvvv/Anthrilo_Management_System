@@ -6,13 +6,32 @@ import { ucCatalog } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
 
-const PAGE_SIZE = 12;
+const CLIENT_PAGE_SIZE = 20;
+
+/**
+ * Stock status thresholds (based on Good Stock / inventory):
+ *   Out of Stock  =  0
+ *   Low Stock     =  1–7   (< 8)
+ *   Normal        =  8–17
+ *   High Stock    =  > 17
+ */
+function getStockStatus(stock: number): string {
+  if (stock === 0) return 'Out of Stock';
+  if (stock < 8) return 'Low';
+  if (stock <= 17) return 'Normal';
+  return 'High';
+}
 
 export default function InventoryAnalysisPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(0);
   const [stockFilter, setStockFilter] = useState('all');
+
+  // Reset to page 0 whenever filter or search changes
+  useEffect(() => {
+    setPage(0);
+  }, [stockFilter]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -29,18 +48,20 @@ export default function InventoryAnalysisPage() {
       const response = await ucCatalog.getInventorySummary();
       return response.data;
     },
-    staleTime: 30 * 60 * 1000, // Cache for 30 minutes (matches backend cache)
+    staleTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 
+  // Fetch ALL items at once so client-side filtering works across the full catalog
   const { data, isLoading, error } = useQuery({
-    queryKey: ['uc-stock-analysis', page, debouncedSearch],
+    queryKey: ['uc-stock-analysis-all', debouncedSearch],
     queryFn: async () => {
+      // Fetch large batch; Unicommerce caps at ~500 per request
       const response = await ucCatalog.searchItems({
-        displayStart: page * PAGE_SIZE,
-        displayLength: PAGE_SIZE,
+        displayStart: 0,
+        displayLength: 500,
         getInventorySnapshot: true,
-        getAggregates: false, // Get aggregates from summary endpoint instead
+        getAggregates: false,
         keyword: debouncedSearch || undefined,
       });
       return response.data;
@@ -48,33 +69,48 @@ export default function InventoryAnalysisPage() {
     staleTime: 60_000,
   });
 
-  const items = (data?.elements || []).map((item: any) => {
-    const snap = item.inventorySnapshots?.[0] || {};
-    const stock = snap.inventory || 0;
-    const status = stock === 0 ? 'Out of Stock' : stock <= 5 ? 'Critical' : stock <= 20 ? 'Low' : stock <= 100 ? 'Normal' : 'High';
-    return {
-      skuCode: item.skuCode,
-      name: item.name,
-      categoryName: item.categoryName || '-',
-      inventory: stock,
-      virtualInventory: snap.virtualInventory || 0,
-      openSale: snap.openSale || 0,
-      badInventory: snap.badInventory || 0,
-      putawayPending: snap.putawayPending || 0,
-      price: item.price || 0,
-      stockValue: stock * (item.price || 0),
-      status,
-    };
-  });
+  // Map raw elements → enriched rows with correct status
+  const allItems = useMemo(() => {
+    return (data?.elements || []).map((item: any) => {
+      const snap = item.inventorySnapshots?.[0] || {};
+      const stock = snap.inventory || 0;
+      return {
+        skuCode: item.skuCode,
+        name: item.name,
+        categoryName: item.categoryName || '-',
+        inventory: stock,
+        virtualInventory: snap.virtualInventory || 0,
+        openSale: snap.openSale || 0,
+        badInventory: snap.badInventory || 0,
+        putawayPending: snap.putawayPending || 0,
+        price: item.price || 0,
+        stockValue: stock * (item.price || 0),
+        status: getStockStatus(stock),
+      };
+    });
+  }, [data]);
 
-  const filtered = stockFilter === 'all' ? items :
-    stockFilter === 'out' ? items.filter((i: any) => i.status === 'Out of Stock') :
-      stockFilter === 'low' ? items.filter((i: any) => i.status === 'Critical' || i.status === 'Low') :
-        stockFilter === 'normal' ? items.filter((i: any) => i.status === 'Normal') :
-          items.filter((i: any) => i.status === 'High');
+  // Apply filter across ALL items, then paginate client-side
+  const filtered = useMemo(() => {
+    if (stockFilter === 'all') return allItems;
+    if (stockFilter === 'out') return allItems.filter((i: any) => i.status === 'Out of Stock');
+    if (stockFilter === 'low') return allItems.filter((i: any) => i.status === 'Low');
+    if (stockFilter === 'normal') return allItems.filter((i: any) => i.status === 'Normal');
+    if (stockFilter === 'high') return allItems.filter((i: any) => i.status === 'High');
+    return allItems;
+  }, [allItems, stockFilter]);
 
-  const totalRecords = data?.totalRecords || 0;
-  const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
+  const totalPages = Math.ceil(filtered.length / CLIENT_PAGE_SIZE);
+  const pagedItems = filtered.slice(page * CLIENT_PAGE_SIZE, (page + 1) * CLIENT_PAGE_SIZE);
+
+  // Category counts for filter badges
+  const counts = useMemo(() => ({
+    all: allItems.length,
+    out: allItems.filter((i: any) => i.status === 'Out of Stock').length,
+    low: allItems.filter((i: any) => i.status === 'Low').length,
+    normal: allItems.filter((i: any) => i.status === 'Normal').length,
+    high: allItems.filter((i: any) => i.status === 'High').length,
+  }), [allItems]);
 
   // Get REAL aggregates from summary endpoint (ALL SKUs)
   const totalSKUs = summaryData?.totalSKUs || 0;
@@ -85,7 +121,6 @@ export default function InventoryAnalysisPage() {
 
   const statusColors: Record<string, string> = {
     'Out of Stock': 'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200',
-    'Critical': 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200',
     'Low': 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200',
     'Normal': 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200',
     'High': 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200',
@@ -158,7 +193,7 @@ export default function InventoryAnalysisPage() {
             ].map((f) => (
               <button key={f.key} onClick={() => setStockFilter(f.key)}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${stockFilter === f.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
-                {f.label}
+                {f.label} ({counts[f.key as keyof typeof counts]})
               </button>
             ))}
           </div>
@@ -174,11 +209,14 @@ export default function InventoryAnalysisPage() {
       )}
 
       <div className="card">
-        <h2 className="mb-4 text-slate-900 dark:text-white">Stock Analysis</h2>
+        <h2 className="mb-4 text-slate-900 dark:text-white">
+          Stock Analysis
+          {stockFilter !== 'all' && <span className="text-sm font-normal text-slate-500 ml-2">({filtered.length} items)</span>}
+        </h2>
         {isLoading ? (
           <LoadingSpinner message="Fetching stock data from Unicommerce..." />
         ) : (
-          <DataTable data={filtered} columns={columns} emptyMessage="No stock data found." />
+          <DataTable data={pagedItems} columns={columns} emptyMessage="No stock data found." />
         )}
       </div>
 
@@ -186,7 +224,7 @@ export default function InventoryAnalysisPage() {
         <div className="flex justify-between items-center mt-4">
           <button disabled={page === 0} onClick={() => setPage(page - 1)}
             className="btn btn-secondary disabled:opacity-40">← Previous</button>
-          <span className="text-sm text-slate-600 dark:text-slate-400">Page {page + 1} of {totalPages}</span>
+          <span className="text-sm text-slate-600 dark:text-slate-400">Page {page + 1} of {totalPages} ({filtered.length} items)</span>
           <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}
             className="btn btn-secondary disabled:opacity-40">Next →</button>
         </div>
