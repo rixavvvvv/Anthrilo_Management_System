@@ -187,8 +187,46 @@ async def search_items(payload: Dict[str, Any] = Body(...)):
         # Transform response to ensure consistent field naming
         if result.get("successful") and payload.get("getInventorySnapshot"):
             elements = result.get("elements", [])
+
+            # Collect SKU codes for dedicated inventory snapshot lookup
+            sku_codes = [item.get("skuCode")
+                         for item in elements if item.get("skuCode")]
+
+            # Fetch accurate virtualInventory from dedicated snapshot API
+            vi_map = {}
+            if sku_codes:
+                try:
+                    snap_result = await svc.post(
+                        "/inventory/inventorySnapshot/get",
+                        {"itemTypeSKUs": sku_codes}
+                    )
+                    if snap_result.get("successful"):
+                        for snap in snap_result.get("inventorySnapshots", []):
+                            sku = snap.get("itemTypeSKU", "")
+                            vi_map[sku] = {
+                                "virtualInventory": snap.get("virtualInventory", 0) or 0,
+                                "inventory": snap.get("inventory", 0) or 0,
+                                "openSale": snap.get("openSale", 0) or 0,
+                                "badInventory": snap.get("badInventory", 0) or 0,
+                                "putawayPending": snap.get("putawayPending", 0) or 0,
+                                "inventoryBlocked": snap.get("inventoryBlocked", 0) or 0,
+                            }
+                except Exception as e:
+                    logger.warning(f"Failed to fetch dedicated snapshot: {e}")
+
             for item in elements:
                 snapshots = item.get("inventorySnapshots", [])
+                sku = item.get("skuCode", "")
+
+                # If we have dedicated snapshot data, use it (more accurate)
+                if sku in vi_map:
+                    if snapshots:
+                        snap = snapshots[0]
+                        snap.update(vi_map[sku])
+                    else:
+                        item["inventorySnapshots"] = [vi_map[sku]]
+                        snapshots = item["inventorySnapshots"]
+
                 for snap in snapshots:
                     # Normalize field names - try multiple possible field names
                     if "goodInventory" in snap and "inventory" not in snap:
@@ -197,10 +235,12 @@ async def search_items(payload: Dict[str, Any] = Body(...)):
                         snap["inventory"] = snap["availableInventory"]
                     # Ensure numeric values for all inventory fields
                     snap["inventory"] = snap.get("inventory", 0) or 0
-                    snap["virtualInventory"] = snap.get("virtualInventory", 0) or 0
+                    snap["virtualInventory"] = snap.get(
+                        "virtualInventory", 0) or 0
                     snap["badInventory"] = snap.get("badInventory", 0) or 0
                     snap["openSale"] = snap.get("openSale", 0) or 0
-                    snap["inventoryBlocked"] = snap.get("inventoryBlocked", 0) or 0
+                    snap["inventoryBlocked"] = snap.get(
+                        "inventoryBlocked", 0) or 0
                     snap["putawayPending"] = snap.get("putawayPending", 0) or 0
 
         # Compute aggregates if requested
@@ -325,32 +365,23 @@ async def _compute_inventory_aggregates(svc, base_payload: Dict[str, Any]) -> Di
 # =============================================================================
 
 @router.get("/inventory/summary")
-async def get_inventory_summary():
+async def get_inventory_summary(force_refresh: bool = False):
     """
     Get aggregated inventory summary across all SKUs.
-    This endpoint uses the inventory snapshot API for accurate totals.
+    Uses catalog search for SKU list + inventory snapshot API for accurate virtual inventory.
     Uses Redis caching with 30-minute TTL for performance.
-    Returns:
-        totalProducts: Total number of products in catalog
-        totalSKUs: Total number of SKUs with inventory
-        activeSKUs: Number of active (enabled) SKUs
-        skusWithStock: Number of SKUs with inventory > 0
-        skusOutOfStock: Number of SKUs with inventory = 0
-        outOfStockPercent: Percentage of SKUs out of stock
-        totalRealInventory: SUM of all inventory values
-        totalVirtualInventory: SUM of all virtualInventory values
-        totalStockValue: Total stock value (inventory * price)
     """
     from app.services.cache_service import CacheService
-    
+
     cache_key = "uc:inventory:summary:all"
-    
-    # Try to get from cache first
-    cached = CacheService.get(cache_key)
-    if cached:
-        logger.info("Returning cached inventory summary")
-        return cached
-    
+
+    # Try to get from cache first (unless force refresh)
+    if not force_refresh:
+        cached = CacheService.get(cache_key)
+        if cached:
+            logger.info("Returning cached inventory summary")
+            return cached
+
     try:
         svc = get_uc_api_service()
 
@@ -402,7 +433,9 @@ async def get_inventory_summary():
             "skusOutOfStock": 0
         }
 
-        # Fetch all pages
+        all_skus = []  # Collect all SKU codes for dedicated inventory snapshot
+
+        # Fetch all pages from catalog
         for start in range(0, total_catalog_records, batch_size):
             batch_payload = {
                 "getInventorySnapshot": True,
@@ -422,6 +455,10 @@ async def get_inventory_summary():
 
             for item in elements:
                 is_enabled = item.get("enabled", False)
+                sku_code = item.get("skuCode", "")
+
+                if sku_code:
+                    all_skus.append(sku_code)
 
                 # Count active SKUs
                 if is_enabled:
@@ -445,14 +482,7 @@ async def get_inventory_summary():
                     else:
                         totals["skusOutOfStock"] += 1
 
-                    # Get virtual inventory
-                    virtual_inv = snap.get("virtualInventory", 0)
-                    if virtual_inv is None:
-                        virtual_inv = 0
-                    virtual_inv = int(virtual_inv)
-
                     totals["totalRealInventory"] += inv
-                    totals["totalVirtualInventory"] += virtual_inv
 
                     # Calculate value
                     price = item.get("price", 0) or 0
@@ -463,9 +493,34 @@ async def get_inventory_summary():
 
             # Log progress for large datasets
             if start % 10000 == 0 and start > 0:
-                logger.info(f"Summary progress: processed {start}/{total_catalog_records} records. "
-                            f"Running totals - Inventory: {totals['totalRealInventory']}, "
-                            f"With Stock: {totals['skusWithStock']}")
+                logger.info(
+                    f"Summary progress: processed {start}/{total_catalog_records} records")
+
+        # Now fetch virtualInventory from DEDICATED inventory snapshot API
+        # (catalog search may not include virtualInventory accurately)
+        total_virtual = 0
+        snapshot_batch_size = 500  # inventorySnapshot/get supports up to 10,000 SKUs
+        for i in range(0, len(all_skus), snapshot_batch_size):
+            batch_skus = all_skus[i:i + snapshot_batch_size]
+            snap_payload = {"itemTypeSKUs": batch_skus}
+            snap_result = await svc.post(
+                "/inventory/inventorySnapshot/get", snap_payload
+            )
+            if snap_result.get("successful"):
+                for snap in snap_result.get("inventorySnapshots", []):
+                    vi = snap.get("virtualInventory", 0)
+                    if vi is not None:
+                        total_virtual += int(vi)
+            else:
+                logger.warning(f"Inventory snapshot batch {i} failed, "
+                               f"falling back to catalog data")
+                # Fallback: re-read from catalog snapshots (already collected above won't help)
+                break
+
+        if total_virtual > 0:
+            totals["totalVirtualInventory"] = total_virtual
+            logger.info(
+                f"Virtual inventory from snapshot API: {total_virtual}")
 
         # Calculate out of stock percentage
         total_checked = totals["skusWithStock"] + totals["skusOutOfStock"]
@@ -489,10 +544,10 @@ async def get_inventory_summary():
             "totalVirtualInventory": totals["totalVirtualInventory"],
             "totalStockValue": totals["totalStockValue"]
         }
-        
+
         # Cache for 30 minutes
         CacheService.set(cache_key, result, CacheService.TTL_LONG)
-        
+
         return result
 
     except Exception as e:

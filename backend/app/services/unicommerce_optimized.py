@@ -280,6 +280,19 @@ class UnicommerceServiceProduction:
                 client, headers, from_date, to_date, 0, self.API_PAGE_SIZE
             )
 
+            # On 401, invalidate the cached token, force a refresh, and retry once
+            if not success and error and "401" in error:
+                logger.warning(
+                    "PHASE 1: Got 401 – refreshing token and retrying chunk "
+                    f"{from_date.isoformat()} → {to_date.isoformat()}"
+                )
+                self.token_manager.invalidate_token()
+                await self.token_manager.get_valid_token()
+                headers = await self._get_headers()
+                success, orders, total_records, error = await self._fetch_single_page(
+                    client, headers, from_date, to_date, 0, self.API_PAGE_SIZE
+                )
+
             if not success:
                 return [], 0, [error or "API request failed"]
 
@@ -458,6 +471,20 @@ class UnicommerceServiceProduction:
 
                 except httpx.HTTPStatusError as e:
                     status = e.response.status_code
+                    if status == 401:
+                        # Token expired mid-flight – refresh and update shared headers
+                        logger.warning(
+                            f"PHASE 2: Got 401 for {order_code} "
+                            f"(attempt {attempt+1}) – refreshing token..."
+                        )
+                        self.token_manager.invalidate_token()
+                        await self.token_manager.get_valid_token()
+                        new_headers = await self._get_headers()
+                        # Update in-place for whole batch
+                        headers.update(new_headers)
+                        if attempt < self.MAX_RETRIES:
+                            await asyncio.sleep(self.RETRY_DELAY)
+                            continue
                     if status in (429, 500, 502, 503, 504) and attempt < self.MAX_RETRIES:
                         delay = self.RETRY_DELAY * \
                             (self.RETRY_BACKOFF ** attempt)
