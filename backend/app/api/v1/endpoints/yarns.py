@@ -4,6 +4,7 @@ from typing import List
 from app.db.session import get_db
 from app.db.models import Yarn
 from app.schemas.yarn import Yarn as YarnSchema, YarnCreate, YarnUpdate
+from app.schemas.pagination import PaginatedResponse
 from app.services.cache_service import CacheService
 from app.services.websocket_manager import broadcast_inventory_update
 from datetime import datetime
@@ -32,7 +33,7 @@ async def create_yarn(yarn: YarnCreate, db: Session = Depends(get_db)):
     return db_yarn
 
 
-@router.get("/", response_model=List[YarnSchema])
+@router.get("/", response_model=PaginatedResponse[YarnSchema])
 def list_yarns(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
@@ -45,7 +46,7 @@ def list_yarns(
     cache_key = f"yarn:list:{page}:{page_size}"
     cached = CacheService.get(cache_key)
     if cached:
-        return cached
+        return PaginatedResponse[YarnSchema](**cached)
     
     # Query database
     total = db.query(Yarn).count()
@@ -62,7 +63,7 @@ def list_yarns(
     # Cache result
     CacheService.set(cache_key, result, CacheService.TTL_LONG)
     
-    return result
+    return PaginatedResponse[YarnSchema](**result)
 
 
 @router.get("/{yarn_id}", response_model=YarnSchema)
