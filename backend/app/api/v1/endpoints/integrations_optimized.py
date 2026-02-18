@@ -155,8 +155,8 @@ async def get_last_7_days():
                 f"7 DAYS: {summary.get('total_orders', 0)} orders, "
                 f"INR {summary.get('total_revenue', 0):,.2f}"
             )
-            # Cache for 15 minutes
-            CacheService.set(cache_key, result, CacheService.TTL_MEDIUM)
+            # Cache for 30 minutes (historical data changes less frequently)
+            CacheService.set(cache_key, result, CacheService.TTL_LONG)
         return result
 
     except Exception as e:
@@ -962,6 +962,8 @@ async def get_daily_return_report(
                         return_orders = data.get("returnOrders", [])
                         logger.info(
                             f"Return search {rtype}: found {len(return_orders)} returns (createdFrom/To)")
+                        if return_orders:
+                            logger.info(f"Return search {rtype}: sample codes = {[r.get('code') for r in return_orders[:3]]}")
                         found_returns = return_orders
                     else:
                         errors = data.get("errors", [])
@@ -995,6 +997,8 @@ async def get_daily_return_report(
                             found_returns = data.get("returnOrders", [])
                             logger.info(
                                 f"Return search {rtype}: fallback found {len(found_returns)} returns (updatedFrom/To)")
+                            if found_returns:
+                                logger.info(f"Return search {rtype}: fallback sample codes = {[r.get('code') for r in found_returns[:3]]}")
                     except Exception as e:
                         logger.error(
                             f"Return search {rtype} fallback error: {e}")
@@ -1021,6 +1025,12 @@ async def get_daily_return_report(
                     "total_value": 0, "rto_count": 0, "cir_count": 0,
                 },
                 "search_results": search_results,
+                "debug_info": {
+                    "failed_rto_codes": [],
+                    "failed_cir_codes": [],
+                    "total_failed_rto": 0,
+                    "total_failed_cir": 0,
+                },
             }
 
         # =====================================================================
@@ -1034,14 +1044,25 @@ async def get_daily_return_report(
         # =====================================================================
         return_details = []
         sale_order_codes = set()
+        failed_rto_codes = []
+        failed_cir_codes = []
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             for entry in all_return_codes:
                 get_url = f"{base_url}/oms/return/get"
-                get_payload = {
-                    "reversePickupCode": entry["code"],
-                    "shipmentCode": None,
-                }
+                
+                # RTOs use shipmentCode, CIRs use reversePickupCode
+                if entry["type"] == "RTO":
+                    get_payload = {
+                        "reversePickupCode": None,
+                        "shipmentCode": entry["code"],
+                    }
+                else:
+                    get_payload = {
+                        "reversePickupCode": entry["code"],
+                        "shipmentCode": None,
+                    }
+                
                 try:
                     resp = await client.post(get_url, json=get_payload, headers=headers)
                     if resp.status_code == 401:
@@ -1057,7 +1078,7 @@ async def get_daily_return_report(
                         items = data.get("returnSaleOrderItems", [])
                         value_info = data.get("returnSaleOrderValue", {})
                         logger.info(
-                            f"Return get {entry['code']}: "
+                            f"Return get {entry['code']} ({entry['type']}): "
                             f"{len(items)} items, "
                             f"saleOrderCode={value_info.get('saleOrderCode', '')}, "
                             f"status={value_info.get('returnStatus', '')}"
@@ -1083,9 +1104,30 @@ async def get_daily_return_report(
                         so_code_top = value_info.get("saleOrderCode", "")
                         if so_code_top:
                             sale_order_codes.add(so_code_top)
+                    else:
+                        # Track failed returns
+                        errors = data.get("errors", [])
+                        msg = data.get("message", "Unknown error")
+                        logger.warning(
+                            f"Return get {entry['code']} ({entry['type']}) unsuccessful: {msg} | errors={errors}"
+                        )
+                        if entry["type"] == "RTO":
+                            failed_rto_codes.append(entry["code"])
+                        else:
+                            failed_cir_codes.append(entry["code"])
 
                 except Exception as e:
-                    logger.error(f"Return get {entry['code']} error: {e}")
+                    logger.error(f"Return get {entry['code']} ({entry['type']}) error: {e}")
+                    if entry["type"] == "RTO":
+                        failed_rto_codes.append(entry["code"])
+                    else:
+                        failed_cir_codes.append(entry["code"])
+
+        # Log summary of failures
+        if failed_rto_codes:
+            logger.warning(f"Failed to get details for {len(failed_rto_codes)} RTO returns: {failed_rto_codes[:5]}")
+        if failed_cir_codes:
+            logger.warning(f"Failed to get details for {len(failed_cir_codes)} CIR returns: {failed_cir_codes[:5]}")
 
         # =====================================================================
         # Phase 3: Fetch sale order details for channel + pricing
@@ -1250,6 +1292,12 @@ async def get_daily_return_report(
                 "cir_count": cir_count,
             },
             "search_results": search_results,
+            "debug_info": {
+                "failed_rto_codes": failed_rto_codes[:10],
+                "failed_cir_codes": failed_cir_codes[:10],
+                "total_failed_rto": len(failed_rto_codes),
+                "total_failed_cir": len(failed_cir_codes),
+            },
         }
 
     except Exception as e:
