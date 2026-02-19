@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
 from app.db.session import get_db
 from app.db.models import Yarn
 from app.schemas.yarn import Yarn as YarnSchema, YarnCreate, YarnUpdate

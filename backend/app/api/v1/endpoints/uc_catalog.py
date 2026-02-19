@@ -12,7 +12,7 @@ Covers:
 
 from fastapi import APIRouter, Body
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from app.services.unicommerce_api_service import get_uc_api_service
 

@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
 from datetime import date, datetime
 from decimal import Decimal
 from pydantic import BaseModel
 from app.db.session import get_db
-from app.db.models import ProductionPlan, ProductionActivity, Garment
+from app.db.models import ProductionPlan, Garment
 from app.services.cache_service import CacheService
 from app.services.websocket_manager import broadcast_production_update
 from app.schemas.pagination import PaginatedResponse

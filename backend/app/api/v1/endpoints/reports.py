@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from datetime import date
 from typing import Optional
@@ -165,7 +165,6 @@ def get_summary_report(db: Session = Depends(get_db)):
     """Get a comprehensive summary report combining key metrics"""
     service = ReportsService(db)
 
-    from datetime import timedelta
     today = date.today()
 
     return {

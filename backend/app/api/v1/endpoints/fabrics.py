@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
 from app.db.session import get_db
 from app.db.models import Fabric
 from app.schemas.fabric import Fabric as FabricSchema, FabricCreate, FabricUpdate

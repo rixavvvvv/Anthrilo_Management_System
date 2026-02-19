@@ -1031,7 +1031,7 @@ class UnicommerceServiceProduction:
             logger.info(
                 f"📥 Cache miss - fetching all orders for {from_date.date()} to {to_date.date()}")
             logger.info(
-                f"⏱️  First load: 30s - 5min (depends on order volume)")
+                "⏱️  First load: 30s - 5min (depends on order volume)")
 
             fetch_result = await self.fetch_all_orders_with_revenue(
                 from_date, to_date, max_orders=100000
@@ -1173,7 +1173,7 @@ class UnicommerceServiceProduction:
         logger.info("=" * 70)
         logger.info(f"GETTING {period_name.upper()} SALES DATA")
         logger.info(f"  Date range: {from_date} to {to_date}")
-        logger.info(f"  Method: TWO-PHASE with date chunking + dedup")
+        logger.info("  Method: TWO-PHASE with date chunking + dedup")
         logger.info("=" * 70)
 
         if not self.access_code:
