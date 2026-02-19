@@ -16,7 +16,6 @@ import logging
 from typing import Any, Dict, Optional
 
 from app.core.token_manager import get_token_manager
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 

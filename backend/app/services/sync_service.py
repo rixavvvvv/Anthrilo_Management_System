@@ -16,16 +16,15 @@ Resumability:
 """
 
 import logging
-import asyncio
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, Optional, List
+from datetime import datetime
+from typing import Dict, Any, Optional
 
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.db.session import SessionLocal
 from app.db.sync_models import SyncedOrder, SyncStatus
-from app.services.unicommerce_optimized import get_unicommerce_service, UnicommerceServiceProduction
+from app.services.unicommerce_optimized import get_unicommerce_service
 
 logger = logging.getLogger(__name__)
 

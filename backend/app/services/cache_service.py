@@ -1,7 +1,5 @@
 import json
 from typing import Any, Optional
-from datetime import date as date_type, timedelta
-from sqlalchemy.orm import Session
 from app.core.redis import redis_client
 import logging
 
@@ -145,7 +143,7 @@ class CacheService:
         IST = timezone(timedelta(hours=5, minutes=30))
         today = datetime.now(IST).strftime('%Y-%m-%d')
         CacheService.delete_pattern(f"uc:today:{today}")
-        CacheService.delete_pattern(f"uc:channels:today:*")
+        CacheService.delete_pattern("uc:channels:today:*")
 
     @staticmethod
     def invalidate_monthly_cache(year: int = None, month: int = None):

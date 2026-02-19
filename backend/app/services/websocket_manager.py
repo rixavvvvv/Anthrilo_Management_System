@@ -2,10 +2,9 @@
 Centralized WebSocket Manager for real-time updates across the application.
 Supports multiple event types: sales, inventory, orders, production.
 """
-from typing import Dict, List, Set
+from typing import Dict, Set
 from fastapi import WebSocket
 import logging
-import json
 
 logger = logging.getLogger(__name__)
 

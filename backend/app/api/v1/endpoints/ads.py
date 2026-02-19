@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
 from datetime import date, datetime
 from decimal import Decimal
 from pydantic import BaseModel

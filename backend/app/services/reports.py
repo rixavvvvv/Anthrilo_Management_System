@@ -1,11 +1,11 @@
 from datetime import date, datetime
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 from collections import defaultdict
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from app.db.models import (
     Fabric, Yarn, Garment, Inventory, Sale,
-    ProductionPlan, ProductionActivity, Panel, PaidAd, Discount
+    ProductionPlan, ProductionActivity, Panel
 )
 
 
@@ -59,7 +59,6 @@ class ReportsService:
 
     def yarn_forecasting_report(self, forecast_days: int = 30) -> list:
         """Yarn demand forecasting based on production plans and historical data"""
-        from datetime import timedelta
 
         yarns = self.db.query(Yarn).all()
         result = []

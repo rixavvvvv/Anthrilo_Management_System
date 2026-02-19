@@ -1916,7 +1916,7 @@ async def invalidate_redis_cache(
 ):
     """Invalidate Redis cache keys matching a pattern."""
     try:
-        result = CacheService.delete_pattern(pattern)
+        CacheService.delete_pattern(pattern)
         return {"success": True, "message": f"Invalidated keys matching: {pattern}"}
     except Exception as e:
         return {"success": False, "error": str(e)}
