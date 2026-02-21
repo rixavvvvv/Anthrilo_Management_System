@@ -53,7 +53,7 @@ export default function GarmentMasterPage() {
     categoryName: item.categoryName || '-',
     color: item.color || '-',
     size: item.size || '-',
-    brand: item.brand || '-',
+    weight: item.weight || 0,
     price: item.price || 0,
     enabled: item.enabled,
   }));
@@ -74,7 +74,10 @@ export default function GarmentMasterPage() {
       key: 'size', header: 'Size', width: '7%',
       render: (value) => <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-xs font-medium">{value}</span>,
     },
-    { key: 'brand', header: 'Brand', width: '10%' },
+    {
+      key: 'weight', header: 'Approx Gross Weight Per Size', width: '10%',
+      render: (value) => <span className="text-slate-900 dark:text-slate-100 font-medium">{value ? `${value}g` : '-'}</span>,
+    },
     {
       key: 'price', header: 'MRP', width: '9%',
       render: (value) => <span className="text-slate-900 dark:text-slate-100 font-medium">₹{value?.toFixed(0)}</span>,
