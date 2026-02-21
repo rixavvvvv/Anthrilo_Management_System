@@ -1,24 +1,66 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import Link from 'next/link';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import dynamic from 'next/dynamic';
+import {
+  ShoppingCart, DollarSign, TrendingUp, Package,
+  Clock, Zap,
+  BarChart3, Boxes, Receipt, Store,
+  RefreshCw, X, Bell,
+} from 'lucide-react';
+import { KPIStatCard } from '@/components/dashboard/KPIStatCard';
+import { ChartCard } from '@/components/dashboard/ChartCard';
+import { ComparisonCard } from '@/components/dashboard/ComparisonCard';
+import { InsightsPanel } from '@/components/dashboard/InsightsPanel';
+import { ChartSkeleton } from '@/components/dashboard/charts/ChartSkeleton';
 
+// -- Lazy-loaded Charts (no SSR, with skeleton fallback) --
+const RevenueTrendChart = dynamic(
+  () => import('@/components/dashboard/charts/RevenueTrendChart'),
+  { ssr: false, loading: () => <ChartSkeleton /> }
+);
+const OrdersTrendChart = dynamic(
+  () => import('@/components/dashboard/charts/OrdersTrendChart'),
+  { ssr: false, loading: () => <ChartSkeleton /> }
+);
+const ChannelBarChart = dynamic(
+  () => import('@/components/dashboard/charts/ChannelBarChart'),
+  { ssr: false, loading: () => <ChartSkeleton /> }
+);
+const ChannelDonutChart = dynamic(
+  () => import('@/components/dashboard/charts/ChannelDonutChart'),
+  { ssr: false, loading: () => <ChartSkeleton /> }
+);
 
+// -- Helpers --
+const formatCurrency = (v: number) =>
+  v >= 100000 ? `${(v / 100000).toFixed(1)}L` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toLocaleString('en-IN');
+
+const timeAgo = (timestamp: number) => {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  return `${Math.floor(minutes / 60)}h ago`;
+};
+
+// ---
 export default function DashboardPage() {
+  const queryClient = useQueryClient();
 
-  // WebSocket for real-time updates (auto-updates React Query cache)
+  // WebSocket
   const { isConnected: wsConnected, lastUpdate: wsLastUpdate, newOrderNotification, dismissNotification, requestRefresh } = useWebSocket();
-
-  // ─── New-order toast auto-dismiss ──────────────────────────────
   const [showToast, setShowToast] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
   useEffect(() => {
     if (newOrderNotification) {
       setShowToast(true);
-      // Auto-hide after 15 seconds
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
       toastTimerRef.current = setTimeout(() => {
         setShowToast(false);
@@ -28,13 +70,10 @@ export default function DashboardPage() {
     return () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); };
   }, [newOrderNotification, dismissNotification]);
 
-  // Real-time Unicommerce data with auto-refresh
-  const { data: todayData, isLoading: loadingToday, dataUpdatedAt: updatedToday } = useQuery({
+  // -- Data Queries --
+  const { data: todayData, isLoading: loadingToday, dataUpdatedAt: updatedAt, isFetching: fetchingToday } = useQuery({
     queryKey: ['unicommerce-today'],
-    queryFn: async () => {
-      const response = await ucSales.getToday();
-      return response.data;
-    },
+    queryFn: async () => (await ucSales.getToday()).data,
     refetchInterval: 5 * 60 * 1000,
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
@@ -44,457 +83,396 @@ export default function DashboardPage() {
 
   const { data: yesterdayData, isLoading: loadingYesterday } = useQuery({
     queryKey: ['unicommerce-yesterday'],
-    queryFn: async () => {
-      const response = await ucSales.getYesterday();
-      return response.data;
-    },
+    queryFn: async () => (await ucSales.getYesterday()).data,
     refetchInterval: 10 * 60 * 1000,
     staleTime: 5 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
 
-  const { data: last7Days, isLoading: loading7d, dataUpdatedAt: updated7d } = useQuery({
+  const { data: last7Days, isLoading: loading7d } = useQuery({
     queryKey: ['unicommerce-last-7-days'],
-    queryFn: async () => {
-      const response = await ucSales.getLast7Days();
-      return response.data;
-    },
-    refetchInterval: 30 * 60 * 1000, // Match backend cache TTL (30 minutes)
-    staleTime: 30 * 60 * 1000, // Keep data fresh for 30 minutes
-    gcTime: 60 * 60 * 1000, // Keep in cache for 1 hour
+    queryFn: async () => (await ucSales.getLast7Days()).data,
+    refetchInterval: 30 * 60 * 1000,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
-    placeholderData: (previousData) => previousData, // Show old data while refetching
+    placeholderData: (prev: any) => prev,
   });
 
   const { data: channelData } = useQuery({
     queryKey: ['unicommerce-channels'],
-    queryFn: async () => {
-      const response = await ucSales.getChannelRevenue('last_7_days');
-      return response.data;
-    },
+    queryFn: async () => (await ucSales.getChannelRevenue('last_7_days')).data,
     staleTime: 5 * 60 * 1000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
 
-  // Real-time Unicommerce stats
+  // -- Derived Values --
   const todayOrders = todayData?.summary?.total_orders || 0;
   const todayRevenue = todayData?.summary?.total_revenue || 0;
-
-  // UC-derived stats for system overview
-  const activeChannels = channelData?.channels?.length || 0;
-  const weeklyRevenue = last7Days?.summary?.total_revenue || 0;
+  const todayItems = todayData?.summary?.total_items || 0;
   const avgOrderValue = todayData?.summary?.avg_order_value || (todayOrders > 0 ? todayRevenue / todayOrders : 0);
-  const todayItems = todayData?.summary?.total_items || 0;  // NEW
   const yesterdayOrders = yesterdayData?.summary?.total_orders || 0;
   const yesterdayRevenue = yesterdayData?.summary?.total_revenue || 0;
-  const yesterdayItems = yesterdayData?.summary?.total_items || 0;  // NEW
-  const last7DaysOrders = last7Days?.summary?.total_orders || 0;
-  const last7DaysRevenue = last7Days?.summary?.total_revenue || 0;
-  const last7DaysItems = last7Days?.summary?.total_items || 0;  // NEW
+  const yesterdayItems = yesterdayData?.summary?.total_items || 0;
+  const isLoading = loadingToday && !todayData;
 
-  // Smart loading: only show loading when there's NO data at all (first load)
-  const showLoading7d = loading7d && !last7Days;
-  const isLoading = loadingToday || showLoading7d; // Don't block page for cached data
-  const isUnicommerceLoading = loadingToday || loadingYesterday || showLoading7d;
+  // Growth calculations
+  const orderGrowth = yesterdayOrders > 0 ? ((todayOrders - yesterdayOrders) / yesterdayOrders) * 100 : 0;
+  const revenueGrowth = yesterdayRevenue > 0 ? ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100 : 0;
 
-  // Helper function to format time ago
-  const timeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return `${seconds}s ago`;
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    return `${hours}h ago`;
+  // Daily trend data — use pre-aggregated daily_breakdown from backend summary
+  const dailyTrend = useMemo(() => {
+    const breakdown = last7Days?.summary?.daily_breakdown;
+    if (!breakdown || !Array.isArray(breakdown) || breakdown.length === 0) return [];
+
+    return breakdown
+      .sort((a: any, b: any) => (a.date || '').localeCompare(b.date || ''))
+      .map((d: any) => ({
+        date: (d.date || '').slice(5),              // "2026-02-14" → "02-14"
+        fullDate: d.date || '',                      // keep full date for tooltip
+        orders: d.orders || 0,
+        revenue: Math.round(d.revenue || 0),
+        items: d.items || 0,
+      }));
+  }, [last7Days]);
+
+  // Channel chart data (memoized)
+  const channelChartData = useMemo(() => {
+    if (!channelData?.channels) return [];
+    return channelData.channels
+      .sort((a: any, b: any) => (b.revenue || 0) - (a.revenue || 0))
+      .slice(0, 7)
+      .map((ch: any) => ({
+        name: ch.channel?.replace(/_/g, ' ')?.replace(/UnicommerceChannel/i, '')?.trim()?.slice(0, 14) || 'Other',
+        revenue: Math.round(ch.revenue || 0),
+        orders: ch.orders || 0,
+      }));
+  }, [channelData]);
+
+  // Channel distribution for donut (memoized)
+  const channelDonutData = useMemo(() => {
+    if (!channelData?.channels) return [];
+    return channelData.channels
+      .sort((a: any, b: any) => (b.orders || 0) - (a.orders || 0))
+      .slice(0, 6)
+      .map((ch: any) => ({
+        name: ch.channel?.replace(/_/g, ' ')?.slice(0, 12) || 'Other',
+        value: ch.orders || 0,
+      }));
+  }, [channelData]);
+
+  // Top channel for insights
+  const topChannel = useMemo(() => {
+    if (!channelChartData.length) return undefined;
+    const totalRevenue = channelChartData.reduce((sum: number, ch: any) => sum + ch.revenue, 0);
+    const top = channelChartData[0];
+    return totalRevenue > 0
+      ? { name: top.name, revenue: top.revenue, percentage: (top.revenue / totalRevenue) * 100 }
+      : undefined;
+  }, [channelChartData]);
+
+  // Yesterday vs Day-Before-Yesterday — derived from daily_breakdown (last 2 complete days)
+  const { ydayRevenue, ydayOrders, ydayItems, dbyRevenue, dbyOrders, dbyItems } = useMemo(() => {
+    const breakdown = last7Days?.summary?.daily_breakdown;
+    if (!breakdown || !Array.isArray(breakdown) || breakdown.length < 2) {
+      return {
+        ydayRevenue: yesterdayRevenue, ydayOrders: yesterdayOrders, ydayItems: yesterdayItems,
+        dbyRevenue: 0, dbyOrders: 0, dbyItems: 0,
+      };
+    }
+    const sorted = [...breakdown].sort((a: any, b: any) => (a.date || '').localeCompare(b.date || ''));
+    const yday = sorted[sorted.length - 1];
+    const dby = sorted[sorted.length - 2];
+    return {
+      ydayRevenue: Math.round(yday.revenue || 0),
+      ydayOrders: yday.orders || 0,
+      ydayItems: yday.items || 0,
+      dbyRevenue: Math.round(dby.revenue || 0),
+      dbyOrders: dby.orders || 0,
+      dbyItems: dby.items || 0,
+    };
+  }, [last7Days, yesterdayRevenue, yesterdayOrders, yesterdayItems]);
+
+  // Sparkline data from daily breakdown
+  const revenueSparkline = useMemo(() => dailyTrend.map((d: any) => d.revenue), [dailyTrend]);
+  const ordersSparkline = useMemo(() => dailyTrend.map((d: any) => d.orders), [dailyTrend]);
+  const itemsSparkline = useMemo(() => dailyTrend.map((d: any) => d.items), [dailyTrend]);
+
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['unicommerce-today'] });
+    queryClient.invalidateQueries({ queryKey: ['unicommerce-yesterday'] });
+    queryClient.invalidateQueries({ queryKey: ['unicommerce-last-7-days'] });
+    queryClient.invalidateQueries({ queryKey: ['unicommerce-channels'] });
+    if (wsConnected) requestRefresh();
   };
 
-  const quickActions = [
-    {
-      title: 'Garment Master',
-      description: 'Manage product catalog & SKUs',
-      href: '/dashboard/garments/master',
-      icon: '👕',
-      gradient: 'from-blue-500 to-blue-600',
-      iconBg: 'bg-blue-100 dark:bg-blue-900/30',
-    },
-    {
-      title: 'Sales Management',
-      description: 'Track daily sales & returns',
-      href: '/dashboard/sales',
-      icon: '💰',
-      gradient: 'from-green-500 to-green-600',
-      iconBg: 'bg-green-100 dark:bg-green-900/30',
-    },
-    {
-      title: 'Inventory Control',
-      description: 'Monitor stock levels by SKU',
-      href: '/dashboard/garments/inventory',
-      icon: '📦',
-      gradient: 'from-purple-500 to-purple-600',
-      iconBg: 'bg-purple-100 dark:bg-purple-900/30',
-    },
-    {
-      title: 'Raw Materials',
-      description: 'Manage yarn, fabric & processes',
-      href: '/dashboard/raw-materials/yarn',
-      icon: '🧵',
-      gradient: 'from-orange-500 to-orange-600',
-      iconBg: 'bg-orange-100 dark:bg-orange-900/30',
-    },
-    {
-      title: 'Panel Settlement',
-      description: 'Calculate settlements & payments',
-      href: '/dashboard/reports/panels/settlement',
-      icon: '💵',
-      gradient: 'from-emerald-500 to-emerald-600',
-      iconBg: 'bg-emerald-100 dark:bg-emerald-900/30',
-    },
-    {
-      title: 'Analytics & Reports',
-      description: 'View insights & business reports',
-      href: '/dashboard/reports/reports-index',
-      icon: '📊',
-      gradient: 'from-indigo-500 to-indigo-600',
-      iconBg: 'bg-indigo-100 dark:bg-indigo-900/30',
-    },
+  const quickLinks = [
+    { title: 'Master Data', desc: 'Product catalog & SKUs', href: '/dashboard/garments/master', icon: Package, color: 'from-blue-500 to-indigo-500' },
+    { title: 'Inventory', desc: 'Stock levels by SKU', href: '/dashboard/garments/inventory', icon: Boxes, color: 'from-emerald-500 to-teal-500' },
+    { title: 'Sales', desc: 'Transactions & returns', href: '/dashboard/sales/transactions', icon: Receipt, color: 'from-amber-500 to-orange-500' },
+    { title: 'Reports', desc: 'Insights & analytics', href: '/dashboard/reports/reports-index', icon: BarChart3, color: 'from-violet-500 to-purple-500' },
+    { title: 'Best SKUs', desc: 'Top performing products', href: '/dashboard/garments/best-skus', icon: Zap, color: 'from-rose-500 to-pink-500' },
+    { title: 'Channels', desc: 'Panel settlement', href: '/dashboard/reports/panels/settlement', icon: Store, color: 'from-cyan-500 to-blue-500' },
   ];
 
   return (
     <div className="space-y-8">
-      {/* ─── New Order Toast Notification ─────────────────────────── */}
-      {showToast && newOrderNotification && (
-        <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-2 duration-300 max-w-md w-full">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-emerald-200 dark:border-emerald-700 overflow-hidden">
-            <div className="bg-gradient-to-r from-emerald-500 to-green-500 px-4 py-2 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🔔</span>
-                <span className="text-white font-semibold text-sm">
-                  {newOrderNotification.count} New Order{newOrderNotification.count > 1 ? 's' : ''}!
-                </span>
-              </div>
-              <button onClick={() => { setShowToast(false); dismissNotification(); }}
-                className="text-white/80 hover:text-white text-lg leading-none px-1">&times;</button>
-            </div>
-            <div className="p-4 space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-600 dark:text-slate-400">Total Orders Today</span>
-                <span className="font-bold text-slate-900 dark:text-slate-100">{newOrderNotification.totalOrders}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-600 dark:text-slate-400">Revenue</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                  ₹{newOrderNotification.totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                </span>
-              </div>
-              {newOrderNotification.orders.length > 0 && (
-                <div className="pt-2 border-t border-slate-100 dark:border-slate-700 space-y-1">
-                  {newOrderNotification.orders.slice(0, 3).map((o: any, i: number) => (
-                    <div key={i} className="flex items-center justify-between text-xs">
-                      <span className="font-mono text-slate-500 dark:text-slate-400 truncate max-w-[180px]">
-                        {o.saleOrderCode || o.channel || 'Order'}
-                      </span>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                        ₹{(o.sellingPrice || o.revenue || 0).toLocaleString('en-IN')}
-                      </span>
-                    </div>
-                  ))}
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {showToast && newOrderNotification && (
+          <motion.div
+            initial={{ opacity: 0, x: 100, y: -20 }}
+            animate={{ opacity: 1, x: 0, y: 0 }}
+            exit={{ opacity: 0, x: 100 }}
+            className="fixed top-4 right-4 z-50 max-w-sm w-full"
+          >
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+              <div className="bg-gradient-to-r from-emerald-500 to-green-500 px-4 py-2.5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-white" />
+                  <span className="text-white font-semibold text-sm">
+                    {newOrderNotification.count} New Order{newOrderNotification.count > 1 ? 's' : ''}
+                  </span>
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Hero Section with Real-time Status */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-500 via-primary-600 to-purple-600 dark:from-primary-600 dark:via-primary-700 dark:to-purple-700 p-8 md:p-12 shadow-2xl">
-        <div className="absolute top-0 right-0 -mt-4 -mr-4 h-32 w-32 rounded-full bg-white/10 blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 -mb-4 -ml-4 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
-        <div className="relative">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-white mb-3">
-                Welcome to Anthrilo
-              </h1>
-              <p className="text-primary-100 text-lg max-w-2xl">
-                Enterprise ERP for textile manufacturing and garment production management
-              </p>
-            </div>
-          </div>
-
-          {/* Real-time Status Indicator */}
-          <div className="flex items-center gap-4 mt-6">
-            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
-              <span className={`h-2 w-2 rounded-full ${isUnicommerceLoading ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'}`}></span>
-              <span className="text-sm text-white">
-                {isUnicommerceLoading ? 'Updating...' : 'Live Data'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
-              <span className={`h-2 w-2 rounded-full ${wsConnected ? 'bg-emerald-400' : 'bg-red-400'}`}></span>
-              <span className="text-xs text-white">
-                {wsConnected ? 'WebSocket Live' : 'WS Offline'}
-              </span>
-            </div>
-            {wsConnected && (
-              <button onClick={requestRefresh}
-                className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2 text-xs text-white hover:bg-white/20 transition-colors"
-                title="Fetch latest orders now">
-                🔄 Refresh
-              </button>
-            )}
-            {(wsLastUpdate || updatedToday) && (
-              <div className="text-xs text-white/70 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
-                Last update: {wsLastUpdate ? timeAgo(wsLastUpdate.getTime()) : updatedToday ? timeAgo(updatedToday) : '—'}
+                <button onClick={() => { setShowToast(false); dismissNotification(); }}
+                  className="text-white/70 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
               </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Real-time Unicommerce Sales Stats */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            🔥 Real-time Sales (Unicommerce)
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Today */}
-          <div className="card bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20 border-l-4 border-green-500 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-3xl">📊</span>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Today</h3>
+              <div className="p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500 dark:text-slate-400">Total Orders</span>
+                  <span className="font-bold text-slate-900 dark:text-white">{newOrderNotification.totalOrders}</span>
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">00:00 to now</p>
-              </div>
-              {loadingToday && (
-                <div className="h-6 w-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
-              )}
-            </div>
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Orders</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  {loadingToday ? '...' : todayOrders.toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Items</p>
-                <p className="text-2xl font-semibold text-gray-700 dark:text-gray-300">
-                  {loadingToday ? '...' : todayItems.toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Revenue</p>
-                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  {loadingToday ? '...' : `₹${todayRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
-                </p>
-              </div>
-              {todayData?.fetch_info?.fetch_time_seconds && (
-                <div className="text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
-                  Fetch: {todayData.fetch_info.fetch_time_seconds.toFixed(1)}s
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500 dark:text-slate-400">Revenue</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                    {'\u20B9'}{newOrderNotification.totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </span>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Yesterday */}
-          <div className="card bg-gradient-to-br from-amber-50 to-yellow-100 dark:from-amber-900/20 dark:to-yellow-800/20 border-l-4 border-amber-500 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-3xl">📆</span>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Yesterday</h3>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Full day</p>
-              </div>
-              {loadingYesterday && (
-                <div className="h-6 w-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-              )}
-            </div>
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Orders</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  {loadingYesterday ? '...' : yesterdayOrders.toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Items</p>
-                <p className="text-2xl font-semibold text-gray-700 dark:text-gray-300">
-                  {loadingYesterday ? '...' : yesterdayItems.toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Revenue</p>
-                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                  {loadingYesterday ? '...' : `₹${yesterdayRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
-                </p>
-              </div>
-              {yesterdayData?.fetch_info?.fetch_time_seconds && (
-                <div className="text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
-                  Fetch: {yesterdayData.fetch_info.fetch_time_seconds.toFixed(1)}s
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Last 7 Days */}
-          <div className="card bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-800/20 border-l-4 border-blue-500 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-3xl">📈</span>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Last 7 Days</h3>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Complete days</p>
-              </div>
-              {showLoading7d && (
-                <div className="h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-              )}
-            </div>
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Orders</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  {showLoading7d ? '...' : last7DaysOrders.toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Items</p>
-                <p className="text-2xl font-semibold text-gray-700 dark:text-gray-300">
-                  {showLoading7d ? '...' : last7DaysItems.toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Revenue</p>
-                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {showLoading7d ? '...' : `₹${last7DaysRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
-                </p>
-              </div>
-              {last7Days?.fetch_info?.fetch_time_seconds && (
-                <div className="text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
-                  Fetch: {last7Days.fetch_info.fetch_time_seconds.toFixed(1)}s
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* System Stats from Unicommerce */}
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Business Overview</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Today's Orders */}
-          <div className="card bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-l-4 border-blue-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">Today&apos;s Orders</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  {isLoading ? '...' : todayOrders}
-                </p>
-              </div>
-              <div className="h-14 w-14 rounded-full bg-blue-500/20 dark:bg-blue-500/30 flex items-center justify-center">
-                <span className="text-3xl">🛒</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Avg Order Value */}
-          <div className="card bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border-l-4 border-yellow-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-yellow-600 dark:text-yellow-400 mb-1">Avg Order Value</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  {isLoading ? '...' : `₹${avgOrderValue.toFixed(0)}`}
-                </p>
-              </div>
-              <div className="h-14 w-14 rounded-full bg-yellow-500/20 dark:bg-yellow-500/30 flex items-center justify-center">
-                <span className="text-3xl">📊</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Active Channels */}
-          <div className="card bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-l-4 border-purple-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-purple-600 dark:text-purple-400 mb-1">Active Channels</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  {isLoading ? '...' : activeChannels}
-                </p>
-              </div>
-              <div className="h-14 w-14 rounded-full bg-purple-500/20 dark:bg-purple-500/30 flex items-center justify-center">
-                <span className="text-3xl">🏪</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Weekly Revenue */}
-          <div className="card bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 border-l-4 border-indigo-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400 mb-1">7-Day Revenue</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {isLoading ? '...' : `₹${(weeklyRevenue / 1000).toFixed(0)}K`}
-                </p>
-              </div>
-              <div className="h-14 w-14 rounded-full bg-indigo-500/20 dark:bg-indigo-500/30 flex items-center justify-center">
-                <span className="text-3xl">💰</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Quick Access</h2>
-          <span className="text-sm text-gray-500 dark:text-gray-400">Navigate to key modules</span>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {quickActions.map((action, index) => (
-            <Link
-              key={action.title}
-              href={action.href}
-              className="group relative card hover:shadow-2xl transition-all duration-300 overflow-hidden"
-              style={{ animationDelay: `${index * 50}ms` }}
-            >
-              <div className={`absolute inset-0 bg-gradient-to-br ${action.gradient} opacity-0 group-hover:opacity-5 dark:group-hover:opacity-10 transition-opacity duration-300`}></div>
-              <div className="relative">
-                <div className="flex items-start justify-between mb-4">
-                  <div className={`h-16 w-16 rounded-2xl ${action.iconBg} flex items-center justify-center transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300`}>
-                    <span className="text-4xl">{action.icon}</span>
+                {newOrderNotification.orders?.slice(0, 3).map((o: any, i: number) => (
+                  <div key={i} className="flex justify-between text-xs pt-1 border-t border-slate-100 dark:border-slate-800">
+                    <span className="font-mono text-slate-400 truncate max-w-[180px]">
+                      {o.saleOrderCode || o.channel || 'Order'}
+                    </span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                      {'\u20B9'}{(o.sellingPrice || o.revenue || 0).toLocaleString('en-IN')}
+                    </span>
                   </div>
-                  <svg
-                    className="h-6 w-6 text-gray-400 dark:text-gray-600 group-hover:text-primary-500 dark:group-hover:text-primary-400 transform group-hover:translate-x-1 group-hover:-translate-y-1 transition-all duration-300"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-                  {action.title}
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {action.description}
-                </p>
+                ))}
               </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Dashboard</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            Your business at a glance
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800">
+              <span className={`w-1.5 h-1.5 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                {wsConnected ? 'Live' : 'Offline'}
+              </span>
+            </div>
+            {updatedAt > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800">
+                <Clock className="w-3 h-3 text-slate-400" />
+                <span className="text-xs text-slate-500 dark:text-slate-400">{timeAgo(updatedAt)}</span>
+              </div>
+            )}
+          </div>
+          <button
+            onClick={handleRefresh}
+            className="btn btn-secondary text-xs"
+            disabled={fetchingToday}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${fetchingToday ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* SECTION 1: Performance Snapshot */}
+      <section>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+          Performance Snapshot
+        </h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <KPIStatCard
+            title="Revenue"
+            value={todayRevenue}
+            prefix={'\u20B9'}
+            icon={DollarSign}
+            color="green"
+            change={revenueGrowth}
+            changeLabel="vs yesterday"
+            sparklineData={revenueSparkline}
+            loading={isLoading}
+            formatter={(v) => formatCurrency(v)}
+            delay={0}
+            tooltip="Total revenue from all sale orders created today across every channel."
+          />
+          <KPIStatCard
+            title="Orders"
+            value={todayOrders}
+            icon={ShoppingCart}
+            color="blue"
+            change={orderGrowth}
+            changeLabel="vs yesterday"
+            sparklineData={ordersSparkline}
+            loading={isLoading}
+            delay={80}
+            tooltip="Number of sale orders placed today across all marketplace and D2C channels."
+          />
+          <KPIStatCard
+            title="Avg Order Value"
+            value={avgOrderValue}
+            prefix={'\u20B9'}
+            icon={TrendingUp}
+            color="amber"
+            loading={isLoading}
+            formatter={(v) => v.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            delay={160}
+            tooltip="Average revenue generated per order. Higher AOV means customers spend more per purchase."
+          />
+          <KPIStatCard
+            title="Items Sold"
+            value={todayItems}
+            icon={Package}
+            color="purple"
+            sparklineData={itemsSparkline}
+            loading={isLoading}
+            delay={240}
+            tooltip="Total individual items (units) sold across all orders today."
+          />
+        </div>
+      </section>
+
+      {/* SECTION 2: Trend Over Time */}
+      <section>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+          Trend Over Time
+        </h2>
+        {/* Revenue — primary metric, full width */}
+        <ChartCard title="Revenue Trend" subtitle="Daily revenue — last 7 days">
+          <RevenueTrendChart data={dailyTrend} />
+        </ChartCard>
+        {/* Orders & Items — secondary, below */}
+        <div className="mt-4">
+          <ChartCard title="Orders & Items" subtitle="Daily volume — last 7 days">
+            <OrdersTrendChart data={dailyTrend} />
+          </ChartCard>
+        </div>
+      </section>
+
+      {/* SECTION 3: Channel Contribution */}
+      <section>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+          Channel Contribution
+        </h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ChartCard title="Revenue by Channel" subtitle="Top channels — last 7 days">
+            <ChannelBarChart data={channelChartData} />
+          </ChartCard>
+          <ChartCard title="Order Distribution" subtitle="Orders split by channel">
+            <ChannelDonutChart data={channelDonutData} />
+          </ChartCard>
+        </div>
+      </section>
+
+      {/* SECTION 4: Comparison & Insights */}
+      <section>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+          Comparison & Insights
+        </h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ComparisonCard
+            title="Yesterday vs Day Before"
+            leftLabel="Yesterday"
+            rightLabel="Day Before"
+            loading={loading7d && !last7Days}
+            metrics={[
+              {
+                label: 'Revenue',
+                today: ydayRevenue,
+                yesterday: dbyRevenue,
+                formatter: (v: number) => `₹${formatCurrency(v)}`,
+              },
+              {
+                label: 'Orders',
+                today: ydayOrders,
+                yesterday: dbyOrders,
+              },
+              {
+                label: 'Items',
+                today: ydayItems,
+                yesterday: dbyItems,
+              },
+            ]}
+          />
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: 'easeOut', delay: 0.1 }}
+            className="rounded-2xl border border-slate-200/60 dark:border-slate-800
+              bg-white dark:bg-slate-900 shadow-[var(--shadow-soft)] p-6"
+          >
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">
+              Insights
+            </h3>
+            <InsightsPanel
+              todayRevenue={ydayRevenue}
+              yesterdayRevenue={dbyRevenue}
+              todayOrders={ydayOrders}
+              yesterdayOrders={dbyOrders}
+              todayItems={ydayItems}
+              yesterdayItems={dbyItems}
+              topChannel={topChannel}
+              totalChannels={channelData?.channels?.length}
+              loading={loading7d && !last7Days}
+              comparisonLabel="day before yesterday"
+            />
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Quick Navigation */}
+      <section>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+          Quick Access
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {quickLinks.map((link, i) => (
+            <Link key={link.href} href={link.href}>
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: i * 0.04 }}
+                className="card-interactive p-4 group text-center"
+              >
+                <div className={`w-10 h-10 mx-auto rounded-xl bg-gradient-to-br ${link.color} flex items-center justify-center mb-3
+                  group-hover:scale-110 transition-transform duration-200`}>
+                  <link.icon className="w-5 h-5 text-white" strokeWidth={1.8} />
+                </div>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                  {link.title}
+                </p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{link.desc}</p>
+              </motion.div>
             </Link>
           ))}
         </div>
-      </div>
-
+      </section>
     </div>
   );
 }

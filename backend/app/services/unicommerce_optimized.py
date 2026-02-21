@@ -1717,6 +1717,7 @@ class UnicommerceServiceProduction:
 
         channel_stats: Dict[str, Dict[str, Any]] = {}
         status_stats: Dict[str, int] = {}
+        daily_stats: Dict[str, Dict[str, Any]] = {}  # day-level aggregation
 
         # Single-pass aggregation
         for order in orders:
@@ -1743,6 +1744,17 @@ class UnicommerceServiceProduction:
                 channel_stats[channel]["revenue"] += calc["net_revenue"]
                 # Track items per channel
                 channel_stats[channel]["items"] += calc.get("quantity", 0)
+
+                # Daily breakdown (YYYY-MM-DD)
+                created_raw = calc.get("created") or ""
+                day_key = str(created_raw)[:10]  # "2026-02-14 ..." → "2026-02-14"
+                if day_key and len(day_key) == 10:
+                    if day_key not in daily_stats:
+                        daily_stats[day_key] = {
+                            "date": day_key, "orders": 0, "revenue": 0.0, "items": 0}
+                    daily_stats[day_key]["orders"] += 1
+                    daily_stats[day_key]["revenue"] += calc["net_revenue"]
+                    daily_stats[day_key]["items"] += calc.get("quantity", 0)
             else:
                 excluded_orders += 1
 
@@ -1762,6 +1774,11 @@ class UnicommerceServiceProduction:
         # Round channel revenues
         for ch_data in channel_stats.values():
             ch_data["revenue"] = round(ch_data["revenue"], 2)
+
+        # Round daily revenues and sort by date
+        for day_data in daily_stats.values():
+            day_data["revenue"] = round(day_data["revenue"], 2)
+        daily_breakdown = sorted(daily_stats.values(), key=lambda d: d["date"])
 
         logger.info(
             f"AGGREGATION: {total_orders} orders, "
@@ -1783,6 +1800,7 @@ class UnicommerceServiceProduction:
                 total_revenue / valid_orders, 2
             ) if valid_orders > 0 else 0,
             "channel_breakdown": channel_stats,
+            "daily_breakdown": daily_breakdown,
             "status_breakdown": status_stats,
             "currency": "INR",
             "calculation_method": "sellingPrice_only",
