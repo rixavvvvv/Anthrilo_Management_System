@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ucCatalog, ucInventory } from '@/lib/api/uc';
-import { DataTable, Column } from '@/components/ui/DataTable';
-import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
+import { ucCatalog } from '@/lib/api/uc';
 
 const PAGE_SIZE = 25;
+
+/* ── tiny helpers ──────────────────────────────────────────────── */
+const fmt = (n?: number) => (n ?? 0).toLocaleString('en-IN');
+const inr = (n?: number) => `₹${(n ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 
 export default function GarmentMasterPage() {
   const [search, setSearch] = useState('');
@@ -25,11 +27,15 @@ export default function GarmentMasterPage() {
 
   useEffect(() => { setPage(0); }, [selectedCategory]);
 
-  // ── Export-based summary (all 26K+ SKUs) ──────────────────────
-  const { data: summaryData, isLoading: summaryLoading } = useQuery({
-    queryKey: ['uc-inventory-summary-export'],
+  /* ── 1) Big fetch for stats & categories (1000 SKUs, cached long) ── */
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['uc-catalog-stats'],
     queryFn: async () => {
-      const res = await ucInventory.getSummary();
+      const res = await ucCatalog.searchItems({
+        displayStart: 0,
+        displayLength: 1000,
+        getInventorySnapshot: true,
+      });
       return res.data;
     },
     staleTime: 15 * 60 * 1000,
@@ -37,23 +43,10 @@ export default function GarmentMasterPage() {
     refetchOnWindowFocus: false,
   });
 
-  // ── Catalog search (paginated from Unicommerce) ───────────────
+  /* ── 2) Paginated catalog (fast, no inventory snapshot) ──────── */
   const { data, isLoading, error, isFetching } = useQuery({
     queryKey: ['uc-catalog', page, debouncedSearch, selectedCategory],
     queryFn: async () => {
-      const payload: any = {
-        getInventorySnapshot: false,
-        searchOptions: {
-          displayStart: page * PAGE_SIZE,
-          displayLength: PAGE_SIZE,
-        },
-      };
-      if (debouncedSearch) payload.keyword = debouncedSearch;
-      // Unicommerce catalog search doesn't support category filter natively,
-      // so we pass keyword if category is selected
-      if (selectedCategory && !debouncedSearch) {
-        payload.keyword = selectedCategory;
-      }
       const response = await ucCatalog.searchItems({
         displayStart: page * PAGE_SIZE,
         displayLength: PAGE_SIZE,
@@ -63,15 +56,17 @@ export default function GarmentMasterPage() {
       return response.data;
     },
     staleTime: 2 * 60 * 1000,
-    placeholderData: (prev) => prev,
+    placeholderData: (prev: any) => prev,
   });
 
+  /* ── derived data ────────────────────────────────────────────── */
   const items = useMemo(() =>
     (data?.elements || []).map((item: any) => ({
       skuCode: item.skuCode || '-',
       name: item.name || '-',
       description: item.description || '',
       categoryName: item.categoryName || '-',
+      categoryCode: item.categoryCode || '',
       color: item.color || '-',
       size: item.size || '-',
       brand: item.brand || '-',
@@ -79,210 +74,188 @@ export default function GarmentMasterPage() {
       hsnCode: item.hsnCode || '-',
       weight: item.weight || 0,
       enabled: item.enabled,
-      ean: item.ean || '-',
+      ean: item.ean || item.scanIdentifier || '-',
     })),
   [data]);
 
   const totalRecords = data?.totalRecords || 0;
   const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
-  const currentPage = page + 1; // display as 1-based
+  const currentPage = page + 1;
 
-  // ── Summary stats ─────────────────────────────────────────────
-  const summary = summaryData?.summary || {};
-  const categories = summaryData?.categories || [];
-  const summaryOk = summaryData?.successful;
+  /* ── stats from the 1000-SKU fetch ─────────────────────────── */
+  const stats = useMemo(() => {
+    const elems = statsData?.elements || [];
+    if (!elems.length) return null;
 
-  // Unique category count
-  const categoryCount = categories.length;
+    let enabled = 0, inStock = 0, outOfStock = 0, totalInv = 0;
+    const catMap: Record<string, { skus: number; inventory: number }> = {};
 
-  const columns: Column<any>[] = [
-    {
-      key: 'skuCode', header: 'SKU Code', width: '14%',
-      render: (value) => (
-        <span className="font-mono text-sm font-semibold text-primary-600 dark:text-primary-400">{value}</span>
-      ),
-    },
-    {
-      key: 'name', header: 'Product Name', width: '22%',
-      render: (value, row) => (
-        <div className="min-w-0">
-          <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{value}</p>
-          {row.description && (
-            <p className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5">{row.description}</p>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'categoryName', header: 'Category', width: '12%',
-      render: (value) => (
-        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 text-xs font-medium">
-          {value}
-        </span>
-      ),
-    },
-    {
-      key: 'color', header: 'Color', width: '8%',
-      render: (value) => (
-        <div className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full border border-slate-200 dark:border-slate-600" style={{ backgroundColor: value !== '-' ? value.toLowerCase().replace(/\s+/g, '') : '#94a3b8' }}></span>
-          <span className="text-sm">{value}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'size', header: 'Size', width: '8%',
-      render: (value) => (
-        <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300">
-          {value}
-        </span>
-      ),
-    },
-    {
-      key: 'brand', header: 'Brand', width: '8%',
-      render: (value) => <span className="text-sm font-medium">{value}</span>,
-    },
-    {
-      key: 'hsnCode', header: 'HSN', width: '8%',
-      render: (value) => <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{value}</span>,
-    },
-    {
-      key: 'price', header: 'MRP', width: '8%',
-      render: (value) => (
-        <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
-          ₹{value?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-        </span>
-      ),
-    },
-    {
-      key: 'weight', header: 'Weight', width: '6%',
-      render: (value) => (
-        <span className="text-xs text-slate-500 dark:text-slate-400">{value > 0 ? `${value}g` : '-'}</span>
-      ),
-    },
-    {
-      key: 'enabled', header: 'Status', width: '6%',
-      render: (value) => (
-        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
-          value
-            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-            : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-        }`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${value ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
-          {value ? 'Active' : 'Off'}
-        </span>
-      ),
-    },
-  ];
+    for (const item of elems) {
+      if (item.enabled) enabled++;
+      const snap = item.inventorySnapshots?.[0];
+      const inv = snap?.inventory ?? snap?.goodInventory ?? 0;
+      if (inv > 0) inStock++;
+      else outOfStock++;
+      totalInv += inv;
 
+      const cat = item.categoryName || 'Uncategorized';
+      if (!catMap[cat]) catMap[cat] = { skus: 0, inventory: 0 };
+      catMap[cat].skus++;
+      catMap[cat].inventory += inv;
+    }
+
+    const categories = Object.entries(catMap)
+      .map(([name, d]) => ({ name, ...d }))
+      .sort((a, b) => b.inventory - a.inventory);
+
+    return {
+      sampleSize: elems.length,
+      totalCatalog: statsData?.totalRecords || 0,
+      enabled,
+      inStock,
+      outOfStock,
+      totalInventory: totalInv,
+      categories,
+    };
+  }, [statsData]);
+
+  const categories = stats?.categories || [];
+
+  /* ── RENDER ──────────────────────────────────────────────────── */
   return (
-    <div>
-      {/* Header */}
-      <PageHeader
-        title="Product Master Data"
-        description={`Unicommerce Product Catalog — ${summaryOk ? summary.total_skus?.toLocaleString() : totalRecords.toLocaleString()} SKUs across ${categoryCount} categories`}
-      />
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-        <StatCard
-          title="Total Catalog"
-          value={totalRecords.toLocaleString()}
-          icon="📦"
-          color="blue"
-        />
-        <StatCard
-          title="Enabled SKUs"
-          value={summaryOk ? summary.enabled_skus?.toLocaleString() : (summaryLoading ? '…' : '-')}
-          icon="✅"
-          color="emerald"
-        />
-        <StatCard
-          title="In Stock"
-          value={summaryOk ? summary.in_stock_skus?.toLocaleString() : (summaryLoading ? '…' : '-')}
-          icon="📊"
-          color="green"
-        />
-        <StatCard
-          title="Out of Stock"
-          value={summaryOk ? summary.out_of_stock_skus?.toLocaleString() : (summaryLoading ? '…' : '-')}
-          icon="⚠️"
-          color="red"
-        />
-        <StatCard
-          title="Total Inventory"
-          value={summaryOk ? summary.total_inventory?.toLocaleString() : (summaryLoading ? '…' : '-')}
-          icon="🏭"
-          color="purple"
-        />
-        <StatCard
-          title="Categories"
-          value={categoryCount.toString()}
-          icon="🏷️"
-          color="indigo"
-        />
+    <div className="space-y-5">
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+          Product Master Data
+        </h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          {fmt(stats?.totalCatalog || totalRecords)} SKUs across {categories.length} categories
+          <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+            Unicommerce API
+          </span>
+        </p>
       </div>
 
-      {/* Search & Filter Bar */}
-      <div className="card mb-4">
+      {/* ── Stats Row ───────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          { label: 'Total Catalog', value: fmt(stats?.totalCatalog || totalRecords), icon: '📦', bg: 'bg-blue-50 dark:bg-blue-950/30', ring: 'ring-blue-200/50 dark:ring-blue-800/30' },
+          { label: 'Enabled SKUs', value: stats ? fmt(stats.enabled) : (statsLoading ? '…' : '-'), icon: '✅', bg: 'bg-emerald-50 dark:bg-emerald-950/30', ring: 'ring-emerald-200/50 dark:ring-emerald-800/30' },
+          { label: 'In Stock', value: stats ? fmt(stats.inStock) : (statsLoading ? '…' : '-'), icon: '📊', bg: 'bg-green-50 dark:bg-green-950/30', ring: 'ring-green-200/50 dark:ring-green-800/30' },
+          { label: 'Out of Stock', value: stats ? fmt(stats.outOfStock) : (statsLoading ? '…' : '-'), icon: '⚠️', bg: 'bg-rose-50 dark:bg-rose-950/30', ring: 'ring-rose-200/50 dark:ring-rose-800/30' },
+          { label: 'Total Inventory', value: stats ? fmt(stats.totalInventory) : (statsLoading ? '…' : '-'), icon: '🏭', bg: 'bg-violet-50 dark:bg-violet-950/30', ring: 'ring-violet-200/50 dark:ring-violet-800/30' },
+          { label: 'Categories', value: categories.length.toString(), icon: '🏷️', bg: 'bg-indigo-50 dark:bg-indigo-950/30', ring: 'ring-indigo-200/50 dark:ring-indigo-800/30' },
+        ].map((s) => (
+          <div key={s.label}
+            className={`relative overflow-hidden rounded-2xl ring-1 ${s.ring} ${s.bg} p-4
+              hover:shadow-md hover:-translate-y-0.5 transition-all duration-200`}>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{s.label}</p>
+                <p className="text-xl font-extrabold text-slate-900 dark:text-white mt-1 tabular-nums">{s.value}</p>
+              </div>
+              <span className="text-xl leading-none">{s.icon}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Search & Category Bar ───────────────────────────────── */}
+      <div className="rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
         <div className="flex gap-3 items-center flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+          {/* Search */}
+          <div className="relative flex-1 min-w-[220px]">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
             <input
               type="text"
               placeholder="Search SKU, product name, category, brand…"
-              className="input pl-10 w-full"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm border border-slate-200 dark:border-slate-700
+                bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-slate-100
+                placeholder:text-slate-400 dark:placeholder:text-slate-500
+                focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-all"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setSelectedCategory(null); }}
             />
+            {search && (
+              <button onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            )}
           </div>
 
+          {/* Category toggle */}
           <button
             onClick={() => setShowCategories(!showCategories)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+            className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
               showCategories || selectedCategory
-                ? 'bg-primary-600 text-white shadow-sm'
-                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/25'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
             }`}
           >
-            🏷️ {selectedCategory ? selectedCategory : 'Categories'}
+            <span className="text-base">🏷️</span>
+            {selectedCategory || 'Categories'}
+            {selectedCategory && (
+              <svg className="w-3.5 h-3.5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7"/>
+              </svg>
+            )}
           </button>
 
           {selectedCategory && (
             <button
               onClick={() => { setSelectedCategory(null); setSearch(''); }}
-              className="px-3 py-2 rounded-xl text-sm font-medium bg-rose-100 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400 hover:bg-rose-200 dark:hover:bg-rose-900/30 transition-colors"
+              className="px-3 py-2.5 rounded-xl text-sm font-medium bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400
+                hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors"
             >
               ✕ Clear
             </button>
           )}
 
-          <span className="text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap ml-auto">
-            {totalRecords.toLocaleString()} products · Page {currentPage} / {totalPages || 1}
-            {isFetching && !isLoading && ' ⟳'}
+          {/* Page info */}
+          <span className="text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap ml-auto tabular-nums">
+            {fmt(totalRecords)} results · Page {currentPage}/{totalPages || 1}
+            {isFetching && !isLoading && (
+              <span className="ml-1.5 inline-block w-3 h-3 border-2 border-primary-400 border-t-transparent rounded-full animate-spin" />
+            )}
           </span>
         </div>
 
-        {/* Category Chips (collapsible) */}
+        {/* Category Chips */}
         {showCategories && categories.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-            <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
-              {categories.map((cat: any) => (
+          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex flex-wrap gap-2 max-h-52 overflow-y-auto pr-1">
+              <button
+                onClick={() => { setSelectedCategory(null); setSearch(''); setShowCategories(false); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  !selectedCategory
+                    ? 'bg-primary-600 text-white shadow-sm'
+                    : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                }`}
+              >
+                All ({fmt(stats?.totalCatalog || totalRecords)})
+              </button>
+              {categories.map((cat) => (
                 <button
-                  key={cat.category}
+                  key={cat.name}
                   onClick={() => {
-                    setSelectedCategory(cat.category === selectedCategory ? null : cat.category);
+                    setSelectedCategory(cat.name === selectedCategory ? null : cat.name);
                     setSearch('');
                     setShowCategories(false);
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    selectedCategory === cat.category
+                    selectedCategory === cat.name
                       ? 'bg-primary-600 text-white shadow-sm'
-                      : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600'
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-700 hover:bg-primary-50 dark:hover:bg-primary-950/20'
                   }`}
                 >
-                  {cat.category}
-                  <span className="ml-1.5 opacity-60">({cat.skus})</span>
+                  {cat.name}
+                  <span className="ml-1 opacity-50">({cat.skus})</span>
                 </button>
               ))}
             </div>
@@ -290,95 +263,231 @@ export default function GarmentMasterPage() {
         )}
       </div>
 
-      {/* Error */}
+      {/* ── Error ───────────────────────────────────────────────── */}
       {error && (
-        <div className="card bg-rose-50 dark:bg-rose-900/20 mb-4">
-          <p className="text-rose-600 dark:text-rose-400">Error: {(error as any)?.message || 'Failed to load catalog'}</p>
+        <div className="rounded-2xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-900/20 p-4">
+          <p className="text-sm text-rose-600 dark:text-rose-400">
+            <span className="font-semibold">Error:</span> {(error as any)?.message || 'Failed to load catalog'}
+          </p>
         </div>
       )}
 
-      {/* Table */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+      {/* ── Product Table ───────────────────────────────────────── */}
+      <div className="rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+        {/* Table header bar */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-800">
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
             Product Catalog
-            <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-              Unicommerce API
-            </span>
+            {selectedCategory && (
+              <span className="text-xs font-medium px-2.5 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
+                📂 {selectedCategory}
+              </span>
+            )}
           </h2>
-          {selectedCategory && (
-            <span className="text-sm px-3 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-medium">
-              📂 {selectedCategory}
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"/>
+              Live
             </span>
-          )}
+          </div>
         </div>
+
         {isLoading ? (
-          <LoadingSpinner message="Fetching product catalog from Unicommerce…" />
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="w-10 h-10 border-[3px] border-slate-200 dark:border-slate-700 border-t-primary-500 rounded-full animate-spin"/>
+            <p className="mt-4 text-sm text-slate-400">Fetching product catalog…</p>
+          </div>
+        ) : items.length === 0 ? (
+          <div className="text-center py-20">
+            <div className="text-4xl mb-3">📭</div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">No products found for this search.</p>
+          </div>
         ) : (
-          <DataTable data={items} columns={columns} emptyMessage="No products found for this search." />
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr className="bg-slate-50/70 dark:bg-slate-800/40">
+                  {['SKU Code','Product Name','Category','Color','Size','Brand','HSN','MRP','Weight','Status'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100/80 dark:divide-slate-800/60">
+                {items.map((item: any, i: number) => (
+                  <tr key={item.skuCode + i}
+                    className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors duration-100">
+                    {/* SKU */}
+                    <td className="px-4 py-3">
+                      <span className="font-mono text-xs font-bold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 px-2 py-0.5 rounded-md">
+                        {item.skuCode}
+                      </span>
+                    </td>
+                    {/* Product Name */}
+                    <td className="px-4 py-3 max-w-[260px]">
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{item.name}</p>
+                      {item.description && item.description !== '-' && (
+                        <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">{item.description}</p>
+                      )}
+                    </td>
+                    {/* Category */}
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => { setSelectedCategory(item.categoryName); setSearch(''); }}
+                        className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold
+                          bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400
+                          hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors cursor-pointer"
+                      >
+                        {item.categoryName}
+                      </button>
+                    </td>
+                    {/* Color */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full border border-slate-200 dark:border-slate-600 flex-shrink-0"
+                          style={{ backgroundColor: item.color !== '-' ? item.color.toLowerCase().replace(/\s+/g, '') : '#94a3b8' }}/>
+                        <span className="text-xs text-slate-600 dark:text-slate-400">{item.color}</span>
+                      </div>
+                    </td>
+                    {/* Size */}
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                        {item.size}
+                      </span>
+                    </td>
+                    {/* Brand */}
+                    <td className="px-4 py-3 text-xs font-medium text-slate-700 dark:text-slate-300">{item.brand}</td>
+                    {/* HSN */}
+                    <td className="px-4 py-3">
+                      <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{item.hsnCode}</span>
+                    </td>
+                    {/* MRP */}
+                    <td className="px-4 py-3">
+                      <span className="text-sm font-bold text-slate-900 dark:text-white tabular-nums">{inr(item.price)}</span>
+                    </td>
+                    {/* Weight */}
+                    <td className="px-4 py-3 text-xs text-slate-400 tabular-nums">
+                      {item.weight > 0 ? `${item.weight}g` : '-'}
+                    </td>
+                    {/* Status */}
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                        item.enabled
+                          ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${item.enabled ? 'bg-emerald-500' : 'bg-slate-400'}`}/>
+                        {item.enabled ? 'Active' : 'Off'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {/* Pagination */}
+      {/* ── Pagination ──────────────────────────────────────────── */}
       {totalPages > 1 && (
-        <div className="flex justify-between items-center mt-4">
+        <div className="flex items-center justify-between">
           <button disabled={page <= 0} onClick={() => setPage(page - 1)}
-            className="btn btn-secondary disabled:opacity-40">← Previous</button>
-          <div className="flex items-center gap-2">
-            {currentPage > 2 && (
-              <button onClick={() => setPage(0)} className="px-3 py-1 rounded-lg text-sm bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">1</button>
-            )}
-            {currentPage > 3 && <span className="text-slate-400">…</span>}
-            {currentPage > 1 && (
-              <button onClick={() => setPage(page - 1)} className="px-3 py-1 rounded-lg text-sm bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">{currentPage - 1}</button>
-            )}
-            <span className="px-3 py-1 rounded-lg text-sm bg-primary-600 text-white font-semibold">{currentPage}</span>
-            {currentPage < totalPages && (
-              <button onClick={() => setPage(page + 1)} className="px-3 py-1 rounded-lg text-sm bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">{currentPage + 1}</button>
-            )}
-            {currentPage < totalPages - 2 && <span className="text-slate-400">…</span>}
-            {currentPage < totalPages - 1 && (
-              <button onClick={() => setPage(totalPages - 1)} className="px-3 py-1 rounded-lg text-sm bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">{totalPages}</button>
-            )}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium
+              bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800
+              text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800
+              disabled:opacity-40 disabled:pointer-events-none transition-all shadow-sm">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
+            </svg>
+            Previous
+          </button>
+
+          <div className="flex items-center gap-1">
+            {(() => {
+              const pages: (number | '...')[] = [];
+              if (totalPages <= 7) {
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
+              } else {
+                pages.push(1);
+                if (currentPage > 3) pages.push('...');
+                for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) pages.push(i);
+                if (currentPage < totalPages - 2) pages.push('...');
+                pages.push(totalPages);
+              }
+              return pages.map((p, idx) =>
+                p === '...' ? (
+                  <span key={`dots-${idx}`} className="px-1 text-slate-400 text-xs">…</span>
+                ) : (
+                  <button key={p} onClick={() => setPage((p as number) - 1)}
+                    className={`min-w-[32px] h-8 rounded-lg text-xs font-semibold transition-all ${
+                      p === currentPage
+                        ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/25'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}>
+                    {p}
+                  </button>
+                )
+              );
+            })()}
           </div>
+
           <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}
-            className="btn btn-secondary disabled:opacity-40">Next →</button>
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium
+              bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800
+              text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800
+              disabled:opacity-40 disabled:pointer-events-none transition-all shadow-sm">
+            Next
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
         </div>
       )}
 
-      {/* Category Breakdown (always visible at bottom) */}
+      {/* ── Category Distribution Grid ──────────────────────────── */}
       {categories.length > 0 && (
-        <div className="card mt-6">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-            📊 Category Distribution
-            <span className="text-xs font-normal text-slate-500 dark:text-slate-400">({categories.length} categories)</span>
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {categories.slice(0, 20).map((cat: any) => {
-              const stockPercent = summary.total_inventory > 0 ? ((cat.inventory / summary.total_inventory) * 100) : 0;
+        <div className="rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              📊 Category Distribution
+              <span className="text-[11px] font-normal text-slate-400 dark:text-slate-500">
+                ({categories.length} categories · top {Math.min(20, categories.length)} shown)
+              </span>
+            </h2>
+            {stats && (
+              <span className="text-[11px] text-slate-400 tabular-nums">
+                Based on {fmt(stats.sampleSize)} sampled SKUs
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {categories.slice(0, 20).map((cat) => {
+              const pct = stats && stats.totalInventory > 0 ? (cat.inventory / stats.totalInventory) * 100 : 0;
               return (
                 <button
-                  key={cat.category}
-                  onClick={() => { setSelectedCategory(cat.category); setSearch(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                  className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md transition-all text-left group"
+                  key={cat.name}
+                  onClick={() => { setSelectedCategory(cat.name); setSearch(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  className="group relative p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60
+                    hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-md hover:-translate-y-0.5
+                    transition-all duration-200 text-left overflow-hidden"
                 >
-                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 truncate group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-                    {cat.category}
+                  <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 truncate group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                    {cat.name}
                   </p>
-                  <p className="text-lg font-bold text-slate-900 dark:text-white mt-1">
-                    {cat.inventory.toLocaleString()}
-                    <span className="text-xs font-normal text-slate-400 ml-1">units</span>
+                  <p className="text-lg font-extrabold text-slate-900 dark:text-white mt-1 tabular-nums">
+                    {fmt(cat.inventory)}
+                    <span className="text-[10px] font-medium text-slate-400 ml-1">units</span>
                   </p>
-                  <div className="flex items-center justify-between mt-1.5">
-                    <span className="text-xs text-slate-400">{cat.skus} SKUs</span>
-                    <span className="text-xs font-medium text-primary-600 dark:text-primary-400">{stockPercent.toFixed(1)}%</span>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-[10px] text-slate-400 tabular-nums">{cat.skus} SKUs</span>
+                    <span className="text-[10px] font-semibold text-primary-600 dark:text-primary-400 tabular-nums">{pct.toFixed(1)}%</span>
                   </div>
-                  {/* Mini progress bar */}
-                  <div className="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-full mt-1.5 overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-primary-400 to-primary-600 rounded-full transition-all"
-                      style={{ width: `${Math.min(stockPercent, 100)}%` }}
-                    ></div>
+                  {/* Progress bar */}
+                  <div className="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-full mt-2 overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-primary-400 to-primary-600 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(pct, 100)}%` }}/>
                   </div>
                 </button>
               );
