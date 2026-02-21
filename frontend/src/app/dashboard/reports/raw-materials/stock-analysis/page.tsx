@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ucCatalog } from '@/lib/api/uc';
+import { ucInventory } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
 
-const CLIENT_PAGE_SIZE = 20;
+const PAGE_SIZE = 50;
 
 /**
  * Stock status thresholds (based on Good Stock / inventory):
@@ -25,99 +25,77 @@ function getStockStatus(stock: number): string {
 export default function InventoryAnalysisPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [page, setPage] = useState(0);
-  const [stockFilter, setStockFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [stockFilter, setStockFilter] = useState<'all' | 'in-stock' | 'out-of-stock'>('all');
 
-  // Reset to page 0 whenever filter or search changes
-  useEffect(() => {
-    setPage(0);
-  }, [stockFilter]);
+  useEffect(() => { setPage(1); }, [stockFilter]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
-      setPage(0);
+      setPage(1);
     }, 400);
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Fetch summary data ONCE for totals across ALL SKUs
+  // ── Summary (totals across ALL 26K+ SKUs) ─────────────────────
   const { data: summaryData, isLoading: summaryLoading } = useQuery({
-    queryKey: ['uc-inventory-summary'],
+    queryKey: ['uc-inventory-summary-export'],
     queryFn: async () => {
-      const response = await ucCatalog.getInventorySummary();
-      return response.data;
+      const res = await ucInventory.getSummary();
+      return res.data;
     },
-    staleTime: 30 * 60 * 1000,
+    staleTime: 15 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 
-  // Fetch ALL items at once so client-side filtering works across the full catalog
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['uc-stock-analysis-all', debouncedSearch],
+  // ── Paginated data via Export Job API ──────────────────────────
+  const isSearching = debouncedSearch.length > 0;
+
+  const { data, isLoading, error, isFetching } = useQuery({
+    queryKey: isSearching
+      ? ['uc-stock-analysis-search', debouncedSearch, page]
+      : ['uc-stock-analysis', page, PAGE_SIZE, stockFilter],
     queryFn: async () => {
-      // Fetch large batch; Unicommerce caps at ~500 per request
-      const response = await ucCatalog.searchItems({
-        displayStart: 0,
-        displayLength: 500,
-        getInventorySnapshot: true,
-        getAggregates: false,
-        keyword: debouncedSearch || undefined,
+      if (isSearching) {
+        const res = await ucInventory.search({ q: debouncedSearch, page, page_size: PAGE_SIZE });
+        return res.data;
+      }
+      const res = await ucInventory.getSnapshot({
+        page,
+        page_size: PAGE_SIZE,
+        in_stock_only: stockFilter === 'in-stock',
       });
-      return response.data;
+      return res.data;
     },
-    staleTime: 60_000,
+    staleTime: 5 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 
-  // Map raw elements → enriched rows with correct status
-  const allItems = useMemo(() => {
-    return (data?.elements || []).map((item: any) => {
-      const snap = item.inventorySnapshots?.[0] || {};
-      const stock = snap.inventory || 0;
-      return {
-        skuCode: item.skuCode,
-        name: item.name,
-        categoryName: item.categoryName || '-',
-        inventory: stock,
-        virtualInventory: snap.virtualInventory || 0,
-        openSale: snap.openSale || 0,
-        badInventory: snap.badInventory || 0,
-        putawayPending: snap.putawayPending || 0,
-        price: item.price || 0,
-        stockValue: stock * (item.price || 0),
-        status: getStockStatus(stock),
-      };
-    });
-  }, [data]);
+  const items = data?.inventorySnapshots || [];
+  const totalCount = data?.totalCount || 0;
+  const totalPages = data?.totalPages || 0;
 
-  // Apply filter across ALL items, then paginate client-side
-  const filtered = useMemo(() => {
-    if (stockFilter === 'all') return allItems;
-    if (stockFilter === 'out') return allItems.filter((i: any) => i.status === 'Out of Stock');
-    if (stockFilter === 'low') return allItems.filter((i: any) => i.status === 'Low');
-    if (stockFilter === 'normal') return allItems.filter((i: any) => i.status === 'Normal');
-    if (stockFilter === 'high') return allItems.filter((i: any) => i.status === 'High');
-    return allItems;
-  }, [allItems, stockFilter]);
+  // Enrich with stock status
+  const enrichedItems = useMemo(() =>
+    items.map((item: any) => ({
+      ...item,
+      stockValue: (item.inventory || 0) * (item.costPrice || 0),
+      status: getStockStatus(item.inventory || 0),
+    })),
+  [items]);
 
-  const totalPages = Math.ceil(filtered.length / CLIENT_PAGE_SIZE);
-  const pagedItems = filtered.slice(page * CLIENT_PAGE_SIZE, (page + 1) * CLIENT_PAGE_SIZE);
+  // Count statuses on current page for display
+  const statusCounts = useMemo(() => ({
+    out: enrichedItems.filter((i: any) => i.status === 'Out of Stock').length,
+    low: enrichedItems.filter((i: any) => i.status === 'Low').length,
+    normal: enrichedItems.filter((i: any) => i.status === 'Normal').length,
+    high: enrichedItems.filter((i: any) => i.status === 'High').length,
+  }), [enrichedItems]);
 
-  // Category counts for filter badges
-  const counts = useMemo(() => ({
-    all: allItems.length,
-    out: allItems.filter((i: any) => i.status === 'Out of Stock').length,
-    low: allItems.filter((i: any) => i.status === 'Low').length,
-    normal: allItems.filter((i: any) => i.status === 'Normal').length,
-    high: allItems.filter((i: any) => i.status === 'High').length,
-  }), [allItems]);
-
-  // Get REAL aggregates from summary endpoint (ALL SKUs)
-  const totalSKUs = summaryData?.totalSKUs || 0;
-  const totalInventory = summaryData?.totalRealInventory || 0;
-  const totalVirtualInventory = summaryData?.totalVirtualInventory || 0;
-  const totalValue = summaryData?.totalStockValue || 0;
-  const summaryLoaded = summaryData?.successful || false;
+  const summary = summaryData?.summary || {};
+  const summaryOk = summaryData?.successful;
 
   const statusColors: Record<string, string> = {
     'Out of Stock': 'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200',
@@ -127,25 +105,35 @@ export default function InventoryAnalysisPage() {
   };
 
   const columns: Column<any>[] = [
-    { key: 'skuCode', header: 'SKU', width: '14%' },
-    { key: 'name', header: 'Product Name', width: '20%' },
-    { key: 'categoryName', header: 'Category', width: '10%' },
+    {
+      key: 'itemTypeSKU', header: 'SKU', width: '16%',
+      render: (value) => <span className="font-mono text-sm font-medium text-slate-900 dark:text-slate-100">{value}</span>,
+    },
+    { key: 'categoryName', header: 'Category', width: '11%' },
+    { key: 'color', header: 'Color', width: '8%' },
+    { key: 'size', header: 'Size', width: '6%' },
     {
       key: 'inventory', header: 'Good Stock', width: '9%',
-      render: (value) => <span className="font-semibold text-slate-900 dark:text-slate-100">{value}</span>,
+      render: (value) => {
+        const c = value === 0 ? 'text-rose-600' : value <= 7 ? 'text-amber-600' : 'text-emerald-600';
+        return <span className={`font-bold ${c}`}>{value}</span>;
+      },
     },
-    { key: 'virtualInventory', header: 'Virtual', width: '8%' },
     {
       key: 'openSale', header: 'Open Sale', width: '8%',
-      render: (value) => <span className="text-blue-600 dark:text-blue-400">{value}</span>,
+      render: (value) => value > 0 ? <span className="text-blue-600 dark:text-blue-400">{value}</span> : <span className="text-slate-400">0</span>,
     },
     {
       key: 'badInventory', header: 'Bad', width: '6%',
       render: (value) => value > 0 ? <span className="text-rose-500 font-medium">{value}</span> : <span className="text-slate-400">0</span>,
     },
     {
-      key: 'stockValue', header: 'Stock Value', width: '11%',
-      render: (value) => <span className="text-emerald-600 dark:text-emerald-400 font-semibold">₹{(value || 0).toFixed(0)}</span>,
+      key: 'putawayPending', header: 'Putaway', width: '8%',
+      render: (value) => value > 0 ? <span className="text-orange-600 dark:text-orange-400 font-medium">{value}</span> : <span className="text-slate-400">0</span>,
+    },
+    {
+      key: 'stockValue', header: 'Value (Cost)', width: '10%',
+      render: (value) => <span className="text-emerald-600 dark:text-emerald-400 font-semibold">₹{(value || 0).toLocaleString()}</span>,
     },
     {
       key: 'status', header: 'Status', width: '10%',
@@ -157,75 +145,81 @@ export default function InventoryAnalysisPage() {
 
   return (
     <div>
-      <PageHeader title="Inventory Stock Analysis" description={`Unicommerce stock levels — ${totalSKUs.toLocaleString()} total SKUs`} />
+      <PageHeader
+        title="Inventory Stock Analysis"
+        description={`Export Job API — ${summaryOk ? summary.total_skus?.toLocaleString() : '…'} total SKUs across all facilities`}
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <StatCard title="Total SKUs" value={summaryLoaded ? totalSKUs.toLocaleString() : (summaryLoading ? 'Loading...' : '-')} icon="📦" color="blue" />
-        <StatCard
-          title="Total Real Inventory"
-          value={summaryLoaded ? totalInventory.toLocaleString() : (summaryLoading ? 'Loading...' : '-')}
-          icon="📊"
-          color="emerald"
-        />
-        <StatCard
-          title="Total Virtual Inventory"
-          value={summaryLoaded ? totalVirtualInventory.toLocaleString() : (summaryLoading ? 'Loading...' : '-')}
-          icon="🔢"
-          color="purple"
-        />
-        <StatCard
-          title="Total Stock Value"
-          value={summaryLoaded ? `₹${(totalValue / 1000000).toFixed(2)}M` : (summaryLoading ? 'Loading...' : '-')}
-          icon="💰"
-          color="yellow"
-        />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+        <StatCard title="Total SKUs" value={summaryOk ? summary.total_skus?.toLocaleString() : (summaryLoading ? '…' : '-')} icon="📦" color="blue" />
+        <StatCard title="Total Inventory" value={summaryOk ? summary.total_inventory?.toLocaleString() : (summaryLoading ? '…' : '-')} icon="📊" color="emerald" />
+        <StatCard title="Out of Stock" value={summaryOk ? summary.out_of_stock_skus?.toLocaleString() : (summaryLoading ? '…' : '-')} icon="⚠️" color="red" />
+        <StatCard title="Total Blocked" value={summaryOk ? summary.total_blocked?.toLocaleString() : (summaryLoading ? '…' : '-')} icon="🔒" color="yellow" />
       </div>
 
       <div className="card mb-4">
         <div className="flex gap-4 items-center flex-wrap">
           <div className="flex gap-2">
-            {[
+            {([
               { key: 'all', label: 'All' },
-              { key: 'out', label: 'Out of Stock' },
-              { key: 'low', label: 'Low Stock' },
-              { key: 'normal', label: 'Normal' },
-              { key: 'high', label: 'High Stock' },
-            ].map((f) => (
+              { key: 'in-stock', label: 'In Stock' },
+              { key: 'out-of-stock', label: 'Out of Stock' },
+            ] as const).map((f) => (
               <button key={f.key} onClick={() => setStockFilter(f.key)}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${stockFilter === f.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
-                {f.label} ({counts[f.key as keyof typeof counts]})
+                {f.label}
               </button>
             ))}
           </div>
-          <input type="text" placeholder="Search product name..." className="input flex-1"
+          <input type="text" placeholder="Search SKU, category, brand, color, size…" className="input flex-1"
             value={search} onChange={(e) => setSearch(e.target.value)} />
+          <span className="text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">
+            {totalCount.toLocaleString()} items · Page {page} / {totalPages || 1}
+            {isFetching && !isLoading && ' ⟳'}
+          </span>
         </div>
       </div>
 
       {error && (
         <div className="card bg-rose-50 dark:bg-rose-900/20 mb-4">
-          <p className="text-rose-600 dark:text-rose-400">Error: {(error as any)?.message}</p>
+          <p className="text-rose-600 dark:text-rose-400">Error: {(error as any)?.message || 'Failed to load stock data'}</p>
         </div>
       )}
 
       <div className="card">
-        <h2 className="mb-4 text-slate-900 dark:text-white">
+        <h2 className="mb-4 text-slate-900 dark:text-white flex items-center gap-2">
           Stock Analysis
-          {stockFilter !== 'all' && <span className="text-sm font-normal text-slate-500 ml-2">({filtered.length} items)</span>}
+          {data?.method === 'export_job' && (
+            <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
+              Export API
+            </span>
+          )}
+          <span className="text-sm font-normal text-slate-500 ml-auto">
+            {statusCounts.out > 0 && <span className="text-rose-500 mr-3">{statusCounts.out} OOS</span>}
+            {statusCounts.low > 0 && <span className="text-amber-500 mr-3">{statusCounts.low} Low</span>}
+          </span>
         </h2>
         {isLoading ? (
-          <LoadingSpinner message="Fetching stock data from Unicommerce..." />
+          <LoadingSpinner message="Fetching stock data via Export Job API (26K+ SKUs)…" />
         ) : (
-          <DataTable data={pagedItems} columns={columns} emptyMessage="No stock data found." />
+          <DataTable data={enrichedItems} columns={columns} emptyMessage="No stock data found." />
         )}
       </div>
 
       {totalPages > 1 && (
         <div className="flex justify-between items-center mt-4">
-          <button disabled={page === 0} onClick={() => setPage(page - 1)}
+          <button disabled={page <= 1} onClick={() => setPage(page - 1)}
             className="btn btn-secondary disabled:opacity-40">← Previous</button>
-          <span className="text-sm text-slate-600 dark:text-slate-400">Page {page + 1} of {totalPages} ({filtered.length} items)</span>
-          <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}
+          <div className="flex items-center gap-2">
+            {page > 2 && <button onClick={() => setPage(1)} className="px-3 py-1 rounded-lg text-sm bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">1</button>}
+            {page > 3 && <span className="text-slate-400">…</span>}
+            {page > 1 && <button onClick={() => setPage(page - 1)} className="px-3 py-1 rounded-lg text-sm bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">{page - 1}</button>}
+            <span className="px-3 py-1 rounded-lg text-sm bg-primary-600 text-white font-semibold">{page}</span>
+            {page < totalPages && <button onClick={() => setPage(page + 1)} className="px-3 py-1 rounded-lg text-sm bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">{page + 1}</button>}
+            {page < totalPages - 2 && <span className="text-slate-400">…</span>}
+            {page < totalPages - 1 && <button onClick={() => setPage(totalPages)} className="px-3 py-1 rounded-lg text-sm bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">{totalPages}</button>}
+          </div>
+          <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}
             className="btn btn-secondary disabled:opacity-40">Next →</button>
         </div>
       )}

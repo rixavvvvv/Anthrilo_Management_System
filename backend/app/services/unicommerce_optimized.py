@@ -1301,6 +1301,50 @@ class UnicommerceServiceProduction:
     # REVENUE CALCULATION - USES sellingPrice ONLY
     # =========================================================================
 
+    @staticmethod
+    def _extract_date_key(created_raw) -> Optional[str]:
+        """
+        Extract a YYYY-MM-DD date key from a created timestamp.
+
+        Handles:
+        - Epoch milliseconds (int/float or numeric string like "1771107580000")
+        - ISO / standard date strings ("2026-02-14 07:58:00", "2026-02-14T07:58:00")
+        - Already-formatted date ("2026-02-14")
+        Returns None if unparseable.
+        """
+        if created_raw is None or created_raw == "":
+            return None
+
+        val = str(created_raw).strip()
+        if not val:
+            return None
+
+        # Check if it's a purely numeric value → epoch ms or epoch seconds
+        try:
+            numeric = float(val)
+            # Epoch milliseconds (>= 1e12) vs seconds (< 1e12)
+            if numeric > 1e12:
+                numeric = numeric / 1000.0
+            dt = datetime.fromtimestamp(numeric, tz=IST)
+            return dt.strftime("%Y-%m-%d")
+        except (ValueError, TypeError, OverflowError, OSError):
+            pass
+
+        # Already a proper YYYY-MM-DD or YYYY-MM-DD ... string
+        if len(val) >= 10 and val[4] == "-" and val[7] == "-":
+            return val[:10]
+
+        # Try common datetime parsing as fallback
+        for fmt in ("%d %b %Y %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%d-%m-%Y %H:%M:%S"):
+            try:
+                dt = datetime.strptime(val, fmt)
+                return dt.strftime("%Y-%m-%d")
+            except ValueError:
+                continue
+
+        logger.debug(f"Could not parse created date: {val!r}")
+        return None
+
     def calculate_order_revenue(self, order: Dict[str, Any]) -> Dict[str, Any]:
         """
         Calculate revenue for a single order using ONLY sellingPrice.
@@ -1425,9 +1469,8 @@ class UnicommerceServiceProduction:
                 channel_stats[channel]["items"] += calc.get("quantity", 0)
 
                 # Daily breakdown (YYYY-MM-DD)
-                created_raw = calc.get("created") or ""
-                day_key = str(created_raw)[:10]  # "2026-02-14 ..." → "2026-02-14"
-                if day_key and len(day_key) == 10:
+                day_key = self._extract_date_key(calc.get("created"))
+                if day_key:
                     if day_key not in daily_stats:
                         daily_stats[day_key] = {
                             "date": day_key, "orders": 0, "revenue": 0.0, "items": 0}

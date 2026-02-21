@@ -124,11 +124,30 @@ export default function DashboardPage() {
   const revenueGrowth = yesterdayRevenue > 0 ? ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100 : 0;
 
   // Daily trend data — use pre-aggregated daily_breakdown from backend summary
+  // Defensive: if backend returns per-order entries instead of daily aggregates,
+  // re-aggregate client-side (should never happen with fixed backend)
   const dailyTrend = useMemo(() => {
     const breakdown = last7Days?.summary?.daily_breakdown;
     if (!breakdown || !Array.isArray(breakdown) || breakdown.length === 0) return [];
 
-    return breakdown
+    let data = breakdown;
+
+    // Guard: if too many entries (expected max ~30 for a month, 7 for a week),
+    // the backend returned per-order rows — re-aggregate by date client-side
+    if (data.length > 31) {
+      const byDate: Record<string, { date: string; orders: number; revenue: number; items: number }> = {};
+      for (const d of data) {
+        const key = (d.date || '').slice(0, 10);
+        if (!key) continue;
+        if (!byDate[key]) byDate[key] = { date: key, orders: 0, revenue: 0, items: 0 };
+        byDate[key].orders += d.orders || 0;
+        byDate[key].revenue += d.revenue || 0;
+        byDate[key].items += d.items || 0;
+      }
+      data = Object.values(byDate);
+    }
+
+    return data
       .sort((a: any, b: any) => (a.date || '').localeCompare(b.date || ''))
       .map((d: any) => ({
         date: (d.date || '').slice(5),              // "2026-02-14" → "02-14"
@@ -174,18 +193,16 @@ export default function DashboardPage() {
       : undefined;
   }, [channelChartData]);
 
-  // Yesterday vs Day-Before-Yesterday — derived from daily_breakdown (last 2 complete days)
+  // Yesterday vs Day-Before-Yesterday — derived from dailyTrend (already aggregated + sorted)
   const { ydayRevenue, ydayOrders, ydayItems, dbyRevenue, dbyOrders, dbyItems } = useMemo(() => {
-    const breakdown = last7Days?.summary?.daily_breakdown;
-    if (!breakdown || !Array.isArray(breakdown) || breakdown.length < 2) {
+    if (dailyTrend.length < 2) {
       return {
         ydayRevenue: yesterdayRevenue, ydayOrders: yesterdayOrders, ydayItems: yesterdayItems,
         dbyRevenue: 0, dbyOrders: 0, dbyItems: 0,
       };
     }
-    const sorted = [...breakdown].sort((a: any, b: any) => (a.date || '').localeCompare(b.date || ''));
-    const yday = sorted[sorted.length - 1];
-    const dby = sorted[sorted.length - 2];
+    const yday = dailyTrend[dailyTrend.length - 1];
+    const dby = dailyTrend[dailyTrend.length - 2];
     return {
       ydayRevenue: Math.round(yday.revenue || 0),
       ydayOrders: yday.orders || 0,
@@ -194,7 +211,7 @@ export default function DashboardPage() {
       dbyOrders: dby.orders || 0,
       dbyItems: dby.items || 0,
     };
-  }, [last7Days, yesterdayRevenue, yesterdayOrders, yesterdayItems]);
+  }, [dailyTrend, yesterdayRevenue, yesterdayOrders, yesterdayItems]);
 
   // Sparkline data from daily breakdown
   const revenueSparkline = useMemo(() => dailyTrend.map((d: any) => d.revenue), [dailyTrend]);
