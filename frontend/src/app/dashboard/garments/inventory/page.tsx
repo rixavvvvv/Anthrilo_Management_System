@@ -1,179 +1,178 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ucInventory } from '@/lib/api/uc';
+import { ucCatalog } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 12;
 
 export default function GarmentInventoryPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [stockFilter, setStockFilter] = useState<'all' | 'in-stock' | 'out-of-stock'>('all');
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
-      setPage(1);
+      setPage(0);
     }, 400);
     return () => clearTimeout(timer);
   }, [search]);
 
-  useEffect(() => { setPage(1); }, [stockFilter]);
-
-  // ── Summary (totals + category breakdown) ─────────────────────
+  // Fetch inventory summary ONCE on page load - independent of pagination
   const { data: summaryData, isLoading: summaryLoading } = useQuery({
-    queryKey: ['uc-inventory-summary-export'],
+    queryKey: ['uc-inventory-summary'],
     queryFn: async () => {
-      const res = await ucInventory.getSummary();
-      return res.data;
+      const response = await ucCatalog.getInventorySummary();
+      return response.data;
     },
-    staleTime: 15 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    staleTime: 30 * 60 * 1000, // Cache for 30 minutes (matches backend cache)
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    retry: 1, // Only retry once on failure
   });
 
-  // ── Paginated inventory (search OR browse) ────────────────────
-  const isSearching = debouncedSearch.length > 0;
-
-  const { data, isLoading, error, isFetching } = useQuery({
-    queryKey: isSearching
-      ? ['uc-inventory-search', debouncedSearch, page]
-      : ['uc-inventory-snapshot', page, PAGE_SIZE, stockFilter],
+  // Fetch paginated data for table - no aggregates needed
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['uc-inventory', page, debouncedSearch],
     queryFn: async () => {
-      if (isSearching) {
-        const res = await ucInventory.search({ q: debouncedSearch, page, page_size: PAGE_SIZE });
-        return res.data;
-      }
-      const res = await ucInventory.getSnapshot({
-        page,
-        page_size: PAGE_SIZE,
-        in_stock_only: stockFilter === 'in-stock',
-        enabled_only: stockFilter !== 'out-of-stock',
+      const response = await ucCatalog.searchItems({
+        displayStart: page * PAGE_SIZE,
+        displayLength: PAGE_SIZE,
+        getInventorySnapshot: true,
+        getAggregates: false, // No longer need aggregates from paginated query
+        keyword: debouncedSearch || undefined,
       });
-      return res.data;
+      return response.data;
     },
-    staleTime: 5 * 60 * 1000,
-    placeholderData: (prev) => prev,
+    staleTime: 60_000,
   });
 
-  const items = data?.inventorySnapshots || [];
-  const totalCount = data?.totalCount || 0;
-  const totalPages = data?.totalPages || 0;
+  const items = (data?.elements || []).map((item: any) => {
+    const snap = item.inventorySnapshots?.[0] || {};
+    return {
+      itemTypeSKU: item.itemTypeSKU || item.skuCode || '-',
+      name: item.name,
+      categoryName: item.categoryName,
+      inventory: snap.inventory || 0,
+      inventoryBlocked: snap.inventoryBlocked || 0,
+      putawayPending: snap.putawayPending || 0,
+      virtualInventory: snap.virtualInventory || 0,
+      openSale: snap.openSale || 0,
+      badInventory: snap.badInventory || 0,
+      price: item.price || 0,
+      enabled: item.enabled,
+    };
+  });
 
-  // ── Summary stats ─────────────────────────────────────────────
-  const summary = summaryData?.summary || {};
-  const summaryOk = summaryData?.successful;
+  const totalRecords = data?.totalRecords || 0;
+  const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
+
+  // Use REAL data from /inventory/summary endpoint (processes ALL 61k+ SKUs with Redis cache)
+  const totalSKUs = summaryData?.totalSKUs || 0;
+  const totalRealInventory = summaryData?.totalRealInventory || 0;
+  const totalVirtualInventory = summaryData?.totalVirtualInventory || 0;
+  const totalStockValue = summaryData?.totalStockValue || 0;
+  
+  // Real counts across ALL SKUs
+  const skusWithStock = summaryData?.skusWithStock || 0;
+  const skusOutOfStock = summaryData?.skusOutOfStock || 0;
+  const outOfStockPercent = summaryData?.outOfStockPercent || 0;
+  
+  const summaryLoaded = summaryData?.successful || false;
 
   const columns: Column<any>[] = [
-    {
-      key: 'itemTypeSKU',
-      header: 'SKU',
-      width: '20%',
+    { 
+      key: 'itemTypeSKU', 
+      header: 'Item Type SKU', 
+      width: '15%',
       render: (value) => <span className="font-mono text-sm font-medium text-slate-900 dark:text-slate-100">{value}</span>,
     },
-    { key: 'categoryName', header: 'Category', width: '12%' },
-    { key: 'color', header: 'Color', width: '8%' },
+    { key: 'name', header: 'Product Name', width: '25%' },
+    { key: 'categoryName', header: 'Category', width: '10%' },
     {
-      key: 'size', header: 'Size', width: '7%',
-      render: (value) => <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-xs font-medium">{value}</span>,
-    },
-    {
-      key: 'inventory',
-      header: 'Stock',
-      width: '8%',
+      key: 'inventory', 
+      header: 'Inventory', 
+      width: '9%',
       render: (value) => {
         const c = value === 0 ? 'text-rose-600 dark:text-rose-400' : value <= 10 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400';
         return <span className={`font-bold ${c}`}>{value}</span>;
       },
     },
     {
-      key: 'inventoryBlocked',
-      header: 'Blocked',
+      key: 'inventoryBlocked', 
+      header: 'Blocked', 
       width: '8%',
       render: (value) => value > 0 ? <span className="text-red-600 dark:text-red-400 font-semibold">{value}</span> : <span className="text-slate-400">0</span>,
     },
     {
-      key: 'putawayPending',
-      header: 'Putaway',
-      width: '8%',
+      key: 'putawayPending', 
+      header: 'Putaway Pending', 
+      width: '11%',
       render: (value) => value > 0 ? <span className="text-orange-600 dark:text-orange-400 font-medium">{value}</span> : <span className="text-slate-400">0</span>,
     },
     {
-      key: 'openSale',
-      header: 'Open Sale',
-      width: '8%',
-      render: (value) => value > 0 ? <span className="text-purple-600 dark:text-purple-400 font-medium">{value}</span> : <span className="text-slate-400">0</span>,
-    },
-    {
-      key: 'badInventory',
-      header: 'Bad',
-      width: '6%',
-      render: (value) => value > 0 ? <span className="text-rose-500 font-medium">{value}</span> : <span className="text-slate-400">0</span>,
-    },
-    {
-      key: 'costPrice',
-      header: 'Cost',
-      width: '8%',
-      render: (value) => <span className="text-slate-900 dark:text-slate-100 font-medium">₹{(value || 0).toFixed(0)}</span>,
-    },
-    {
-      key: 'enabled',
-      header: 'Status',
+      key: 'virtualInventory', 
+      header: 'Virtual', 
       width: '7%',
-      render: (value) => (
-        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${value ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
-          {value ? 'Active' : 'Off'}
-        </span>
-      ),
+      render: (value) => <span className="font-medium text-blue-600 dark:text-blue-400">{value}</span>,
+    },
+    {
+      key: 'openSale', 
+      header: 'Open Sale', 
+      width: '7%',
+      render: (value) => <span className="text-purple-600 dark:text-purple-400 font-medium">{value}</span>,
+    },
+    {
+      key: 'price', 
+      header: 'MRP', 
+      width: '8%',
+      render: (value) => <span className="text-slate-900 dark:text-slate-100 font-medium">₹{value?.toFixed(0)}</span>,
     },
   ];
 
   return (
     <div>
-      <PageHeader
-        title="Garment Inventory"
-        description={`Export Job API — ${summaryOk ? summary.total_skus?.toLocaleString() : '…'} total SKUs, ${summaryOk ? summary.total_inventory?.toLocaleString() : '…'} units in stock`}
-      />
+      <PageHeader title="Garment Inventory" description={`Live inventory from Unicommerce — ${totalSKUs.toLocaleString()} total SKUs`} />
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-        <StatCard title="Total SKUs" value={summaryOk ? summary.total_skus?.toLocaleString() : (summaryLoading ? '…' : '-')} icon="📦" color="blue" />
-        <StatCard title="Enabled SKUs" value={summaryOk ? summary.enabled_skus?.toLocaleString() : (summaryLoading ? '…' : '-')} icon="✅" color="emerald" />
-        <StatCard title="In Stock" value={summaryOk ? summary.in_stock_skus?.toLocaleString() : (summaryLoading ? '…' : '-')} icon="📊" color="green" />
-        <StatCard title="Out of Stock" value={summaryOk ? summary.out_of_stock_skus?.toLocaleString() : (summaryLoading ? '…' : '-')} icon="⚠️" color="red" />
-        <StatCard title="Total Inventory" value={summaryOk ? summary.total_inventory?.toLocaleString() : (summaryLoading ? '…' : '-')} icon="🏭" color="purple" />
-        <StatCard title="Blocked" value={summaryOk ? summary.total_blocked?.toLocaleString() : (summaryLoading ? '…' : '-')} icon="🔒" color="yellow" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
+        <StatCard title="Total SKUs" value={totalSKUs.toLocaleString()} icon="📦" color="blue" />
+        <StatCard
+          title="SKUs with Stock"
+          value={summaryLoaded ? skusWithStock.toLocaleString() : (summaryLoading ? 'Loading...' : '-')}
+          icon="✅"
+          color="emerald"
+        />
+        <StatCard
+          title="Out of Stock %"
+          value={summaryLoaded ? `${outOfStockPercent}%` : (summaryLoading ? 'Loading...' : '-')}
+          icon="⚠️"
+          color="red"
+        />
+        <StatCard
+          title="Total Inventory"
+          value={summaryLoaded ? totalRealInventory.toLocaleString() : (summaryLoading ? 'Loading...' : '-')}
+          icon="📊"
+          color="purple"
+        />
+        <StatCard
+          title="Stock Value"
+          value={summaryLoaded ? `₹${(totalStockValue / 100000).toFixed(2)}L` : (summaryLoading ? 'Loading...' : '-')}
+          icon="💰"
+          color="yellow"
+        />
       </div>
 
-      {/* Filters */}
       <div className="card mb-4">
-        <div className="flex gap-4 items-center flex-wrap">
-          <div className="flex gap-2">
-            {([
-              { key: 'all', label: 'All' },
-              { key: 'in-stock', label: 'In Stock' },
-              { key: 'out-of-stock', label: 'Out of Stock' },
-            ] as const).map((f) => (
-              <button key={f.key} onClick={() => setStockFilter(f.key)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${stockFilter === f.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
-                {f.label}
-              </button>
-            ))}
-          </div>
-          <input
-            type="text"
-            placeholder="Search SKU, category, brand, color, size…"
-            className="input flex-1"
+        <div className="flex gap-4 items-center">
+          <input type="text" placeholder="Search by SKU Code..." className="input flex-1"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           <span className="text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">
-            {totalCount.toLocaleString()} items · Page {page} / {totalPages || 1}
-            {isFetching && !isLoading && ' ⟳'}
+            Page {page + 1} of {totalPages || 1}
           </span>
         </div>
       </div>
@@ -184,55 +183,24 @@ export default function GarmentInventoryPage() {
         </div>
       )}
 
-      {/* Table */}
       <div className="card">
-        <h2 className="mb-4 text-slate-900 dark:text-white flex items-center gap-2">
-          Inventory Overview
-          {data?.method === 'export_job' && (
-            <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
-              Export API
-            </span>
-          )}
-        </h2>
+        <h2 className="mb-4 text-slate-900 dark:text-white">Inventory Overview</h2>
         {isLoading ? (
-          <LoadingSpinner message="Fetching inventory via Export Job API (26K+ SKUs)…" />
+          <LoadingSpinner message="Fetching inventory from Unicommerce..." />
         ) : (
-          <DataTable data={items} columns={columns} emptyMessage="No inventory records found." />
+          <DataTable data={items} columns={columns} emptyMessage="No inventory records found for this search." />
         )}
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex justify-between items-center mt-4">
-          <button disabled={page <= 1} onClick={() => setPage(page - 1)}
+          <button disabled={page === 0} onClick={() => setPage(page - 1)}
             className="btn btn-secondary disabled:opacity-40">← Previous</button>
-          <div className="flex items-center gap-2">
-            {page > 2 && <button onClick={() => setPage(1)} className="px-3 py-1 rounded-lg text-sm bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">1</button>}
-            {page > 3 && <span className="text-slate-400">…</span>}
-            {page > 1 && <button onClick={() => setPage(page - 1)} className="px-3 py-1 rounded-lg text-sm bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">{page - 1}</button>}
-            <span className="px-3 py-1 rounded-lg text-sm bg-primary-600 text-white font-semibold">{page}</span>
-            {page < totalPages && <button onClick={() => setPage(page + 1)} className="px-3 py-1 rounded-lg text-sm bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">{page + 1}</button>}
-            {page < totalPages - 2 && <span className="text-slate-400">…</span>}
-            {page < totalPages - 1 && <button onClick={() => setPage(totalPages)} className="px-3 py-1 rounded-lg text-sm bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600">{totalPages}</button>}
-          </div>
-          <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}
+          <span className="text-sm text-slate-600 dark:text-slate-400">
+            Page {page + 1} of {totalPages}
+          </span>
+          <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}
             className="btn btn-secondary disabled:opacity-40">Next →</button>
-        </div>
-      )}
-
-      {/* Category breakdown */}
-      {summaryData?.categories && summaryData.categories.length > 0 && (
-        <div className="card mt-6">
-          <h2 className="mb-4 text-slate-900 dark:text-white">Category Breakdown</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {summaryData.categories.slice(0, 16).map((cat: any) => (
-              <div key={cat.category} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 truncate">{cat.category}</p>
-                <p className="text-lg font-bold text-slate-900 dark:text-white">{cat.inventory.toLocaleString()}</p>
-                <p className="text-xs text-slate-400">{cat.skus} SKUs</p>
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>

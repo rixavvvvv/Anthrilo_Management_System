@@ -27,10 +27,6 @@ logger = logging.getLogger(__name__)
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
-# Track last-known order count so we can detect new orders
-_last_known_order_count: int = 0
-_last_known_order_codes: set = set()
-
 
 # =============================================================================
 # WEBSOCKET CONNECTION MANAGER
@@ -76,7 +72,6 @@ ws_manager = ConnectionManager()
 @router.get("/unicommerce/today")
 async def get_today_sales():
     """Get today's sales summary using two-phase approach with Redis caching."""
-    global _last_known_order_count, _last_known_order_codes
     try:
         # Check Redis cache (short TTL for today)
         cache_key = f"uc:today:{datetime.now(IST).strftime('%Y-%m-%d')}"
@@ -92,41 +87,15 @@ async def get_today_sales():
 
         if result.get("success"):
             summary = result.get("summary", {})
-            new_count = summary.get("total_orders", 0)
             logger.info(
-                f"TODAY: {new_count} orders, "
+                f"TODAY: {summary.get('total_orders', 0)} orders, "
                 f"INR {summary.get('total_revenue', 0):,.2f}"
             )
             # Cache for 3 minutes (today changes frequently)
             CacheService.set(cache_key, result, 180)
 
-            # Broadcast full data to WebSocket clients
+            # Broadcast to WebSocket clients
             await ws_manager.broadcast({"type": "today_sales", "data": result})
-
-            # --- New-order detection ---
-            new_order_codes = set(
-                o.get("saleOrderCode", "") for o in result.get("orders", [])
-            )
-            if _last_known_order_count > 0 and new_count > _last_known_order_count:
-                delta = new_count - _last_known_order_count
-                fresh_codes = new_order_codes - _last_known_order_codes
-                # Pick up to 5 newest order details for the notification
-                fresh_orders = [
-                    o for o in result.get("orders", [])
-                    if o.get("saleOrderCode", "") in fresh_codes
-                ][:5]
-                await ws_manager.broadcast({
-                    "type": "new_orders",
-                    "count": delta,
-                    "total_orders": new_count,
-                    "total_revenue": summary.get("total_revenue", 0),
-                    "orders": fresh_orders,
-                    "timestamp": datetime.now(IST).isoformat(),
-                })
-                logger.info(f"WS broadcast: {delta} new order(s) detected")
-
-            _last_known_order_count = new_count
-            _last_known_order_codes = new_order_codes
 
         return result
 
@@ -1782,26 +1751,17 @@ async def get_cod_vs_prepaid(
 async def websocket_sales(websocket: WebSocket):
     """
     WebSocket endpoint for real-time sales dashboard updates.
-    - Sends today's sales summary immediately on connect.
-    - Every 60s: re-fetches today's sales and pushes an update.
-    - Detects NEW orders (vs last push) and sends a 'new_orders' notification.
-    - Clients can send {"action": "refresh"} for an immediate update.
+    Sends today's sales summary every 60 seconds automatically.
+    Clients can also send requests: {"action": "refresh"} to trigger immediate update.
     """
-    global _last_known_order_count, _last_known_order_codes
     await ws_manager.connect(websocket)
-    # Track per-connection order count so each push can detect deltas
-    local_order_count = 0
-    local_order_codes: set = set()
     try:
         # Send initial data immediately
         try:
+            service = get_unicommerce_service()
             today_key = f"uc:today:{datetime.now(IST).strftime('%Y-%m-%d')}"
             cached = CacheService.get(today_key)
             if cached:
-                local_order_count = cached.get("summary", {}).get("total_orders", 0)
-                local_order_codes = set(
-                    o.get("saleOrderCode", "") for o in cached.get("orders", [])
-                )
                 await websocket.send_json({"type": "today_sales", "data": cached})
         except Exception:
             pass
@@ -1813,66 +1773,24 @@ async def websocket_sales(websocket: WebSocket):
                 msg = json_module.loads(data)
 
                 if msg.get("action") == "refresh":
-                    # Client requests fresh data — bypass cache
+                    # Client requests fresh data
                     service = get_unicommerce_service()
                     result = await service.get_today_sales()
                     if result.get("success"):
                         today_key = f"uc:today:{datetime.now(IST).strftime('%Y-%m-%d')}"
                         CacheService.set(today_key, result, 180)
                         await websocket.send_json({"type": "today_sales", "data": result})
-                        # Check for new orders
-                        new_count = result.get("summary", {}).get("total_orders", 0)
-                        new_codes = set(
-                            o.get("saleOrderCode", "") for o in result.get("orders", [])
-                        )
-                        if local_order_count > 0 and new_count > local_order_count:
-                            delta = new_count - local_order_count
-                            fresh = [o for o in result.get("orders", []) if o.get("saleOrderCode", "") in (new_codes - local_order_codes)][:5]
-                            await websocket.send_json({
-                                "type": "new_orders",
-                                "count": delta,
-                                "total_orders": new_count,
-                                "total_revenue": result.get("summary", {}).get("total_revenue", 0),
-                                "orders": fresh,
-                                "timestamp": datetime.now(IST).isoformat(),
-                            })
-                        local_order_count = new_count
-                        local_order_codes = new_codes
-                        # Sync global tracker
-                        _last_known_order_count = new_count
-                        _last_known_order_codes = new_codes
 
                 elif msg.get("action") == "subscribe":
-                    await websocket.send_json({"type": "subscribed", "message": "Connected to live sales feed"})
+                    await websocket.send_json({"type": "subscribed", "message": "Connected to live feed"})
 
             except asyncio.TimeoutError:
-                # ─── Periodic push: fetch fresh + detect new orders ───
+                # Periodic push: send cached data every 60s
                 try:
                     today_key = f"uc:today:{datetime.now(IST).strftime('%Y-%m-%d')}"
                     cached = CacheService.get(today_key)
                     if cached:
-                        new_count = cached.get("summary", {}).get("total_orders", 0)
-                        new_codes = set(
-                            o.get("saleOrderCode", "") for o in cached.get("orders", [])
-                        )
                         await websocket.send_json({"type": "today_sales", "data": cached})
-
-                        # Detect new orders since last push
-                        if local_order_count > 0 and new_count > local_order_count:
-                            delta = new_count - local_order_count
-                            fresh = [o for o in cached.get("orders", []) if o.get("saleOrderCode", "") in (new_codes - local_order_codes)][:5]
-                            await websocket.send_json({
-                                "type": "new_orders",
-                                "count": delta,
-                                "total_orders": new_count,
-                                "total_revenue": cached.get("summary", {}).get("total_revenue", 0),
-                                "orders": fresh,
-                                "timestamp": datetime.now(IST).isoformat(),
-                            })
-                        local_order_count = new_count
-                        local_order_codes = new_codes
-                        _last_known_order_count = new_count
-                        _last_known_order_codes = new_codes
                 except Exception:
                     pass
 
