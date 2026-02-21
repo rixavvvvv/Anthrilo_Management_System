@@ -4,12 +4,29 @@ import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import Link from 'next/link';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
+import { useEffect, useRef, useState } from 'react';
 
 
 export default function DashboardPage() {
 
   // WebSocket for real-time updates (auto-updates React Query cache)
-  const { isConnected: wsConnected, lastUpdate: wsLastUpdate } = useWebSocket();
+  const { isConnected: wsConnected, lastUpdate: wsLastUpdate, newOrderNotification, dismissNotification, requestRefresh } = useWebSocket();
+
+  // ─── New-order toast auto-dismiss ──────────────────────────────
+  const [showToast, setShowToast] = useState(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    if (newOrderNotification) {
+      setShowToast(true);
+      // Auto-hide after 15 seconds
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => {
+        setShowToast(false);
+        dismissNotification();
+      }, 15000);
+    }
+    return () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); };
+  }, [newOrderNotification, dismissNotification]);
 
   // Real-time Unicommerce data with auto-refresh
   const { data: todayData, isLoading: loadingToday, dataUpdatedAt: updatedToday } = useQuery({
@@ -147,6 +164,50 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* ─── New Order Toast Notification ─────────────────────────── */}
+      {showToast && newOrderNotification && (
+        <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-2 duration-300 max-w-md w-full">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-emerald-200 dark:border-emerald-700 overflow-hidden">
+            <div className="bg-gradient-to-r from-emerald-500 to-green-500 px-4 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🔔</span>
+                <span className="text-white font-semibold text-sm">
+                  {newOrderNotification.count} New Order{newOrderNotification.count > 1 ? 's' : ''}!
+                </span>
+              </div>
+              <button onClick={() => { setShowToast(false); dismissNotification(); }}
+                className="text-white/80 hover:text-white text-lg leading-none px-1">&times;</button>
+            </div>
+            <div className="p-4 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-600 dark:text-slate-400">Total Orders Today</span>
+                <span className="font-bold text-slate-900 dark:text-slate-100">{newOrderNotification.totalOrders}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-600 dark:text-slate-400">Revenue</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                  ₹{newOrderNotification.totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </span>
+              </div>
+              {newOrderNotification.orders.length > 0 && (
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-700 space-y-1">
+                  {newOrderNotification.orders.slice(0, 3).map((o: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between text-xs">
+                      <span className="font-mono text-slate-500 dark:text-slate-400 truncate max-w-[180px]">
+                        {o.saleOrderCode || o.channel || 'Order'}
+                      </span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                        ₹{(o.sellingPrice || o.revenue || 0).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero Section with Real-time Status */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-500 via-primary-600 to-purple-600 dark:from-primary-600 dark:via-primary-700 dark:to-purple-700 p-8 md:p-12 shadow-2xl">
         <div className="absolute top-0 right-0 -mt-4 -mr-4 h-32 w-32 rounded-full bg-white/10 blur-3xl"></div>
@@ -174,9 +235,16 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
               <span className={`h-2 w-2 rounded-full ${wsConnected ? 'bg-emerald-400' : 'bg-red-400'}`}></span>
               <span className="text-xs text-white">
-                {wsConnected ? 'WebSocket' : 'WS Offline'}
+                {wsConnected ? 'WebSocket Live' : 'WS Offline'}
               </span>
             </div>
+            {wsConnected && (
+              <button onClick={requestRefresh}
+                className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2 text-xs text-white hover:bg-white/20 transition-colors"
+                title="Fetch latest orders now">
+                🔄 Refresh
+              </button>
+            )}
             {(wsLastUpdate || updatedToday) && (
               <div className="text-xs text-white/70 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
                 Last update: {wsLastUpdate ? timeAgo(wsLastUpdate.getTime()) : updatedToday ? timeAgo(updatedToday) : '—'}

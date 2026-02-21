@@ -128,6 +128,33 @@ class UnicommerceServiceProduction:
         "itemDetails",       # → CSV: "Item Details"
     ]
 
+    # Inventory Snapshot export columns
+    # CSV headers: Facility, Item Type Name, EAN, UPC, ISBN, Color, Size, Brand,
+    #   Category Name, Open Sale, Inventory, Inventory Blocked, Bad Inventory,
+    #   Putaway Pending, Pending Inventory Assessment, Open Purchase, Enabled,
+    #   Updated, Cost Price
+    INVENTORY_EXPORT_COLUMNS = [
+        "facility",
+        "itemTypeName",
+        "ean",
+        "upc",
+        "isbn",
+        "color",
+        "size",
+        "brand",
+        "categoryName",
+        "openSale",
+        "inventory",
+        "inventoryBlocked",
+        "badInventory",
+        "putawayPending",
+        "pendingInventoryAssessment",
+        "openPurchase",
+        "enabled",
+        "updated",
+        "costPrice",
+    ]
+
     def __init__(self):
         self.token_manager = get_token_manager()
         self.access_code = self.token_manager.access_code
@@ -593,6 +620,300 @@ class UnicommerceServiceProduction:
             return await self.fetch_all_orders_with_revenue_two_phase(
                 from_date, to_date
             )
+
+    # =========================================================================
+    # INVENTORY EXPORT JOB API (FAST PATH)
+    # =========================================================================
+
+    async def _create_inventory_export_job(self) -> Optional[str]:
+        """
+        Create a Unicommerce Inventory Snapshot export job.
+        Returns the jobCode on success, None on failure.
+        Unlike sale orders, inventory snapshot has NO date filter — it's always
+        a point-in-time snapshot of ALL inventory at the facility.
+        """
+        url = f"{self.base_url}/export/job/create"
+
+        payload = {
+            "exportJobTypeName": "Inventory Snapshot",
+            "frequency": "ONETIME",
+            "exportColums": self.INVENTORY_EXPORT_COLUMNS,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
+                headers = await self._get_headers()
+                headers["Facility"] = "anthrilo"
+
+                response = await client.post(url, json=payload, headers=headers)
+
+                if response.status_code == 401:
+                    self.token_manager.invalidate_token()
+                    await self.token_manager.get_valid_token()
+                    headers = await self._get_headers()
+                    headers["Facility"] = "anthrilo"
+                    response = await client.post(url, json=payload, headers=headers)
+
+                if response.status_code >= 400:
+                    try:
+                        error_body = response.json()
+                    except Exception:
+                        error_body = response.text[:500]
+                    logger.error(
+                        f"INVENTORY EXPORT: Job creation HTTP {response.status_code}: {error_body}"
+                    )
+                    return None
+
+                data = response.json()
+
+                if data.get("successful"):
+                    job_code = data.get("jobCode")
+                    logger.info(f"INVENTORY EXPORT: Job created → {job_code}")
+                    return job_code
+                else:
+                    errors = data.get("errors", [])
+                    msg = data.get("message", "Unknown error")
+                    logger.error(f"INVENTORY EXPORT: Job creation failed: {msg} | errors={errors}")
+                    return None
+
+        except Exception as e:
+            logger.error(f"INVENTORY EXPORT: Job creation exception: {e}", exc_info=True)
+            return None
+
+    async def _download_parse_inventory_export(self, download_url: str) -> List[Dict]:
+        """
+        Download the inventory export CSV and parse into inventory dicts.
+
+        CSV columns (actual headers from Unicommerce):
+        Facility, Item Type Name, EAN, UPC, ISBN, Color, Size, Brand,
+        Category Name, Open Sale, Inventory, Inventory Blocked, Bad Inventory,
+        Putaway Pending, Pending Inventory Assessment, Open Purchase, Enabled,
+        Updated, Cost Price
+
+        Returns list of dicts compatible with the old /inventory/inventorySnapshot/get response.
+        """
+        try:
+            download_timeout = httpx.Timeout(180.0, connect=15.0)
+
+            async with httpx.AsyncClient(timeout=download_timeout) as client:
+                response = await client.get(download_url)
+
+                if response.status_code in (401, 403):
+                    headers = await self._get_headers()
+                    response = await client.get(download_url, headers=headers)
+
+                response.raise_for_status()
+                csv_text = response.text
+
+            if not csv_text or not csv_text.strip():
+                logger.warning("INVENTORY EXPORT: Downloaded CSV is empty")
+                return []
+
+            reader = csv.DictReader(io.StringIO(csv_text))
+            fieldnames = reader.fieldnames or []
+            logger.info(f"INVENTORY EXPORT: CSV columns ({len(fieldnames)}): {fieldnames}")
+
+            items = []
+            row_count = 0
+
+            for row in reader:
+                row_count += 1
+
+                def safe_int(val):
+                    try:
+                        return int(float(val)) if val else 0
+                    except (ValueError, TypeError):
+                        return 0
+
+                def safe_float(val):
+                    try:
+                        return float(val) if val else 0.0
+                    except (ValueError, TypeError):
+                        return 0.0
+
+                item_name = (
+                    row.get("Item Type Name")
+                    or row.get("itemTypeName")
+                    or ""
+                ).strip()
+
+                # Build a dict compatible with the old inventorySnapshot/get response
+                item = {
+                    "itemTypeSKU": item_name,  # This is the SKU/name from export
+                    "itemName": item_name,
+                    "facility": (
+                        row.get("Facility") or row.get("facility") or ""
+                    ).strip(),
+                    "ean": (row.get("EAN") or row.get("ean") or "").strip(),
+                    "upc": (row.get("UPC") or row.get("upc") or "").strip(),
+                    "isbn": (row.get("ISBN") or row.get("isbn") or "").strip(),
+                    "color": (row.get("Color") or row.get("color") or "").strip(),
+                    "size": (row.get("Size") or row.get("size") or "").strip(),
+                    "brand": (row.get("Brand") or row.get("brand") or "").strip(),
+                    "categoryName": (
+                        row.get("Category Name") or row.get("categoryName") or ""
+                    ).strip(),
+                    "openSale": safe_int(row.get("Open Sale") or row.get("openSale")),
+                    "inventory": safe_int(row.get("Inventory") or row.get("inventory")),
+                    "inventoryBlocked": safe_int(
+                        row.get("Inventory Blocked") or row.get("inventoryBlocked")
+                    ),
+                    "badInventory": safe_int(
+                        row.get("Bad Inventory") or row.get("badInventory")
+                    ),
+                    "putawayPending": safe_int(
+                        row.get("Putaway Pending") or row.get("putawayPending")
+                    ),
+                    "pendingInventoryAssessment": safe_int(
+                        row.get("Pending Inventory Assessment")
+                        or row.get("pendingInventoryAssessment")
+                    ),
+                    "openPurchase": safe_int(
+                        row.get("Open Purchase") or row.get("openPurchase")
+                    ),
+                    "enabled": (
+                        (row.get("Enabled") or row.get("enabled") or "true")
+                        .strip().lower() == "true"
+                    ),
+                    "updated": (
+                        row.get("Updated") or row.get("updated") or ""
+                    ).strip(),
+                    "costPrice": safe_float(
+                        row.get("Cost Price") or row.get("costPrice")
+                    ),
+                }
+
+                items.append(item)
+
+            logger.info(
+                f"INVENTORY EXPORT: Parsed {row_count} CSV rows → {len(items)} inventory items"
+            )
+            return items
+
+        except Exception as e:
+            logger.error(f"INVENTORY EXPORT: Download/parse failed: {e}", exc_info=True)
+            return []
+
+    async def fetch_inventory_via_export(self) -> Dict[str, Any]:
+        """
+        Fetch COMPLETE inventory snapshot using Export Job API.
+        Returns dict with 'successful', 'inventorySnapshots', timing info.
+        Falls back to old /inventorySnapshot/get on failure.
+        """
+        start_time = time_module.time()
+
+        logger.info("=" * 60)
+        logger.info("INVENTORY EXPORT JOB: FAST FETCH")
+        logger.info("=" * 60)
+
+        try:
+            # Step 1: Create export job
+            job_code = await self._create_inventory_export_job()
+            create_time = time_module.time() - start_time
+
+            if not job_code:
+                logger.warning(
+                    "INVENTORY EXPORT: Job creation failed → falling back to old API"
+                )
+                return await self._fetch_inventory_old_api()
+
+            logger.info(f"  Step 1 done in {create_time:.1f}s → job={job_code}")
+
+            # Step 2: Poll until complete (reuse existing poll method)
+            download_url = await self._poll_export_status(job_code)
+            poll_time = time_module.time() - start_time - create_time
+
+            if not download_url:
+                logger.warning(
+                    "INVENTORY EXPORT: Job failed/timed out → falling back to old API"
+                )
+                return await self._fetch_inventory_old_api()
+
+            logger.info(f"  Step 2 done in {poll_time:.1f}s → file ready")
+
+            # Step 3: Download and parse CSV
+            items = await self._download_parse_inventory_export(download_url)
+            download_time = time_module.time() - start_time - create_time - poll_time
+            total_time = time_module.time() - start_time
+
+            logger.info(
+                f"  Step 3 done in {download_time:.1f}s → {len(items)} items"
+            )
+            logger.info(
+                f"INVENTORY EXPORT COMPLETE: {len(items)} items in {total_time:.1f}s total"
+            )
+
+            return {
+                "successful": True,
+                "inventorySnapshots": items,
+                "totalItems": len(items),
+                "method": "export_job",
+                "create_time": round(create_time, 2),
+                "poll_time": round(poll_time, 2),
+                "download_time": round(download_time, 2),
+                "total_time": round(total_time, 2),
+            }
+
+        except Exception as e:
+            total_time = time_module.time() - start_time
+            logger.error(
+                f"INVENTORY EXPORT: Failed after {total_time:.1f}s: {e}",
+                exc_info=True,
+            )
+            logger.info("Falling back to old inventory API...")
+            return await self._fetch_inventory_old_api()
+
+    async def _fetch_inventory_old_api(self) -> Dict[str, Any]:
+        """
+        Fallback: Fetch inventory using the old /inventorySnapshot/get API.
+        Limited to last 24h and max 10K SKUs.
+        """
+        start_time = time_module.time()
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.timeout, limits=self.limits
+            ) as client:
+                headers = await self._get_headers()
+                headers["Facility"] = "anthrilo"
+
+                url = f"{self.base_url}/inventory/inventorySnapshot/get"
+                payload = {"updatedSinceInMinutes": 1440}
+
+                response = await client.post(url, json=payload, headers=headers)
+
+                if response.status_code == 401:
+                    self.token_manager.invalidate_token()
+                    await self.token_manager.get_valid_token()
+                    headers = await self._get_headers()
+                    headers["Facility"] = "anthrilo"
+                    response = await client.post(url, json=payload, headers=headers)
+
+                response.raise_for_status()
+                data = response.json()
+
+                items = data.get("inventorySnapshots", [])
+                total_time = time_module.time() - start_time
+
+                logger.info(
+                    f"INVENTORY OLD API: {len(items)} items in {total_time:.1f}s"
+                )
+
+                return {
+                    "successful": True,
+                    "inventorySnapshots": items,
+                    "totalItems": len(items),
+                    "method": "old_api_fallback",
+                    "total_time": round(total_time, 2),
+                }
+
+        except Exception as e:
+            logger.error(f"INVENTORY OLD API failed: {e}", exc_info=True)
+            return {
+                "successful": False,
+                "inventorySnapshots": [],
+                "totalItems": 0,
+                "error": str(e),
+            }
 
     # =========================================================================
     # TIME RANGE HELPERS (IST timezone aware)
