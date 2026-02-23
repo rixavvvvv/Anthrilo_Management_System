@@ -83,7 +83,7 @@ export default function DiscountAnalysisPage() {
 
   return (
     <div>
-      <PageHeader title="Discount Analysis" description="Discount breakdown across products from Unicommerce" />
+      <PageHeader title="Discount Analysis" description="Discount breakdown across products from Anthrilo" />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
         <StatCard title="Overall Discount %" value={`${overallDiscountPct}%`} icon="💸" color="blue" />
@@ -138,7 +138,7 @@ export default function DiscountAnalysisPage() {
           <span className="text-sm text-slate-500 dark:text-slate-400">{filtered.length} SKUs</span>
         </div>
         {isLoading ? (
-          <LoadingSpinner message="Calculating discount analytics from Unicommerce..." />
+          <LoadingSpinner message="Calculating discount analytics from Anthrilo..." />
         ) : (
           <DataTable data={paginated} columns={columns} emptyMessage="No discount data available for this period." />
         )}

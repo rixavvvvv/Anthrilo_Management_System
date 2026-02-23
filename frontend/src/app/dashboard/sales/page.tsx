@@ -21,7 +21,7 @@ export default function SalesPage() {
 
   const modules = [
     {
-      title: 'Unicommerce Orders',
+      title: 'Anthrilo Orders',
       description: 'View real-time orders from all channels',
       href: '/dashboard/garments/production',
       icon: '🛒',
@@ -53,7 +53,7 @@ export default function SalesPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Sales Management</h1>
-        <p className="text-gray-600 dark:text-gray-400">Real-time sales data from Unicommerce</p>
+        <p className="text-gray-600 dark:text-gray-400">Real-time sales data from Anthrilo</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

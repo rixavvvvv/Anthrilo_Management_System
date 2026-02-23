@@ -73,7 +73,7 @@ export default function SKUSalesPage() {
 
   return (
     <div>
-      <PageHeader title="SKU Sales Report" description="Sales performance by SKU from Unicommerce" />
+      <PageHeader title="SKU Sales Report" description="Sales performance by SKU from Anthrilo" />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
         <StatCard title="Total SKUs Sold" value={summary.total_skus || 0} icon="📦" color="blue" />
@@ -114,7 +114,7 @@ export default function SKUSalesPage() {
           <span className="text-sm text-slate-500 dark:text-slate-400">{filtered.length} SKUs</span>
         </div>
         {isLoading ? (
-          <LoadingSpinner message="Fetching SKU sales from Unicommerce..." />
+          <LoadingSpinner message="Fetching SKU sales from Anthrilo..." />
         ) : (
           <DataTable data={paginated} columns={columns} emptyMessage="No SKU sales data for this period." />
         )}

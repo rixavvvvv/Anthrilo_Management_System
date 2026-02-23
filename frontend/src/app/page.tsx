@@ -31,7 +31,7 @@ export default function Home() {
         <div className="text-center pt-20 pb-16">
           <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full bg-primary-100/60 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-sm font-medium text-primary-700 dark:text-primary-300">Live Unicommerce Data</span>
+            <span className="text-sm font-medium text-primary-700 dark:text-primary-300">Live Anthrilo Data</span>
           </div>
           <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold leading-tight mb-6">
             <span className="text-slate-900 dark:text-white">Anthrilo</span>
@@ -39,7 +39,7 @@ export default function Home() {
             <span className="bg-gradient-to-r from-primary-600 via-violet-600 to-purple-600 bg-clip-text text-transparent">Management System</span>
           </h1>
           <p className="text-lg md:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            Real-time inventory, sales, and financial analytics powered by Unicommerce — all in one modern dashboard.
+            Real-time inventory, sales, and financial analytics powered by Anthrilo — all in one modern dashboard.
           </p>
           <div className="mt-10 flex justify-center gap-4">
             <Link href="/dashboard" className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-primary-600 to-violet-600 text-white font-semibold shadow-xl shadow-primary-500/25 hover:shadow-primary-500/40 hover:-translate-y-0.5 transition-all text-lg">
@@ -76,7 +76,7 @@ export default function Home() {
           <h2 className="text-3xl font-bold text-center text-slate-900 dark:text-white mb-12">Why Anthrilo?</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {[
-              { title: 'Real-time Unicommerce Sync', desc: 'Live catalog, orders, and revenue data from 11+ sales channels synced automatically.', bgClass: 'bg-primary-100 dark:bg-primary-900/30', textClass: 'text-primary-600 dark:text-primary-400' },
+              { title: 'Real-time Anthrilo Sync', desc: 'Live catalog, orders, and revenue data from 11+ sales channels synced automatically.', bgClass: 'bg-primary-100 dark:bg-primary-900/30', textClass: 'text-primary-600 dark:text-primary-400' },
               { title: '61,000+ Products Tracked', desc: 'Full catalog search, inventory monitoring, and stock analysis in real-time.', bgClass: 'bg-emerald-100 dark:bg-emerald-900/30', textClass: 'text-emerald-600 dark:text-emerald-400' },
               { title: 'Actionable Analytics', desc: 'Channel-wise revenue, SKU sales breakdown, discount analysis, and profitability reports.', bgClass: 'bg-violet-100 dark:bg-violet-900/30', textClass: 'text-violet-600 dark:text-violet-400' },
               { title: 'Modern & Fast', desc: 'Built with Next.js 14, React Query caching, and a responsive glass-morphism UI.', bgClass: 'bg-amber-100 dark:bg-amber-900/30', textClass: 'text-amber-600 dark:text-amber-400' },
@@ -116,7 +116,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
             <div>
               <span className="text-xl font-bold bg-gradient-to-r from-primary-400 to-violet-400 bg-clip-text text-transparent">Anthrilo</span>
-              <p className="text-slate-500 mt-2 text-sm">Enterprise management powered by Unicommerce real-time data.</p>
+              <p className="text-slate-500 mt-2 text-sm">Enterprise management powered by Anthrilo real-time data.</p>
             </div>
             <div>
               <h4 className="font-semibold text-slate-300 mb-3 text-sm">Quick Links</h4>

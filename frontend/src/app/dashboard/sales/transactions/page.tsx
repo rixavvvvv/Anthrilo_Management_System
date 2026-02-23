@@ -120,7 +120,7 @@ export default function SalesTransactionsPage() {
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Sales Transactions</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Item-level transaction breakdown from Unicommerce</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Item-level transaction breakdown from Anthrilo</p>
         </div>
         <div className="flex gap-1.5 bg-slate-100 dark:bg-slate-700/60 rounded-xl p-1 self-start">
           {[{ key: 'today', label: 'Today' }, { key: 'yesterday', label: 'Yesterday' }, { key: 'custom', label: 'Custom' }].map((p) => (

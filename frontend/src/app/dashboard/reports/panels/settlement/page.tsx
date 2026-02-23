@@ -56,7 +56,7 @@ export default function ChannelRevenuePage() {
 
   return (
     <div>
-      <PageHeader title="Channel Revenue & Settlement" description="Marketplace-wise revenue from Unicommerce with estimated deductions" />
+      <PageHeader title="Channel Revenue & Settlement" description="Marketplace-wise revenue from Anthrilo with estimated deductions" />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div className="card bg-green-50 dark:bg-green-900/20">
@@ -98,7 +98,7 @@ export default function ChannelRevenuePage() {
       <div className="card">
         <h2 className="mb-4 text-gray-900 dark:text-gray-100">Channel Settlement Details</h2>
         {isLoading ? (
-          <LoadingSpinner message="Fetching channel revenue from Unicommerce..." />
+          <LoadingSpinner message="Fetching channel revenue from Anthrilo..." />
         ) : (
           <DataTable data={channels} columns={columns} emptyMessage="No channel revenue data for this period." />
         )}

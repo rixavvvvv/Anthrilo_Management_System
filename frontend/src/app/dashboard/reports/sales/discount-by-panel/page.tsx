@@ -114,7 +114,7 @@ export default function DiscountByChannelPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Discount by Channel" description="Channel-wise discount analysis from Unicommerce" />
+      <PageHeader title="Discount by Channel" description="Channel-wise discount analysis from Anthrilo" />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <StatCard title="Overall Discount %" value={`${overallDiscountPct}%`} icon="💸" color="blue" />
@@ -148,7 +148,7 @@ export default function DiscountByChannelPage() {
       <div className="card">
         <h2 className="mb-4 text-gray-900 dark:text-gray-100">Discount by Channel</h2>
         {isLoading ? (
-          <LoadingSpinner message="Fetching discount data from Unicommerce..." />
+          <LoadingSpinner message="Fetching discount data from Anthrilo..." />
         ) : (
           <DataTable data={channelDiscounts} columns={columns} emptyMessage="No discount data available for this period." />
         )}

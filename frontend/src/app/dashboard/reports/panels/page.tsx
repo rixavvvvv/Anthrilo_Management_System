@@ -69,7 +69,7 @@ export default function PanelReportsPage() {
 
     return (
         <div className="space-y-6">
-            <PageHeader title="Panel / Channel Reports" description="Channel-wise sales performance from Unicommerce" />
+            <PageHeader title="Panel / Channel Reports" description="Channel-wise sales performance from Anthrilo" />
 
             {/* Quick Links */}
             <div className="flex gap-3">
@@ -115,7 +115,7 @@ export default function PanelReportsPage() {
             <div className="card">
                 <h2 className="mb-4 text-gray-900 dark:text-gray-100">Channel Performance — {periodLabels[period] || period}</h2>
                 {isLoading ? (
-                    <LoadingSpinner message="Fetching channel data from Unicommerce..." />
+                    <LoadingSpinner message="Fetching channel data from Anthrilo..." />
                 ) : (
                     <DataTable data={channels} columns={columns} emptyMessage="No channel data available for this period." />
                 )}

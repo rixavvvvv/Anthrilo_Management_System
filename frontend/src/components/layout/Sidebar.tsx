@@ -63,7 +63,6 @@ const navigation: NavItem[] = [
     icon: Shirt,
     children: [
       { name: 'Master Data', href: '/dashboard/garments/master', icon: Package },
-      { name: 'Inventory', href: '/dashboard/garments/inventory', icon: Boxes },
       { name: 'Orders', href: '/dashboard/garments/production', icon: ShoppingCart },
       { name: 'Best SKUs', href: '/dashboard/garments/best-skus', icon: Zap },
       { name: 'SKU Velocity', href: '/dashboard/garments/sku-velocity', icon: Gauge },
@@ -118,9 +117,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   return (
     <aside
-      className={`${
-        collapsed ? 'w-[72px]' : 'w-[260px]'
-      } flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out
+      className={`${collapsed ? 'w-[72px]' : 'w-[260px]'
+        } flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out
         bg-white dark:bg-slate-950 
         border-r border-slate-200/70 dark:border-slate-800/70
         z-40`}
@@ -169,9 +167,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <div key={item.name} className="space-y-0.5">
               <button
                 onClick={() => !collapsed && toggleGroup(item.name)}
-                className={`sidebar-item w-full ${
-                  groupActive ? 'text-primary-700 dark:text-primary-300 font-semibold' : ''
-                }`}
+                className={`sidebar-item w-full ${groupActive ? 'text-primary-700 dark:text-primary-300 font-semibold' : ''
+                  }`}
                 title={collapsed ? item.name : undefined}
               >
                 <item.icon className="w-[18px] h-[18px] flex-shrink-0" strokeWidth={1.8} />
@@ -179,9 +176,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   <>
                     <span className="flex-1 text-left">{item.name}</span>
                     <ChevronDown
-                      className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
-                        isOpen ? 'rotate-180' : ''
-                      }`}
+                      className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''
+                        }`}
                     />
                   </>
                 )}
@@ -202,11 +198,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                         <Link
                           key={child.href}
                           href={child.href}
-                          className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] transition-colors duration-150 ${
-                            isActive(child.href)
+                          className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] transition-colors duration-150 ${isActive(child.href)
                               ? 'text-primary-600 dark:text-primary-400 bg-primary-50/80 dark:bg-primary-950/40 font-medium'
                               : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                          }`}
+                            }`}
                         >
                           {child.icon && <child.icon className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.8} />}
                           <span>{child.name}</span>

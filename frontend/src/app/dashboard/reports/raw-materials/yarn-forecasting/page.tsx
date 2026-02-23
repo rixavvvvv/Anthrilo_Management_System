@@ -61,7 +61,7 @@ export default function TopSellersPage() {
 
   return (
     <div>
-      <PageHeader title="Top Selling Products" description="Best performing SKUs from Unicommerce sales data" />
+      <PageHeader title="Top Selling Products" description="Best performing SKUs from Anthrilo sales data" />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
         <StatCard title="Total SKUs Sold" value={summary.total_skus || 0} icon="📦" color="blue" />
@@ -95,7 +95,7 @@ export default function TopSellersPage() {
       <div className="card">
         <h2 className="mb-4 text-gray-900 dark:text-gray-100">Top 50 by Units Sold</h2>
         {isLoading ? (
-          <LoadingSpinner message="Fetching sales data from Unicommerce..." />
+          <LoadingSpinner message="Fetching sales data from Anthrilo..." />
         ) : (
           <DataTable data={rankedData} columns={columns} emptyMessage="No sales data for this period." />
         )}
