@@ -126,6 +126,9 @@ export default function GarmentInventoryPage() {
     return nums;
   }, [page, totalPages]);
 
+  /* ── do any items have operational data? ─────── */
+  const hasOpsData = useMemo(() => items.some((i) => i.inventoryBlocked > 0 || i.putawayPending > 0 || i.openSale > 0 || i.badInventory > 0), [items]);
+
   /* ── stock colour helper ─────── */
   const stockColor = (v: number) =>
     v === 0 ? 'text-rose-600 dark:text-rose-400' :
@@ -154,7 +157,7 @@ export default function GarmentInventoryPage() {
           { label: 'In Stock',     value: stats?.inStock,     icon: '📊', gradient: 'from-green-500 to-green-600' },
           { label: 'Out of Stock', value: stats?.outOfStock,  icon: '⚠️', gradient: 'from-rose-500 to-rose-600' },
           { label: 'Total Units',  value: stats?.totalUnits,  icon: '🏭', gradient: 'from-violet-500 to-violet-600' },
-          { label: 'Blocked',      value: stats?.blocked,     icon: '🔒', gradient: 'from-amber-500 to-amber-600' },
+          ...((stats?.blocked ?? 0) > 0 ? [{ label: 'Blocked' as const, value: stats?.blocked, icon: '🔒', gradient: 'from-amber-500 to-amber-600' }] : []),
         ] as const).map((c) => (
           <div key={c.label} className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
             <div className={`absolute -top-4 -right-4 h-16 w-16 rounded-full bg-gradient-to-br ${c.gradient} opacity-10`} />
@@ -167,14 +170,14 @@ export default function GarmentInventoryPage() {
         ))}
       </div>
 
-      {/* ── Secondary metrics bar ───────────────────────────── */}
-      {stats && (
+      {/* ── Secondary metrics bar — only shown when any value > 0 */}
+      {stats && (stats.putaway > 0 || stats.openSale > 0 || stats.bad > 0) && (
         <div className="flex flex-wrap gap-6 px-1">
           {[
             { label: 'Putaway Pending', value: stats.putaway, color: 'text-orange-600 dark:text-orange-400' },
             { label: 'Open Sale', value: stats.openSale, color: 'text-purple-600 dark:text-purple-400' },
             { label: 'Bad Inventory', value: stats.bad, color: 'text-rose-600 dark:text-rose-400' },
-          ].map((m) => (
+          ].filter((m) => m.value > 0).map((m) => (
             <div key={m.label} className="flex items-center gap-2 text-sm">
               <span className="text-slate-500 dark:text-slate-400">{m.label}:</span>
               <span className={`font-bold tabular-nums ${m.color}`}>{m.value.toLocaleString()}</span>
@@ -253,7 +256,7 @@ export default function GarmentInventoryPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
-                  {['SKU', 'Product', 'Category', 'Color', 'Size', 'Stock', 'Blocked', 'Putaway', 'Open Sale', 'Bad', 'MRP', 'Status'].map((h) => (
+                  {['SKU', 'Product', 'Category', 'Color', 'Size', 'Stock', ...(hasOpsData ? ['Blocked', 'Putaway', 'Open Sale', 'Bad'] : []), 'MRP', 'Status'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -295,14 +298,12 @@ export default function GarmentInventoryPage() {
                     <td className="px-4 py-3">
                       <span className={`font-bold tabular-nums ${stockColor(it.inventory)}`}>{it.inventory}</span>
                     </td>
-                    {/* Blocked */}
-                    <td className="px-4 py-3">{numCell(it.inventoryBlocked, 'text-red-600 dark:text-red-400')}</td>
-                    {/* Putaway */}
-                    <td className="px-4 py-3">{numCell(it.putawayPending, 'text-orange-600 dark:text-orange-400')}</td>
-                    {/* Open Sale */}
-                    <td className="px-4 py-3">{numCell(it.openSale, 'text-purple-600 dark:text-purple-400')}</td>
-                    {/* Bad */}
-                    <td className="px-4 py-3">{numCell(it.badInventory, 'text-rose-500')}</td>
+                    {hasOpsData && <>
+                      <td className="px-4 py-3">{numCell(it.inventoryBlocked, 'text-red-600 dark:text-red-400')}</td>
+                      <td className="px-4 py-3">{numCell(it.putawayPending, 'text-orange-600 dark:text-orange-400')}</td>
+                      <td className="px-4 py-3">{numCell(it.openSale, 'text-purple-600 dark:text-purple-400')}</td>
+                      <td className="px-4 py-3">{numCell(it.badInventory, 'text-rose-500')}</td>
+                    </>}
                     {/* MRP */}
                     <td className="px-4 py-3">
                       <span className="text-slate-900 dark:text-white font-medium tabular-nums">₹{it.price.toLocaleString()}</span>
