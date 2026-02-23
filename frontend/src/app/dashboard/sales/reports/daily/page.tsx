@@ -7,8 +7,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Calendar, Download, BarChart3, TrendingUp, TrendingDown,
   ArrowUpDown, ArrowUp, ArrowDown, Search, Sparkles, Flame,
-  Package, ShoppingCart, Layers, Store, FileText, Loader2,
+  Package, ShoppingCart, Layers, Store, FileText, Loader2, ChevronLeft, ChevronRight,
 } from 'lucide-react';
+import { DayPicker } from 'react-day-picker';
+import 'react-day-picker/style.css';
+import { format, parse } from 'date-fns';
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -79,9 +82,20 @@ export default function DailySalesReportPage() {
     return d.toISOString().split('T')[0];
   });
   const [showReport, setShowReport] = useState(false);
+  const [calOpen, setCalOpen] = useState(false);
+  const calRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('selling_price');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  // Close calendar on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (calRef.current && !calRef.current.contains(e.target as Node)) setCalOpen(false);
+    };
+    if (calOpen) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [calOpen]);
 
   const { data: raw, isLoading, refetch } = useQuery({
     queryKey: ['daily-sales-report', reportDate],
@@ -186,14 +200,43 @@ export default function DailySalesReportPage() {
       {/* ─── Filters ─────────────────────────────────────────────────── */}
       <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[180px] max-w-[260px]">
+          <div className="flex-1 min-w-[180px] max-w-[260px]" ref={calRef}>
             <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Report date</label>
             <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              <input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)}
-                max={new Date().toISOString().split('T')[0]}
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <button type="button" onClick={() => setCalOpen((o) => !o)}
+                className="w-full flex items-center gap-2 pl-3 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-left">
+                <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <span>{format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}</span>
+              </button>
+
+              <AnimatePresence>
+                {calOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute left-0 top-full mt-2 z-50 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl p-3">
+                    <DayPicker
+                      mode="single"
+                      selected={parse(reportDate, 'yyyy-MM-dd', new Date())}
+                      onSelect={(day) => { if (day) { setReportDate(format(day, 'yyyy-MM-dd')); setCalOpen(false); } }}
+                      disabled={{ after: new Date() }}
+                      defaultMonth={parse(reportDate, 'yyyy-MM-dd', new Date())}
+                      classNames={{
+                        root: 'rdp-custom',
+                        month_caption: 'text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center py-1',
+                        weekday: 'text-[11px] font-medium text-slate-400 dark:text-slate-500 w-9 text-center',
+                        day_button: 'h-9 w-9 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center',
+                        today: 'font-bold text-blue-600 dark:text-blue-400',
+                        selected: '!bg-blue-600 !text-white rounded-lg font-semibold',
+                        disabled: 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40',
+                        chevron: 'fill-slate-500 dark:fill-slate-400 w-4 h-4',
+                      }}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
           <button onClick={handleGenerate} disabled={isLoading}

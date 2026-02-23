@@ -161,3 +161,42 @@
     @apply card relative overflow-hidden group;
   }
 }
+
+/* ── React Day Picker Overrides ──────────────────────────────── */
+.rdp-custom {
+  --rdp-accent-color: #2563eb;
+  --rdp-accent-background-color: #2563eb;
+  font-family: inherit;
+}
+.dark .rdp-custom {
+  --rdp-accent-color: #3b82f6;
+  --rdp-accent-background-color: #3b82f6;
+}
+.rdp-custom .rdp-day.rdp-selected .rdp-day_button {
+  background: var(--rdp-accent-background-color) !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+.rdp-custom .rdp-month_caption {
+  margin-bottom: 4px;
+}
+.rdp-custom .rdp-nav {
+  gap: 2px;
+}
+.rdp-custom .rdp-button_previous,
+.rdp-custom .rdp-button_next {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rdp-custom .rdp-button_previous:hover,
+.rdp-custom .rdp-button_next:hover {
+  background: rgba(148, 163, 184, 0.12);
+}
+.dark .rdp-custom .rdp-button_previous:hover,
+.dark .rdp-custom .rdp-button_next:hover {
+  background: rgba(148, 163, 184, 0.15);
+}
