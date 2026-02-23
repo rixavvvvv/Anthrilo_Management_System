@@ -1657,15 +1657,11 @@ async def get_cod_vs_prepaid(
             if status in service.EXCLUDED_STATUSES:
                 continue
 
-            # Robust multi-signal COD detection:
-            # 1. Direct cod boolean from saleOrderDTO
-            # 2. shippingMethod containing "COD" (e.g. "Standard-COD")
-            # 3. collectableAmount > 0 (amount collected at delivery)
-            cod_flag = order.get("cod", False)
-            shipping_method = (order.get("shippingMethod") or "").upper()
-            collectable = float(order.get("collectableAmount", 0) or 0)
-            is_cod = bool(
-                cod_flag) or "COD" in shipping_method or collectable > 0
+            # COD detection: use the direct `cod` boolean from the order.
+            # Export CSV provides reliable 1/0 column; saleOrderDTO.cod is
+            # authoritative.  Previous triple-check (shippingMethod containing
+            # "COD" or collectableAmount > 0) caused massive false positives.
+            is_cod = bool(order.get("cod", False))
             channel = order.get("channel", "UNKNOWN")
             order_revenue = 0.0
             order_items = 0
@@ -1729,9 +1725,9 @@ async def get_cod_vs_prepaid(
             "channels": channels,
         }
 
-        # Redis cache: current month 1hr, historical 24hr
+        # Redis cache: current month 4hr, historical 24hr
         is_current = (y == now.year and m == now.month)
-        ttl = CacheService.TTL_VERY_LONG if is_current else 86400
+        ttl = 14400 if is_current else 86400
         CacheService.set(cache_key, result, ttl)
         logger.info(
             f"COD vs Prepaid: cached result for {y}-{m:02d} (TTL={ttl}s)")
