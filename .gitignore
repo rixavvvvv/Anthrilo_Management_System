@@ -46,6 +46,9 @@ out/
 .env.test.local
 .env.production.local
 
+# Sensitive tokens
+backend/app/data/unicommerce_tokens.json
+
 # IDEs
 .vscode/
 .idea/
