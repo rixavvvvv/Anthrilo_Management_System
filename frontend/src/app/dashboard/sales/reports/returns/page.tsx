@@ -38,9 +38,9 @@ const CHANNEL_COLORS: Record<string, string> = {
 const getColor = (ch: string, i: number) => CHANNEL_COLORS[ch] || ['#F97316','#EC4899','#A855F7','#3B82F6','#14B8A6','#F59E0B','#6366F1','#EF4444','#8B5CF6','#22C55E'][i % 10];
 
 const riskBadge = (pct: number) =>
-  pct >= 40 ? { label: 'High Risk', cls: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400', dot: 'bg-red-500' }
-    : pct >= 20 ? { label: 'Medium', cls: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' }
-      : { label: 'Low Risk', cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' };
+  pct >= 40 ? { label: 'High Risk', cls: 'bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-400', dot: 'bg-rose-500' }
+    : pct >= 20 ? { label: 'Medium', cls: 'bg-violet-50 dark:bg-violet-900/20 text-violet-500 dark:text-violet-400', dot: 'bg-violet-500' }
+      : { label: 'Low Risk', cls: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 dark:text-emerald-400', dot: 'bg-emerald-500' };
 
 /* ── animated counter ────────────────────────────────────────────── */
 function AnimatedNum({ value, prefix = '' }: { value: number; prefix?: string }) {
@@ -241,7 +241,7 @@ export default function DailyReturnReportPage() {
             <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Report date</label>
             <div className="relative">
               <button type="button" onClick={() => setCalOpen(o => !o)}
-                className="w-full flex items-center gap-2 pl-3 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 text-left">
+                className="w-full flex items-center gap-2 pl-3 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 text-left">
                 <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
                 <span>{format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}</span>
               </button>
@@ -258,9 +258,9 @@ export default function DailyReturnReportPage() {
                         root: 'rdp-custom',
                         month_caption: 'text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center py-1',
                         weekday: 'text-[11px] font-medium text-slate-400 dark:text-slate-500 w-9 text-center',
-                        day_button: 'h-9 w-9 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-red-50 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center',
-                        today: 'font-bold text-red-600 dark:text-red-400',
-                        selected: '!bg-red-600 !text-white rounded-lg font-semibold',
+                        day_button: 'h-9 w-9 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center',
+                        today: 'font-bold text-violet-600 dark:text-violet-400',
+                        selected: '!bg-violet-600 !text-white rounded-lg font-semibold',
                         disabled: 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40',
                         chevron: 'fill-slate-500 dark:fill-slate-400 w-4 h-4',
                       }}
@@ -277,7 +277,7 @@ export default function DailyReturnReportPage() {
             <div className="flex rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 overflow-hidden">
               {RETURN_TYPES.map((t) => (
                 <button key={t.value} onClick={() => { setReturnType(t.value); setShowReport(false); }}
-                  className={`flex-1 px-3 py-2 text-xs font-medium transition ${returnType === t.value ? 'bg-red-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition ${returnType === t.value ? 'bg-violet-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
                   {t.value === 'ALL' ? 'All' : t.value}
                 </button>
               ))}
@@ -285,7 +285,7 @@ export default function DailyReturnReportPage() {
           </div>
 
           <button onClick={handleGenerate} disabled={isLoading}
-            className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
+            className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
             {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
             {isLoading ? 'Generating…' : 'Generate Report'}
           </button>
@@ -303,7 +303,7 @@ export default function DailyReturnReportPage() {
         {isLoading && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-10 flex flex-col items-center gap-3">
-            <div className="h-10 w-10 rounded-full border-[3px] border-red-500 border-t-transparent animate-spin" />
+            <div className="h-10 w-10 rounded-full border-[3px] border-violet-500 border-t-transparent animate-spin" />
             <p className="text-sm text-slate-500 dark:text-slate-400">Analysing return data for {dateLabel}…</p>
           </motion.div>
         )}
@@ -322,7 +322,7 @@ export default function DailyReturnReportPage() {
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="space-y-8">
 
             {/* ── Hero summary ────────────────────────────────────── */}
-            <div className="rounded-2xl bg-gradient-to-br from-red-600 via-red-700 to-orange-700 p-6 sm:p-8 shadow-lg text-white relative overflow-hidden">
+            <div className="rounded-2xl bg-gradient-to-br from-slate-800 via-slate-900 to-violet-950 p-6 sm:p-8 shadow-lg text-white relative overflow-hidden">
               <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImciIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg2MHY2MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjMwIiBjeT0iMzAiIHI9IjEuNSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjA2KSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3QgZmlsbD0idXJsKCNnKSIgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIvPjwvc3ZnPg==')] opacity-50" />
               <div className="relative z-10">
                 <div className="flex items-center gap-2 mb-1">
@@ -331,27 +331,27 @@ export default function DailyReturnReportPage() {
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-4">
                   <div>
-                    <p className="text-xs font-medium text-red-200 mb-1">Total Returns</p>
+                    <p className="text-xs font-medium text-violet-300 mb-1">Total Returns</p>
                     <p className="text-3xl sm:text-4xl font-extrabold tabular-nums tracking-tight">
                       <AnimatedNum value={totals.total_returns} />
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-red-200 mb-1">Return Value</p>
+                    <p className="text-xs font-medium text-violet-300 mb-1">Return Value</p>
                     <p className="text-2xl sm:text-3xl font-bold tabular-nums">
                       <AnimatedNum value={Math.round(totals.total_value)} prefix="₹" />
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-red-200 mb-1">RTO / CIR</p>
+                    <p className="text-xs font-medium text-violet-300 mb-1">RTO / CIR</p>
                     <p className="text-2xl sm:text-3xl font-bold tabular-nums">
                       {totals.rto_count} <span className="text-lg opacity-60">/</span> {totals.cir_count}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-red-200 mb-1">Highest Risk</p>
+                    <p className="text-xs font-medium text-violet-300 mb-1">Highest Risk</p>
                     <p className="text-xl sm:text-2xl font-bold truncate">{topChannel?.label || '—'}</p>
-                    {topChannel && <p className="text-xs text-red-200 mt-0.5">{topChannel.pct.toFixed(1)}% of all returns</p>}
+                    {topChannel && <p className="text-xs text-violet-300 mt-0.5">{topChannel.pct.toFixed(1)}% of all returns</p>}
                   </div>
                 </div>
               </div>
@@ -430,8 +430,8 @@ export default function DailyReturnReportPage() {
                             );
                           }} />
                           <Legend wrapperStyle={{ fontSize: 11 }} />
-                          <Bar dataKey="RTO" fill="#F59E0B" radius={[0, 4, 4, 0]} stackId="a" />
-                          <Bar dataKey="CIR" fill="#EF4444" radius={[0, 4, 4, 0]} stackId="a" />
+                          <Bar dataKey="RTO" fill="#8B5CF6" radius={[0, 4, 4, 0]} stackId="a" />
+                          <Bar dataKey="CIR" fill="#EC4899" radius={[0, 4, 4, 0]} stackId="a" />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -455,11 +455,11 @@ export default function DailyReturnReportPage() {
                             return (
                               <div className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg px-3.5 py-2.5">
                                 <p className="text-xs font-semibold text-slate-900 dark:text-white mb-1">{d.name}</p>
-                                <p className="text-sm font-bold tabular-nums text-red-600 dark:text-red-400">{fmtCurr(d.value)}</p>
+                                <p className="text-sm font-bold tabular-nums text-violet-600 dark:text-violet-400">{fmtCurr(d.value)}</p>
                               </div>
                             );
                           }} />
-                          <Bar dataKey="value" fill="#EF4444" radius={[0, 6, 6, 0]} animationDuration={800} />
+                          <Bar dataKey="value" fill="#8B5CF6" radius={[0, 6, 6, 0]} animationDuration={800} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -472,7 +472,7 @@ export default function DailyReturnReportPage() {
                     {insights.map((ins, i) => (
                       <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
                         className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-4 flex items-start gap-3">
-                        <div className={`mt-0.5 rounded-lg p-2 ${ins.color === 'red' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : ins.color === 'amber' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' : 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400'}`}>
+                        <div className={`mt-0.5 rounded-lg p-2 ${ins.color === 'red' ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-400' : ins.color === 'amber' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400' : 'bg-violet-50 dark:bg-violet-900/20 text-violet-500 dark:text-violet-400'}`}>
                           <ins.icon className="w-4 h-4" />
                         </div>
                         <div>
@@ -526,7 +526,7 @@ export default function DailyReturnReportPage() {
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm font-medium text-slate-900 dark:text-white">{ch.label}</span>
                                     {isTop && (
-                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400">
                                         <Flame className="w-3 h-3" /> Top
                                       </span>
                                     )}
@@ -541,14 +541,14 @@ export default function DailyReturnReportPage() {
                                 </span>
                               </td>
                               <td className="px-5 py-4 text-right">
-                                <p className={`text-sm font-semibold tabular-nums ${rank < 3 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>{fmtCurr(ch.value)}</p>
+                                <p className={`text-sm font-semibold tabular-nums ${rank < 3 ? 'text-violet-600 dark:text-violet-400' : 'text-slate-700 dark:text-slate-300'}`}>{fmtCurr(ch.value)}</p>
                                 <div className="mt-1.5 h-1 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
                                   <div className="h-full rounded-full transition-all duration-500" style={{ width: `${valBarW}%`, background: ch.color }} />
                                 </div>
                               </td>
                               <td className="px-5 py-4 text-right text-sm font-semibold tabular-nums text-slate-600 dark:text-slate-400">{ch.valuePct.toFixed(1)}%</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-amber-600 dark:text-amber-400 font-medium">{ch.rto}</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-red-500 dark:text-red-400 font-medium">{ch.cir}</td>
+                              <td className="px-5 py-4 text-right text-sm tabular-nums text-violet-500 dark:text-violet-400 font-medium">{ch.rto}</td>
+                              <td className="px-5 py-4 text-right text-sm tabular-nums text-rose-500 dark:text-rose-400 font-medium">{ch.cir}</td>
                             </motion.tr>
                           );
                         })}
@@ -558,10 +558,10 @@ export default function DailyReturnReportPage() {
                           <td className="px-5 py-4 text-sm font-bold text-slate-900 dark:text-white">Total</td>
                           <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-slate-900 dark:text-white">{totals.total_returns}</td>
                           <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-slate-900 dark:text-white">100%</td>
-                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-red-600 dark:text-red-400">{fmtCurr(totals.total_value)}</td>
+                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-violet-600 dark:text-violet-400">{fmtCurr(totals.total_value)}</td>
                           <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-slate-900 dark:text-white">100%</td>
-                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-amber-600 dark:text-amber-400">{totals.rto_count}</td>
-                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-red-500 dark:text-red-400">{totals.cir_count}</td>
+                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-violet-500 dark:text-violet-400">{totals.rto_count}</td>
+                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-rose-500 dark:text-rose-400">{totals.cir_count}</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -577,7 +577,7 @@ export default function DailyReturnReportPage() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                         <input value={skuSearch} onChange={(e) => setSkuSearch(e.target.value)}
                           placeholder="Search SKU or name…"
-                          className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500" />
+                          className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500" />
                       </div>
                     </div>
                     <div className="overflow-x-auto">
@@ -610,7 +610,7 @@ export default function DailyReturnReportPage() {
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm font-mono font-medium text-slate-900 dark:text-white">{s.sku}</span>
                                     {isTop && (
-                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400">
                                         <Flame className="w-3 h-3" /> #1
                                       </span>
                                     )}
@@ -619,9 +619,9 @@ export default function DailyReturnReportPage() {
                                 <td className="px-5 py-3.5 text-sm text-slate-500 dark:text-slate-400 max-w-[220px] truncate">{s.name}</td>
                                 <td className="px-5 py-3.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300 font-medium">{s.quantity}</td>
                                 <td className="px-5 py-3.5 text-right">
-                                  <p className="text-sm font-semibold tabular-nums text-red-600 dark:text-red-400">{fmtCurr(s.value)}</p>
+                                  <p className="text-sm font-semibold tabular-nums text-violet-600 dark:text-violet-400">{fmtCurr(s.value)}</p>
                                   <div className="mt-1 h-1 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
-                                    <div className="h-full rounded-full bg-red-500 transition-all duration-500" style={{ width: `${s.barW}%` }} />
+                                    <div className="h-full rounded-full bg-violet-500 transition-all duration-500" style={{ width: `${s.barW}%` }} />
                                   </div>
                                 </td>
                                 <td className="px-5 py-3.5 text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">{s.return_count}</td>
@@ -650,12 +650,12 @@ export default function DailyReturnReportPage() {
                         ))}
                       </div>
                       {raw.debug_info?.total_failed_rto > 0 && (
-                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3 rounded-lg text-xs text-red-700 dark:text-red-300">
+                        <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-3 rounded-lg text-xs text-rose-700 dark:text-rose-300">
                           {raw.debug_info.total_failed_rto} RTOs failed to fetch details
                         </div>
                       )}
                       {raw.debug_info?.total_failed_cir > 0 && (
-                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-lg text-xs text-amber-700 dark:text-amber-300">
+                        <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 p-3 rounded-lg text-xs text-indigo-700 dark:text-indigo-300">
                           {raw.debug_info.total_failed_cir} CIRs failed to fetch details
                         </div>
                       )}
