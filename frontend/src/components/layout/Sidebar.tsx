@@ -51,8 +51,8 @@ const navigation: NavItem[] = [
     icon: BarChart3,
     children: [
       { name: 'All Reports', href: '/dashboard/reports/reports-index', icon: FileText },
-      { name: 'Stock Analysis', href: '/dashboard/reports/raw-materials/stock-analysis', icon: Boxes },
-      { name: 'Top Sellers', href: '/dashboard/reports/raw-materials/yarn-forecasting', icon: Zap },
+      { name: 'Daily Sales', href: '/dashboard/sales/reports/daily', icon: BarChart3 },
+      { name: 'Daily Returns', href: '/dashboard/sales/reports/returns', icon: BarChart3 },
       { name: 'SKU Sales', href: '/dashboard/reports/sales/bundle-sku', icon: BarChart3 },
       { name: 'Discounts', href: '/dashboard/reports/sales/discount-general', icon: Percent },
       { name: 'Channels', href: '/dashboard/reports/panels/settlement', icon: Store },
@@ -75,8 +75,8 @@ const navigation: NavItem[] = [
     children: [
       { name: 'Transactions', href: '/dashboard/sales/transactions', icon: Receipt },
       { name: 'Panels', href: '/dashboard/sales/panels', icon: PieChart },
-      { name: 'Reports', href: '/dashboard/sales/reports', icon: BarChart3 },
       { name: 'COD vs Prepaid', href: '/dashboard/sales/cod-prepaid', icon: ShoppingCart },
+      { name: 'Top Sellers', href: '/dashboard/sales/top-sellers', icon: TrendingUp },
     ],
   },
   {
