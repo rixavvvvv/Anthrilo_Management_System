@@ -1,268 +1,678 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { PageHeader, StatCard } from '@/components/ui/Common';
 import { ucSales } from '@/lib/api/uc';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Calendar, Download, BarChart3, TrendingUp, TrendingDown, AlertTriangle,
+  ArrowUpDown, ArrowUp, ArrowDown, Search, Flame, ShieldAlert,
+  Package, RotateCcw, Undo2, Loader2, ChevronDown, Hash,
+} from 'lucide-react';
+import {
+  PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
+} from 'recharts';
+import { DayPicker } from 'react-day-picker';
+import 'react-day-picker/style.css';
+import { format, parse } from 'date-fns';
 
-export default function DailyReturnReportPage() {
-    const [reportDate, setReportDate] = useState<string>(() => {
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        return yesterday.toISOString().split('T')[0];
-    });
-    const [returnType, setReturnType] = useState<string>('ALL');
-    const [showReport, setShowReport] = useState(false);
+/* ── helpers ─────────────────────────────────────────────────────── */
+const fmtCurr = (v: number) => `₹${v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmtShort = (v: number) =>
+  v >= 10_000_000 ? `₹${(v / 10_000_000).toFixed(2)}Cr`
+    : v >= 100_000 ? `₹${(v / 100_000).toFixed(1)}L`
+      : v >= 1_000 ? `₹${(v / 1_000).toFixed(1)}K`
+        : `₹${v.toLocaleString('en-IN')}`;
 
-    const { data, isLoading, refetch } = useQuery({
-        queryKey: ['daily-return-report', reportDate, returnType],
-        queryFn: async () => {
-            const response = await ucSales.getDailyReturnReport(reportDate, returnType);
-            return response.data;
-        },
-        enabled: showReport,
-        staleTime: 5 * 60 * 1000,
-    });
+const channelLabel = (c: string) =>
+  c.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+    .replace(/ New$/, '').replace(/ Api$/, '').replace(/ 26$/, '');
 
-    const handleGenerate = () => { setShowReport(true); refetch(); };
+const CHANNEL_COLORS: Record<string, string> = {
+  FIRSTCRY_NEW: '#F97316', MYNTRA: '#EC4899', NYKAA_FASHION_NEW: '#A855F7',
+  AMAZON_FLEX: '#F59E0B', AMAZON_IN_API: '#EAB308', SHOPIFY: '#22C55E',
+  AJIO_OMNI: '#3B82F6', MEESHO_26: '#14B8A6', FLIPKART: '#6366F1',
+  TATACLIQ: '#8B5CF6', SNAPDEAL_NEW: '#EF4444',
+};
+const getColor = (ch: string, i: number) => CHANNEL_COLORS[ch] || ['#F97316','#EC4899','#A855F7','#3B82F6','#14B8A6','#F59E0B','#6366F1','#EF4444','#8B5CF6','#22C55E'][i % 10];
 
-    const handleDownloadCSV = () => {
-        if (!data?.by_channel) return;
-        const headers = ['Channel', 'Returns', 'Items', 'Value (₹)', 'RTO', 'CIR'];
-        const rows = data.by_channel.map((ch: any) => [ch.channel, ch.returns, ch.items, ch.value, ch.rto, ch.cir]);
-        rows.push(['TOTAL', data.totals.total_returns, data.totals.total_items, data.totals.total_value, data.totals.rto_count, data.totals.cir_count]);
-        const csv = [headers.join(','), ...rows.map((r: any[]) => r.join(','))].join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `return-report-${reportDate}-${returnType}.csv`;
-        link.click();
+const riskBadge = (pct: number) =>
+  pct >= 40 ? { label: 'High Risk', cls: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400', dot: 'bg-red-500' }
+    : pct >= 20 ? { label: 'Medium', cls: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' }
+      : { label: 'Low Risk', cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' };
+
+/* ── animated counter ────────────────────────────────────────────── */
+function AnimatedNum({ value, prefix = '' }: { value: number; prefix?: string }) {
+  const [display, setDisplay] = useState(0);
+  const prev = useRef(0);
+  useEffect(() => {
+    const start = prev.current, diff = value - start, t0 = performance.now();
+    const step = (now: number) => {
+      const p = Math.min((now - t0) / 800, 1);
+      setDisplay(Math.round(start + diff * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) requestAnimationFrame(step);
     };
+    requestAnimationFrame(step);
+    prev.current = value;
+  }, [value]);
+  return <>{prefix}{display.toLocaleString('en-IN')}</>;
+}
 
-    return (
-        <div className="space-y-6">
-            <PageHeader title="Daily Return Report" description="RTO & Customer-Initiated Returns from Unicommerce" />
+/* ── sort types ──────────────────────────────────────────────────── */
+type ChSortKey = 'channel' | 'returns' | 'items' | 'value' | 'rto' | 'cir' | 'pct' | 'valuePct';
+type SkuSortKey = 'sku' | 'name' | 'quantity' | 'value' | 'return_count';
+type Dir = 'asc' | 'desc';
 
-            <div className="card">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Generate Return Report</h2>
-                <div className="flex flex-wrap items-end gap-4 mb-4">
-                    <div className="flex-1 min-w-[200px]">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Date</label>
-                        <input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)}
-                            max={new Date().toISOString().split('T')[0]}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
-                    </div>
-                    <div className="min-w-[160px]">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Return Type</label>
-                        <select value={returnType} onChange={(e) => setReturnType(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                            <option value="ALL">All Returns</option>
-                            <option value="RTO">RTO Only</option>
-                            <option value="CIR">Customer Returns</option>
-                        </select>
-                    </div>
-                    <button onClick={handleGenerate} disabled={isLoading}
-                        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 shadow-lg">
-                        {isLoading ? '⏳ Generating...' : '📊 Generate Report'}
-                    </button>
-                    {showReport && data?.success && (
-                        <button onClick={handleDownloadCSV}
-                            className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors shadow-lg">
-                            📥 Download CSV
-                        </button>
-                    )}
+const RETURN_TYPES = [
+  { value: 'ALL', label: 'All Returns' },
+  { value: 'RTO', label: 'RTO Only' },
+  { value: 'CIR', label: 'Customer Returns' },
+] as const;
+
+/* ═══════════════════════════════════════════════════════════════════ */
+export default function DailyReturnReportPage() {
+  const [reportDate, setReportDate] = useState<string>(() => {
+    const d = new Date(); d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [returnType, setReturnType] = useState('ALL');
+  const [showReport, setShowReport] = useState(true);
+  const [calOpen, setCalOpen] = useState(false);
+  const calRef = useRef<HTMLDivElement>(null);
+
+  // Channel table state
+  const [chSort, setChSort] = useState<ChSortKey>('value');
+  const [chDir, setChDir] = useState<Dir>('desc');
+
+  // SKU table state
+  const [skuSort, setSkuSort] = useState<SkuSortKey>('value');
+  const [skuDir, setSkuDir] = useState<Dir>('desc');
+  const [skuSearch, setSkuSearch] = useState('');
+
+  // Close calendar on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (calRef.current && !calRef.current.contains(e.target as Node)) setCalOpen(false);
+    };
+    if (calOpen) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [calOpen]);
+
+  const { data: raw, isLoading, refetch } = useQuery({
+    queryKey: ['daily-return-report', reportDate, returnType],
+    queryFn: async () => (await ucSales.getDailyReturnReport(reportDate, returnType)).data,
+    enabled: showReport,
+    staleTime: 5 * 60_000,
+  });
+
+  const handleGenerate = useCallback(() => { setShowReport(true); refetch(); }, [refetch]);
+
+  /* ── CSV download ──────────────────────────────────────────────── */
+  const handleCSV = useCallback(() => {
+    if (!raw?.by_channel) return;
+    const hdr = ['Channel', 'Returns', 'Items', 'Value (₹)', 'Return %', 'Value %', 'RTO', 'CIR'];
+    const totalRet = raw.totals.total_returns || 1;
+    const totalVal = raw.totals.total_value || 1;
+    const rows = raw.by_channel.map((ch: any) => [
+      channelLabel(ch.channel), ch.returns, ch.items, ch.value.toFixed(2),
+      ((ch.returns / totalRet) * 100).toFixed(1) + '%',
+      ((ch.value / totalVal) * 100).toFixed(1) + '%', ch.rto, ch.cir,
+    ]);
+    rows.push(['TOTAL', raw.totals.total_returns, raw.totals.total_items, raw.totals.total_value.toFixed(2), '100%', '100%', raw.totals.rto_count, raw.totals.cir_count]);
+    const csv = [hdr.join(','), ...rows.map((r: any) => r.join(','))].join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a'); a.href = url; a.download = `return-report-${reportDate}-${returnType}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  }, [raw, reportDate, returnType]);
+
+  /* ── derived data ──────────────────────────────────────────────── */
+  const totals = raw?.totals;
+  const totalRet = totals?.total_returns || 1;
+  const totalVal = totals?.total_value || 1;
+
+  const channels = useMemo(() => {
+    if (!raw?.by_channel) return [];
+    return raw.by_channel.map((ch: any, i: number) => ({
+      ...ch,
+      label: channelLabel(ch.channel),
+      color: getColor(ch.channel, i),
+      pct: (ch.returns / totalRet) * 100,
+      valuePct: (ch.value / totalVal) * 100,
+      rtoRatio: ch.returns > 0 ? (ch.rto / ch.returns) * 100 : 0,
+    })).sort((a: any, b: any) => b.value - a.value);
+  }, [raw, totalRet, totalVal]);
+
+  const topChannel = channels[0];
+  const maxChVal = topChannel?.value || 1;
+
+  const highestRtoChannel = useMemo(() => {
+    if (!channels.length) return null;
+    return [...channels].sort((a, b) => b.rtoRatio - a.rtoRatio)[0];
+  }, [channels]);
+
+  /* channel sort */
+  const sortedChannels = useMemo(() => {
+    return [...channels].sort((a: any, b: any) => {
+      const va = chSort === 'channel' ? a.label : a[chSort];
+      const vb = chSort === 'channel' ? b.label : b[chSort];
+      if (typeof va === 'string') return chDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      return chDir === 'asc' ? va - vb : vb - va;
+    });
+  }, [channels, chSort, chDir]);
+
+  /* sku data */
+  const skus = useMemo(() => {
+    if (!raw?.by_sku) return [];
+    const maxSkuVal = Math.max(...raw.by_sku.map((s: any) => s.value), 1);
+    return raw.by_sku.map((s: any, i: number) => ({
+      ...s,
+      rank: i + 1,
+      barW: Math.max(3, Math.round((s.value / maxSkuVal) * 100)),
+    }));
+  }, [raw]);
+
+  const filteredSkus = useMemo(() => {
+    let list = skuSearch
+      ? skus.filter((s: any) => s.sku.toLowerCase().includes(skuSearch.toLowerCase()) || s.name.toLowerCase().includes(skuSearch.toLowerCase()))
+      : skus;
+    return [...list].sort((a: any, b: any) => {
+      const va = a[skuSort]; const vb = b[skuSort];
+      if (typeof va === 'string') return skuDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      return skuDir === 'asc' ? va - vb : vb - va;
+    }).slice(0, 25);
+  }, [skus, skuSearch, skuSort, skuDir]);
+
+  /* ── chart data ────────────────────────────────────────────────── */
+  const pieData = useMemo(
+    () => channels.map((ch: any) => ({ name: ch.label, value: ch.value, color: ch.color })),
+    [channels],
+  );
+  const rtoBarData = useMemo(
+    () => channels.map((ch: any) => ({ name: ch.label, RTO: ch.rto, CIR: ch.cir })),
+    [channels],
+  );
+  const topSkuBarData = useMemo(
+    () => skus.slice(0, 5).map((s: any) => ({ name: s.sku, value: s.value })).reverse(),
+    [skus],
+  );
+
+  /* ── insights ──────────────────────────────────────────────────── */
+  const insights = useMemo(() => {
+    if (!channels.length) return [];
+    const ins: { icon: any; color: string; title: string; desc: string }[] = [];
+    if (topChannel) ins.push({
+      icon: AlertTriangle, color: 'red', title: 'Highest Returns',
+      desc: `${topChannel.label} — ${topChannel.returns} returns (${topChannel.pct.toFixed(1)}% of total)`,
+    });
+    if (highestRtoChannel && highestRtoChannel.rto > 0) ins.push({
+      icon: RotateCcw, color: 'amber', title: 'Highest RTO Ratio',
+      desc: `${highestRtoChannel.label} — ${highestRtoChannel.rtoRatio.toFixed(1)}% RTO rate (${highestRtoChannel.rto} of ${highestRtoChannel.returns})`,
+    });
+    if (skus.length > 0) ins.push({
+      icon: Package, color: 'violet', title: 'Top SKU by Value',
+      desc: `${skus[0].sku} — ${fmtCurr(skus[0].value)} (${skus[0].return_count} returns)`,
+    });
+    return ins;
+  }, [channels, topChannel, highestRtoChannel, skus]);
+
+  const toggleChSort = (k: ChSortKey) => { if (chSort === k) setChDir(d => d === 'asc' ? 'desc' : 'asc'); else { setChSort(k); setChDir('desc'); } };
+  const toggleSkuSort = (k: SkuSortKey) => { if (skuSort === k) setSkuDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSkuSort(k); setSkuDir('desc'); } };
+
+  const SortIcn = ({ active, dir }: { active: boolean; dir: Dir }) =>
+    active ? (dir === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 opacity-30" />;
+
+  const dateLabel = format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'EEEE, dd MMMM yyyy');
+
+  /* ═══════════════════════════════════════════════════════════════ */
+  return (
+    <div className="space-y-8">
+      {/* ─── Header ──────────────────────────────────────────────── */}
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Daily Return Report</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">RTO & Customer-Initiated Returns · Risk analytics</p>
+      </div>
+
+      {/* ─── Filters ─────────────────────────────────────────────── */}
+      <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5">
+        <div className="flex flex-wrap items-end gap-3">
+          {/* Date picker */}
+          <div className="flex-1 min-w-[180px] max-w-[240px]" ref={calRef}>
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Report date</label>
+            <div className="relative">
+              <button type="button" onClick={() => setCalOpen(o => !o)}
+                className="w-full flex items-center gap-2 pl-3 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 text-left">
+                <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <span>{format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}</span>
+              </button>
+              <AnimatePresence>
+                {calOpen && (
+                  <motion.div initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.97 }} transition={{ duration: 0.15 }}
+                    className="absolute left-0 top-full mt-2 z-50 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl p-3">
+                    <DayPicker mode="single"
+                      selected={parse(reportDate, 'yyyy-MM-dd', new Date())}
+                      onSelect={(day) => { if (day) { setReportDate(format(day, 'yyyy-MM-dd')); setShowReport(false); setCalOpen(false); } }}
+                      disabled={{ after: new Date() }}
+                      defaultMonth={parse(reportDate, 'yyyy-MM-dd', new Date())}
+                      classNames={{
+                        root: 'rdp-custom',
+                        month_caption: 'text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center py-1',
+                        weekday: 'text-[11px] font-medium text-slate-400 dark:text-slate-500 w-9 text-center',
+                        day_button: 'h-9 w-9 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-red-50 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center',
+                        today: 'font-bold text-red-600 dark:text-red-400',
+                        selected: '!bg-red-600 !text-white rounded-lg font-semibold',
+                        disabled: 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40',
+                        chevron: 'fill-slate-500 dark:fill-slate-400 w-4 h-4',
+                      }}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Return type */}
+          <div className="min-w-[150px]">
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Type</label>
+            <div className="flex rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 overflow-hidden">
+              {RETURN_TYPES.map((t) => (
+                <button key={t.value} onClick={() => { setReturnType(t.value); setShowReport(false); }}
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition ${returnType === t.value ? 'bg-red-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                  {t.value === 'ALL' ? 'All' : t.value}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button onClick={handleGenerate} disabled={isLoading}
+            className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
+            {isLoading ? 'Generating…' : 'Generate Report'}
+          </button>
+          {showReport && raw?.success && (
+            <button onClick={handleCSV}
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition shadow-sm">
+              <Download className="w-4 h-4" /> Download CSV
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ─── Loading ─────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {isLoading && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-10 flex flex-col items-center gap-3">
+            <div className="h-10 w-10 rounded-full border-[3px] border-red-500 border-t-transparent animate-spin" />
+            <p className="text-sm text-slate-500 dark:text-slate-400">Analysing return data for {dateLabel}…</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Error ───────────────────────────────────────────────── */}
+      {showReport && raw && !raw.success && !isLoading && (
+        <div className="rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4">
+          <p className="text-sm text-rose-600 dark:text-rose-400">{raw.error || 'Failed to generate report'}</p>
+        </div>
+      )}
+
+      {/* ─── Report content ──────────────────────────────────────── */}
+      <AnimatePresence>
+        {showReport && raw?.success && totals && !isLoading && (
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="space-y-8">
+
+            {/* ── Hero summary ────────────────────────────────────── */}
+            <div className="rounded-2xl bg-gradient-to-br from-red-600 via-red-700 to-orange-700 p-6 sm:p-8 shadow-lg text-white relative overflow-hidden">
+              <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImciIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg2MHY2MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjMwIiBjeT0iMzAiIHI9IjEuNSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjA2KSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3QgZmlsbD0idXJsKCNnKSIgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIvPjwvc3ZnPg==')] opacity-50" />
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-1">
+                  <ShieldAlert className="w-4 h-4 opacity-70" />
+                  <span className="text-xs font-medium opacity-70 uppercase tracking-wider">{dateLabel} · {returnType === 'ALL' ? 'RTO + CIR' : returnType}</span>
                 </div>
-                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                    <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">📌 About This Report</h4>
-                    <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-                        <li>• <strong>RTO</strong> = Return to Origin (undelivered shipments)</li>
-                        <li>• <strong>CIR</strong> = Customer Initiated Returns</li>
-                        <li>• Uses Unicommerce <code className="text-xs bg-blue-100 dark:bg-blue-900 px-1 rounded">return/search</code> + <code className="text-xs bg-blue-100 dark:bg-blue-900 px-1 rounded">return/get</code> APIs</li>
-                    </ul>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-4">
+                  <div>
+                    <p className="text-xs font-medium text-red-200 mb-1">Total Returns</p>
+                    <p className="text-3xl sm:text-4xl font-extrabold tabular-nums tracking-tight">
+                      <AnimatedNum value={totals.total_returns} />
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-red-200 mb-1">Return Value</p>
+                    <p className="text-2xl sm:text-3xl font-bold tabular-nums">
+                      <AnimatedNum value={Math.round(totals.total_value)} prefix="₹" />
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-red-200 mb-1">RTO / CIR</p>
+                    <p className="text-2xl sm:text-3xl font-bold tabular-nums">
+                      {totals.rto_count} <span className="text-lg opacity-60">/</span> {totals.cir_count}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-red-200 mb-1">Highest Risk</p>
+                    <p className="text-xl sm:text-2xl font-bold truncate">{topChannel?.label || '—'}</p>
+                    {topChannel && <p className="text-xs text-red-200 mt-0.5">{topChannel.pct.toFixed(1)}% of all returns</p>}
+                  </div>
                 </div>
+              </div>
             </div>
 
-            {isLoading && (
-                <div className="card text-center py-12">
-                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
-                    <p className="mt-4 text-gray-600 dark:text-gray-400 text-lg">Fetching return data...</p>
+            {/* ── No returns case ─────────────────────────────────── */}
+            {totals.total_returns === 0 && (
+              <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-8 text-center">
+                <p className="text-2xl mb-2">✅</p>
+                <p className="text-sm text-emerald-700 dark:text-emerald-300 font-medium">No returns found for this date</p>
+              </div>
+            )}
+
+            {totals.total_returns > 0 && (
+              <>
+                {/* ── Charts ─────────────────────────────────────── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Donut */}
+                  <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5">
+                    <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-4">Returns by Channel (Value)</h2>
+                    <div className="h-[280px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2} dataKey="value" animationDuration={800}>
+                            {pieData.map((e: any, i: number) => <Cell key={i} fill={e.color} stroke="none" />)}
+                          </Pie>
+                          <RTooltip content={({ active, payload }) => {
+                            if (!active || !payload?.length) return null;
+                            const d = payload[0].payload;
+                            return (
+                              <div className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg px-3.5 py-2.5 min-w-[150px]">
+                                <p className="text-xs font-semibold text-slate-900 dark:text-white mb-1">{d.name}</p>
+                                <div className="flex items-center gap-2">
+                                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: d.color }} />
+                                  <span className="text-sm font-bold tabular-nums text-slate-700 dark:text-slate-200">{fmtCurr(d.value)}</span>
+                                </div>
+                                <p className="text-[11px] text-slate-400 mt-0.5">{((d.value / totalVal) * 100).toFixed(1)}% of total</p>
+                              </div>
+                            );
+                          }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2">
+                      {pieData.map((e: any) => (
+                        <div key={e.name} className="flex items-center gap-1.5">
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: e.color }} />
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400">{e.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* RTO vs CIR bar */}
+                  <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5">
+                    <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-4">RTO vs CIR per Channel</h2>
+                    <div className="h-[320px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={rtoBarData} layout="vertical" margin={{ left: 4, right: 16, top: 4, bottom: 4 }}>
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                          <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                          <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                          <RTooltip content={({ active, payload, label }) => {
+                            if (!active || !payload?.length) return null;
+                            return (
+                              <div className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg px-3.5 py-2.5">
+                                <p className="text-xs font-semibold text-slate-900 dark:text-white mb-1.5">{label}</p>
+                                {payload.map((p: any) => (
+                                  <div key={p.dataKey} className="flex items-center gap-2 text-sm">
+                                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.fill }} />
+                                    <span className="text-slate-500 dark:text-slate-400">{p.dataKey}:</span>
+                                    <span className="font-bold tabular-nums text-slate-700 dark:text-slate-200">{p.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          }} />
+                          <Legend wrapperStyle={{ fontSize: 11 }} />
+                          <Bar dataKey="RTO" fill="#F59E0B" radius={[0, 4, 4, 0]} stackId="a" />
+                          <Bar dataKey="CIR" fill="#EF4444" radius={[0, 4, 4, 0]} stackId="a" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
                 </div>
-            )}
 
-            {showReport && data?.success && !isLoading && (
-                <>
-                    {/* Summary Cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                        <StatCard title="Total Returns" value={data.totals.total_returns} icon="📦" color="blue" />
-                        <StatCard title="Total Items" value={data.totals.total_items} icon="🔢" color="purple" />
-                        <StatCard title="Total Value" value={`₹${(data.totals.total_value / 1000).toFixed(1)}K`} icon="💰" color="red" />
-                        <StatCard title="RTO" value={data.totals.rto_count} icon="🔄" color="yellow" />
-                        <StatCard title="CIR" value={data.totals.cir_count} icon="↩️" color="indigo" />
+                {/* ── Top 5 SKUs bar chart ────────────────────────── */}
+                {topSkuBarData.length > 0 && (
+                  <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5">
+                    <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-4">Top 5 SKUs by Return Value</h2>
+                    <div className="h-[220px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={topSkuBarData} layout="vertical" margin={{ left: 10, right: 24, top: 4, bottom: 4 }}>
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                          <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false}
+                            tickFormatter={(v: number) => fmtShort(v)} />
+                          <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                          <RTooltip content={({ active, payload }) => {
+                            if (!active || !payload?.length) return null;
+                            const d = payload[0].payload;
+                            return (
+                              <div className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg px-3.5 py-2.5">
+                                <p className="text-xs font-semibold text-slate-900 dark:text-white mb-1">{d.name}</p>
+                                <p className="text-sm font-bold tabular-nums text-red-600 dark:text-red-400">{fmtCurr(d.value)}</p>
+                              </div>
+                            );
+                          }} />
+                          <Bar dataKey="value" fill="#EF4444" radius={[0, 6, 6, 0]} animationDuration={800} />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
+                  </div>
+                )}
 
-                    {/* Report Header */}
-                    <div className="card">
-                        <div className="p-4 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                            <div className="flex items-center justify-between flex-wrap gap-4">
-                                <div>
-                                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
-                                        📅 {new Date(reportDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                                    </h3>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                                        Type: <span className="font-semibold">{returnType === 'ALL' ? 'RTO + CIR' : returnType}</span>
-                                    </p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">Total Return Value</p>
-                                    <p className="text-3xl font-bold text-red-600 dark:text-red-400">₹{data.totals.total_value.toLocaleString('en-IN')}</p>
-                                </div>
-                            </div>
+                {/* ── Insights ────────────────────────────────────── */}
+                {insights.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {insights.map((ins, i) => (
+                      <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
+                        className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-4 flex items-start gap-3">
+                        <div className={`mt-0.5 rounded-lg p-2 ${ins.color === 'red' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : ins.color === 'amber' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' : 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400'}`}>
+                          <ins.icon className="w-4 h-4" />
                         </div>
+                        <div>
+                          <p className="text-xs font-semibold text-slate-900 dark:text-white">{ins.title}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">{ins.desc}</p>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ── Channel Table ───────────────────────────────── */}
+                <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-slate-100 dark:border-slate-700">
+                    <h2 className="text-base font-semibold text-slate-900 dark:text-white">Channel Breakdown</h2>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-slate-50/80 dark:bg-slate-900/50 sticky top-0 z-10">
+                          {([
+                            { key: 'channel' as ChSortKey, label: 'Channel', align: 'left' },
+                            { key: 'returns' as ChSortKey, label: 'Returns', align: 'right' },
+                            { key: 'pct' as ChSortKey, label: 'Return %', align: 'right' },
+                            { key: 'value' as ChSortKey, label: 'Value', align: 'right' },
+                            { key: 'valuePct' as ChSortKey, label: 'Value %', align: 'right' },
+                            { key: 'rto' as ChSortKey, label: 'RTO', align: 'right' },
+                            { key: 'cir' as ChSortKey, label: 'CIR', align: 'right' },
+                          ] as const).map((col) => (
+                            <th key={col.key} onClick={() => toggleChSort(col.key)}
+                              className={`px-5 py-3 text-[11px] font-semibold uppercase tracking-wider cursor-pointer select-none transition hover:text-slate-900 dark:hover:text-white ${col.align === 'left' ? 'text-left' : 'text-right'} text-slate-500 dark:text-slate-400`}>
+                              <span className="inline-flex items-center gap-1">{col.label} <SortIcn active={chSort === col.key} dir={chDir} /></span>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
+                        {sortedChannels.map((ch: any, idx: number) => {
+                          const risk = riskBadge(ch.pct);
+                          const isTop = ch.channel === topChannel?.channel;
+                          const rank = channels.findIndex((c: any) => c.channel === ch.channel);
+                          const valBarW = Math.max(3, Math.round((ch.value / maxChVal) * 100));
+                          return (
+                            <motion.tr key={ch.channel} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.03 }}
+                              className="group transition hover:bg-slate-50/60 dark:hover:bg-slate-700/30">
+                              <td className="px-5 py-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex-shrink-0 h-8 w-8 rounded-lg flex items-center justify-center text-[10px] font-bold text-white" style={{ background: ch.color }}>
+                                    {ch.label.substring(0, 2).toUpperCase()}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-slate-900 dark:text-white">{ch.label}</span>
+                                    {isTop && (
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+                                        <Flame className="w-3 h-3" /> Top
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-5 py-4 text-right text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-300">{ch.returns}</td>
+                              <td className="px-5 py-4 text-right">
+                                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold ${risk.cls}`}>
+                                  <span className={`h-1.5 w-1.5 rounded-full ${risk.dot}`} />
+                                  {ch.pct.toFixed(1)}%
+                                </span>
+                              </td>
+                              <td className="px-5 py-4 text-right">
+                                <p className={`text-sm font-semibold tabular-nums ${rank < 3 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>{fmtCurr(ch.value)}</p>
+                                <div className="mt-1.5 h-1 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${valBarW}%`, background: ch.color }} />
+                                </div>
+                              </td>
+                              <td className="px-5 py-4 text-right text-sm font-semibold tabular-nums text-slate-600 dark:text-slate-400">{ch.valuePct.toFixed(1)}%</td>
+                              <td className="px-5 py-4 text-right text-sm tabular-nums text-amber-600 dark:text-amber-400 font-medium">{ch.rto}</td>
+                              <td className="px-5 py-4 text-right text-sm tabular-nums text-red-500 dark:text-red-400 font-medium">{ch.cir}</td>
+                            </motion.tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-50 dark:bg-slate-900/60 border-t-2 border-slate-200 dark:border-slate-600">
+                          <td className="px-5 py-4 text-sm font-bold text-slate-900 dark:text-white">Total</td>
+                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-slate-900 dark:text-white">{totals.total_returns}</td>
+                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-slate-900 dark:text-white">100%</td>
+                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-red-600 dark:text-red-400">{fmtCurr(totals.total_value)}</td>
+                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-slate-900 dark:text-white">100%</td>
+                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-amber-600 dark:text-amber-400">{totals.rto_count}</td>
+                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-red-500 dark:text-red-400">{totals.cir_count}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+
+                {/* ── SKU Table ───────────────────────────────────── */}
+                {skus.length > 0 && (
+                  <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                    <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                      <h2 className="text-base font-semibold text-slate-900 dark:text-white">SKU-wise Returns</h2>
+                      <div className="relative w-full sm:w-56">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                        <input value={skuSearch} onChange={(e) => setSkuSearch(e.target.value)}
+                          placeholder="Search SKU or name…"
+                          className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500" />
+                      </div>
                     </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="bg-slate-50/80 dark:bg-slate-900/50 sticky top-0 z-10">
+                            <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 w-12">#</th>
+                            {([
+                              { key: 'sku' as SkuSortKey, label: 'SKU', align: 'left' },
+                              { key: 'name' as SkuSortKey, label: 'Product', align: 'left' },
+                              { key: 'quantity' as SkuSortKey, label: 'Qty', align: 'right' },
+                              { key: 'value' as SkuSortKey, label: 'Value', align: 'right' },
+                              { key: 'return_count' as SkuSortKey, label: 'Returns', align: 'right' },
+                            ] as const).map((col) => (
+                              <th key={col.key} onClick={() => toggleSkuSort(col.key)}
+                                className={`px-5 py-3 text-[11px] font-semibold uppercase tracking-wider cursor-pointer select-none transition hover:text-slate-900 dark:hover:text-white ${col.align === 'left' ? 'text-left' : 'text-right'} text-slate-500 dark:text-slate-400`}>
+                                <span className="inline-flex items-center gap-1">{col.label} <SortIcn active={skuSort === col.key} dir={skuDir} /></span>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
+                          {filteredSkus.map((s: any, idx: number) => {
+                            const isTop = idx === 0 && !skuSearch;
+                            return (
+                              <motion.tr key={s.sku} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.02 }}
+                                className="group transition hover:bg-slate-50/60 dark:hover:bg-slate-700/30">
+                                <td className="px-5 py-3.5 text-xs font-bold text-slate-400 dark:text-slate-500">{idx + 1}</td>
+                                <td className="px-5 py-3.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-mono font-medium text-slate-900 dark:text-white">{s.sku}</span>
+                                    {isTop && (
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+                                        <Flame className="w-3 h-3" /> #1
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3.5 text-sm text-slate-500 dark:text-slate-400 max-w-[220px] truncate">{s.name}</td>
+                                <td className="px-5 py-3.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300 font-medium">{s.quantity}</td>
+                                <td className="px-5 py-3.5 text-right">
+                                  <p className="text-sm font-semibold tabular-nums text-red-600 dark:text-red-400">{fmtCurr(s.value)}</p>
+                                  <div className="mt-1 h-1 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                                    <div className="h-full rounded-full bg-red-500 transition-all duration-500" style={{ width: `${s.barW}%` }} />
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3.5 text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">{s.return_count}</td>
+                              </motion.tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
 
-                    {/* Channel Breakdown Table */}
-                    {data.by_channel?.length > 0 && (
-                        <div className="card">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Channel-wise Returns</h3>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                    <thead className="bg-gray-50 dark:bg-gray-800">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Channel</th>
-                                            <th className="px-6 py-3 text-right text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Returns</th>
-                                            <th className="px-6 py-3 text-right text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Items</th>
-                                            <th className="px-6 py-3 text-right text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Value (₹)</th>
-                                            <th className="px-6 py-3 text-right text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">RTO</th>
-                                            <th className="px-6 py-3 text-right text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">CIR</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                        {data.by_channel.map((ch: any) => (
-                                            <tr key={ch.channel} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                                <td className="px-6 py-3 font-medium text-gray-900 dark:text-white">{ch.channel}</td>
-                                                <td className="px-6 py-3 text-right font-semibold">{ch.returns}</td>
-                                                <td className="px-6 py-3 text-right">{ch.items}</td>
-                                                <td className="px-6 py-3 text-right text-red-600 dark:text-red-400 font-semibold">₹{ch.value.toLocaleString('en-IN')}</td>
-                                                <td className="px-6 py-3 text-right">{ch.rto}</td>
-                                                <td className="px-6 py-3 text-right">{ch.cir}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                    <tfoot className="bg-gray-100 dark:bg-gray-800 border-t-2">
-                                        <tr>
-                                            <td className="px-6 py-3 font-bold">TOTAL</td>
-                                            <td className="px-6 py-3 text-right font-bold">{data.totals.total_returns}</td>
-                                            <td className="px-6 py-3 text-right font-bold">{data.totals.total_items}</td>
-                                            <td className="px-6 py-3 text-right font-bold text-red-600 dark:text-red-400">₹{data.totals.total_value.toLocaleString('en-IN')}</td>
-                                            <td className="px-6 py-3 text-right font-bold">{data.totals.rto_count}</td>
-                                            <td className="px-6 py-3 text-right font-bold">{data.totals.cir_count}</td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
+                {/* ── Debug / API info (collapsible) ──────────────── */}
+                {raw.search_results && (
+                  <details className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 overflow-hidden group">
+                    <summary className="px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 cursor-pointer select-none flex items-center gap-2 hover:text-slate-700 dark:hover:text-slate-300">
+                      <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" /> API Debug Info
+                    </summary>
+                    <div className="px-5 pb-4 space-y-3">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        {Object.entries(raw.search_results).map(([type, count]: [string, any]) => (
+                          <div key={type} className="flex justify-between bg-white dark:bg-slate-700 p-2 rounded-lg">
+                            <span className="text-slate-500 dark:text-slate-400">{type} found:</span>
+                            <span className="font-semibold text-slate-900 dark:text-white">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {raw.debug_info?.total_failed_rto > 0 && (
+                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3 rounded-lg text-xs text-red-700 dark:text-red-300">
+                          {raw.debug_info.total_failed_rto} RTOs failed to fetch details
                         </div>
-                    )}
-
-                    {/* SKU Breakdown Table */}
-                    {data.by_sku?.length > 0 && (
-                        <div className="card">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">SKU-wise Returns (Top {Math.min(data.by_sku.length, 20)})</h3>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                    <thead className="bg-gray-50 dark:bg-gray-800">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">SKU</th>
-                                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Product Name</th>
-                                            <th className="px-6 py-3 text-right text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Qty</th>
-                                            <th className="px-6 py-3 text-right text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Value (₹)</th>
-                                            <th className="px-6 py-3 text-right text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Returns</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                        {data.by_sku.slice(0, 20).map((s: any) => (
-                                            <tr key={s.sku} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                                                <td className="px-6 py-3 font-mono text-sm text-gray-900 dark:text-white">{s.sku}</td>
-                                                <td className="px-6 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-[200px] truncate">{s.name}</td>
-                                                <td className="px-6 py-3 text-right font-semibold">{s.quantity}</td>
-                                                <td className="px-6 py-3 text-right text-red-600 dark:text-red-400 font-semibold">₹{s.value.toLocaleString('en-IN')}</td>
-                                                <td className="px-6 py-3 text-right">{s.return_count}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                      )}
+                      {raw.debug_info?.total_failed_cir > 0 && (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-lg text-xs text-amber-700 dark:text-amber-300">
+                          {raw.debug_info.total_failed_cir} CIRs failed to fetch details
                         </div>
-                    )}
+                      )}
+                    </div>
+                  </details>
+                )}
 
-                    {/* Debug Info */}
-                    {data.search_results && (
-                        <div className="card bg-gray-50 dark:bg-gray-800/50">
-                            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">🔍 API Debug Information</h3>
-
-                            <div className="space-y-3">
-                                <div>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Phase 1: Search Results</p>
-                                    <div className="grid grid-cols-2 gap-4 text-sm">
-                                        {Object.entries(data.search_results).map(([type, count]: [string, any]) => (
-                                            <div key={type} className="flex justify-between bg-white dark:bg-gray-700 p-2 rounded">
-                                                <span className="text-gray-600 dark:text-gray-400">{type} found in search:</span>
-                                                <span className="font-semibold text-gray-900 dark:text-white">{count}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {data.debug_info && (data.debug_info.total_failed_rto > 0 || data.debug_info.total_failed_cir > 0) && (
-                                    <div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Phase 2: Failed to Get Details</p>
-                                        <div className="space-y-2">
-                                            {data.debug_info.total_failed_rto > 0 && (
-                                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3 rounded text-sm">
-                                                    <p className="font-semibold text-red-800 dark:text-red-200">
-                                                        ⚠️ {data.debug_info.total_failed_rto} RTOs failed to fetch details
-                                                    </p>
-                                                    {data.debug_info.failed_rto_codes && data.debug_info.failed_rto_codes.length > 0 && (
-                                                        <p className="text-xs text-red-700 dark:text-red-300 mt-1 font-mono">
-                                                            Sample codes: {data.debug_info.failed_rto_codes.join(', ')}
-                                                        </p>
-                                                    )}
-                                                    <p className="text-xs text-red-600 dark:text-red-400 mt-2">
-                                                        Possible reasons: RTO returns may not have complete data in Unicommerce, or the API returns unsuccessful responses for RTOs.
-                                                    </p>
-                                                </div>
-                                            )}
-                                            {data.debug_info.total_failed_cir > 0 && (
-                                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-3 rounded text-sm">
-                                                    <p className="font-semibold text-yellow-800 dark:text-yellow-200">
-                                                        ⚠️ {data.debug_info.total_failed_cir} CIRs failed to fetch details
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {data.totals.rto_count === 0 && data.search_results.RTO > 0 && (
-                                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded p-3 text-xs text-yellow-800 dark:text-yellow-200">
-                                        <p className="font-semibold mb-1">📊 RTO Analysis:</p>
-                                        <p>• Found {data.search_results.RTO} RTOs in search (Phase 1)</p>
-                                        <p>• But {data.debug_info?.total_failed_rto || data.search_results.RTO} failed to get detailed data (Phase 2)</p>
-                                        <p>• This is likely because Unicommerce&apos;s return/get API doesn&apos;t return complete data for RTO-type returns.</p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {data.totals.total_returns === 0 && (
-                        <div className="card text-center py-8">
-                            <p className="text-2xl mb-2">✅</p>
-                            <p className="text-gray-600 dark:text-gray-400">No returns found for {reportDate} ({returnType})</p>
-                            <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">Try selecting a different date or check Unicommerce data.</p>
-                        </div>
-                    )}
-                </>
+                {/* ── Footer ──────────────────────────────────────── */}
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px] text-slate-400 dark:text-slate-500 px-1">
+                  <span>Source: return/search + return/get API</span>
+                  <span>Type: {returnType === 'ALL' ? 'RTO + CIR' : returnType}</span>
+                </div>
+              </>
             )}
-        </div>
-    );
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
