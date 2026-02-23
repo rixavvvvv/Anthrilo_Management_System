@@ -1,115 +1,138 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Search, Bell, Moon, Sun, Command } from 'lucide-react';
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, memo } from 'react';
+import dynamic from 'next/dynamic';
+import { Search, Moon, Sun, Command } from 'lucide-react';
+import { Breadcrumbs } from './Breadcrumbs';
+import { NotificationDropdown } from './NotificationDropdown';
+import { AvatarMenu } from './AvatarMenu';
 
-export function Navbar() {
-  const pathname = usePathname();
+// Lazy-load command palette — only needed when opened
+const CommandPalette = dynamic(
+  () => import('./CommandPalette').then((m) => ({ default: m.CommandPalette })),
+  { ssr: false },
+);
+
+// ─── Theme Toggle ──────────────────────────────────────────────────────────
+const ThemeToggle = memo(function ThemeToggle() {
   const [darkMode, setDarkMode] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     const isDark =
       localStorage.getItem('theme') === 'dark' ||
-      (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      (!localStorage.getItem('theme') &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches);
     setDarkMode(isDark);
     if (isDark) document.documentElement.classList.add('dark');
   }, []);
 
-  const toggleDarkMode = useCallback(() => {
-    const newMode = !darkMode;
-    setDarkMode(newMode);
-    if (newMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
+  const toggle = useCallback(() => {
+    const next = !darkMode;
+    setDarkMode(next);
+    document.documentElement.classList.toggle('dark', next);
+    localStorage.setItem('theme', next ? 'dark' : 'light');
   }, [darkMode]);
 
-  // Build breadcrumb from pathname
-  const segments = pathname.split('/').filter(Boolean);
-  const breadcrumbs = segments.map((seg, i) => ({
-    label: seg.replace(/-/g, ' '),
-    href: '/' + segments.slice(0, i + 1).join('/'),
-    isLast: i === segments.length - 1,
-  }));
+  return (
+    <button
+      onClick={toggle}
+      aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+      title={darkMode ? 'Light mode' : 'Dark mode'}
+      className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-300
+                 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+    >
+      {darkMode
+        ? <Sun className="w-[18px] h-[18px]" />
+        : <Moon className="w-[18px] h-[18px]" />}
+    </button>
+  );
+});
+
+// ─── Navbar ────────────────────────────────────────────────────────────────
+export function Navbar() {
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  // ⌘K / Ctrl+K global shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Scroll-shadow: listen on the <main> scroller
+  useEffect(() => {
+    const main = document.querySelector('main');
+    if (!main) return;
+    const onScroll = () => setScrolled(main.scrollTop > 4);
+    main.addEventListener('scroll', onScroll, { passive: true });
+    return () => main.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const openPalette = useCallback(() => setPaletteOpen(true), []);
+  const closePalette = useCallback(() => setPaletteOpen(false), []);
 
   return (
-    <header
-      className="h-14 flex-shrink-0 flex items-center justify-between px-6
-                 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl
-                 border-b border-slate-200/60 dark:border-slate-800/60
-                 sticky top-0 z-30"
-    >
-      {/* Left — Breadcrumb */}
-      <nav className="hidden sm:flex items-center gap-1 text-sm">
-        {breadcrumbs.map((crumb, i) => (
-          <span key={i} className="flex items-center gap-1">
-            {i > 0 && <span className="text-slate-300 dark:text-slate-600 mx-0.5">/</span>}
-            {crumb.isLast ? (
-              <span className="text-slate-800 dark:text-slate-200 font-medium capitalize">
-                {crumb.label}
-              </span>
-            ) : (
-              <Link
-                href={crumb.href}
-                className="text-slate-400 dark:text-slate-500 capitalize hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-              >
-                {crumb.label}
-              </Link>
-            )}
-          </span>
-        ))}
-      </nav>
+    <>
+      <header
+        className={`h-14 flex-shrink-0 flex items-center justify-between px-5 gap-4
+                    bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl
+                    border-b border-slate-200/60 dark:border-slate-800/60
+                    sticky top-0 z-30 transition-shadow duration-300
+                    ${scrolled
+                      ? 'shadow-[0_2px_12px_-2px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_12px_-2px_rgba(0,0,0,0.4)]'
+                      : 'shadow-none'
+                    }`}
+      >
+        {/* ── Left: Breadcrumbs ── */}
+        <Breadcrumbs />
 
-      {/* Right — Actions */}
-      <div className="flex items-center gap-1.5">
-        {/* Search Button */}
-        <button
-          onClick={() => setSearchOpen(!searchOpen)}
-          className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-300
-                     hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          title="Search (⌘K)"
-        >
-          <Search className="w-[18px] h-[18px]" />
-        </button>
+        {/* ── Right: Actions ── */}
+        <div className="flex items-center gap-0.5 flex-shrink-0">
 
-        {/* Notifications */}
-        <button
-          className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-300
-                     hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative"
-          title="Notifications"
-        >
-          <Bell className="w-[18px] h-[18px]" />
-        </button>
+          {/* Search / Command Palette trigger */}
+          <button
+            onClick={openPalette}
+            aria-label="Open command palette"
+            title="Search (⌘K)"
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl
+                       text-slate-400 hover:text-slate-600 dark:hover:text-slate-300
+                       hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group"
+          >
+            <Search className="w-[17px] h-[17px]" />
+            {/* ⌘K hint badge */}
+            <kbd
+              className="hidden md:flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium
+                         bg-slate-100 dark:bg-slate-800 text-slate-400
+                         ring-1 ring-slate-200 dark:ring-slate-700
+                         group-hover:ring-slate-300 dark:group-hover:ring-slate-600 transition-all"
+            >
+              <Command className="w-2.5 h-2.5" />
+              K
+            </kbd>
+          </button>
 
-        {/* Theme Toggle */}
-        <button
-          onClick={toggleDarkMode}
-          className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-300
-                     hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          title={darkMode ? 'Light mode' : 'Dark mode'}
-        >
-          {darkMode ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
-        </button>
+          {/* Notifications */}
+          <NotificationDropdown />
 
-        {/* Divider */}
-        <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-1.5" />
+          {/* Theme toggle */}
+          <ThemeToggle />
 
-        {/* Avatar */}
-        <button className="flex items-center gap-2 p-1 pr-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-          <div className="w-7 h-7 rounded-lg bg-primary-600 flex items-center justify-center">
-            <span className="text-white text-xs font-semibold">A</span>
-          </div>
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-300 hidden lg:block">
-            Admin
-          </span>
-        </button>
-      </div>
-    </header>
+          {/* Divider */}
+          <div className="w-px h-5 bg-slate-200 dark:bg-slate-800 mx-1.5" aria-hidden />
+
+          {/* Avatar + profile menu */}
+          <AvatarMenu />
+        </div>
+      </header>
+
+      {/* Command Palette (lazy) */}
+      <CommandPalette open={paletteOpen} onClose={closePalette} />
+    </>
   );
 }
