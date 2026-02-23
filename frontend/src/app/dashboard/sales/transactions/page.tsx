@@ -3,288 +3,308 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
-import { DataTable, Column } from '@/components/ui/DataTable';
-import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 15;
+const fmt = (v: number) => v >= 100_000 ? `₹${(v / 100_000).toFixed(1)}L` : v >= 1_000 ? `₹${(v / 1_000).toFixed(1)}K` : `₹${v.toLocaleString('en-IN')}`;
+
+const channelColors: Record<string, string> = {
+  MYNTRA: 'from-pink-500 to-pink-600', FIRSTCRY_NEW: 'from-orange-500 to-orange-600',
+  AMAZON_FLEX: 'from-amber-500 to-amber-600', AMAZON_IN_API: 'from-yellow-500 to-yellow-600',
+  SHOPIFY: 'from-green-500 to-green-600', NYKAA_FASHION_NEW: 'from-purple-500 to-purple-600',
+  AJIO_OMNI: 'from-blue-500 to-blue-600', MEESHO_26: 'from-teal-500 to-teal-600',
+  TATACLIQ: 'from-indigo-500 to-indigo-600',
+};
+const channelLabel = (c: string) => c.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()).replace(/ New$/, '').replace(/ Api$/, '').replace(/ 26$/, '');
+
+const statusStyle: Record<string, { bg: string; dot: string }> = {
+  CREATED:    { bg: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300', dot: 'bg-blue-500' },
+  PROCESSING: { bg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300', dot: 'bg-amber-500' },
+  COMPLETE:   { bg: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
+  CANCELLED:  { bg: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300', dot: 'bg-rose-500' },
+  DISPATCHED: { bg: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300', dot: 'bg-violet-500' },
+  SHIPPED:    { bg: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300', dot: 'bg-indigo-500' },
+  DELIVERED:  { bg: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300', dot: 'bg-green-500' },
+  PENDING_VERIFICATION: { bg: 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300', dot: 'bg-slate-400' },
+};
+const defaultSt = { bg: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300', dot: 'bg-slate-400' };
 
 export default function SalesTransactionsPage() {
   const [period, setPeriod] = useState('today');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [sizeFilter, setSizeFilter] = useState('');
-  const [paymentFilter, setPaymentFilter] = useState('all'); // all, prepaid, cod
+  const [paymentFilter, setPaymentFilter] = useState('all');
   const [channelFilter, setChannelFilter] = useState('');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
-  // Fetch summary data (reuses cache from dashboard)
+  /* ── Summary (today + 7 days) ──────────────────────────────── */
   const { data: summaryData, isLoading: loadingSummary } = useQuery({
     queryKey: ['unicommerce-today'],
-    queryFn: async () => {
-      const response = await ucSales.getToday();
-      return response.data;
-    },
-    staleTime: 2 * 60 * 1000,
+    queryFn: async () => (await ucSales.getToday()).data,
+    staleTime: 2 * 60_000,
   });
-
   const { data: weekData, isLoading: loadingWeek } = useQuery({
     queryKey: ['unicommerce-last-7-days'],
-    queryFn: async () => {
-      const response = await ucSales.getLast7Days();
-      return response.data;
-    },
-    staleTime: 5 * 60 * 1000,
+    queryFn: async () => (await ucSales.getLast7Days()).data,
+    staleTime: 5 * 60_000,
   });
 
-  // Fetch paginated orders from UC
-  const { data: ordersData, isLoading: loadingOrders, error } = useQuery({
+  /* ── Orders (paginated) ────────────────────────────────────── */
+  const { data: ordersData, isLoading, error, isFetching } = useQuery({
     queryKey: ['uc-transactions', period, page, customFrom, customTo],
     queryFn: async () => {
-      if (period === 'custom' && customFrom && customTo) {
-        const response = await ucSales.getOrders({ period: 'custom', from_date: customFrom, to_date: customTo, page, page_size: 100 });
-        return response.data;
-      }
-      const response = await ucSales.getOrders({ period, page, page_size: 100 }); // fetch larger batch for client filtering
-      return response.data;
+      if (period === 'custom' && customFrom && customTo)
+        return (await ucSales.getOrders({ period: 'custom', from_date: customFrom, to_date: customTo, page, page_size: 100 })).data;
+      return (await ucSales.getOrders({ period, page, page_size: 100 })).data;
     },
     enabled: period !== 'custom' || (!!customFrom && !!customTo),
     staleTime: 60_000,
+    placeholderData: (prev: any) => prev,
   });
 
-  // Flatten orders to item-wise rows
+  /* flatten to item-level rows */
   const allRows = useMemo(() => {
     const orders = ordersData?.orders || [];
     const rows: any[] = [];
-    orders.forEach((order: any) => {
-      const orderItems = order.items || [];
-      if (orderItems.length === 0) {
-        // Order with no items detail
-        rows.push({
-          date: order.displayOrderDateTime || order.created,
-          code: order.displayOrderCode || order.code,
-          channel: order.channel || '-',
-          status: order.status || '-',
-          sku: '-',
-          size: '-',
-          price: order.selling_price || order.total_selling_price || 0,
-          cashOnDelivery: order.cashOnDelivery ?? order.cod ?? false,
-        });
+    orders.forEach((o: any) => {
+      const items = o.items || [];
+      if (items.length === 0) {
+        rows.push({ date: o.displayOrderDateTime || o.created, code: o.displayOrderCode || o.code, channel: o.channel || '-', status: o.status || '-', sku: '-', size: '-', price: o.selling_price || 0, cod: o.cashOnDelivery ?? o.cod ?? false });
       } else {
-        orderItems.forEach((item: any) => {
-          rows.push({
-            date: order.displayOrderDateTime || order.created,
-            code: order.displayOrderCode || order.code,
-            channel: order.channel || '-',
-            status: order.status || '-',
-            sku: item.itemSku || item.sku || '-',
-            size: item.size || item.itemSku?.match(/[-_]([SMLXL0-9]+)$/)?.[1] || '-',
-            price: item.sellingPrice || item.selling_price || 0,
-            cashOnDelivery: order.cashOnDelivery ?? order.cod ?? false,
-          });
+        items.forEach((it: any) => {
+          rows.push({ date: o.displayOrderDateTime || o.created, code: o.displayOrderCode || o.code, channel: o.channel || '-', status: o.status || '-', sku: it.itemSku || it.sku || '-', size: it.size || '-', price: it.sellingPrice || it.selling_price || 0, cod: o.cashOnDelivery ?? o.cod ?? false });
         });
       }
     });
     return rows;
   }, [ordersData]);
 
-  // Extract unique sizes for filter
-  const uniqueSizes = useMemo(() => {
-    const sizes = new Set<string>();
-    allRows.forEach((r) => {
-      if (r.size && r.size !== '-') sizes.add(r.size);
-    });
-    return Array.from(sizes).sort();
-  }, [allRows]);
+  const uniqueChannels = useMemo(() => [...new Set(allRows.map((r) => r.channel).filter((c) => c !== '-'))].sort(), [allRows]);
 
-  // Extract unique channels for filter
-  const uniqueChannels = useMemo(() => {
-    const channels = new Set<string>();
-    allRows.forEach((r) => {
-      if (r.channel && r.channel !== '-') channels.add(r.channel);
-    });
-    return Array.from(channels).sort();
-  }, [allRows]);
+  /* filter */
+  const filtered = useMemo(() => allRows.filter((r) => {
+    if (search) { const t = search.toLowerCase(); if (!r.code?.toLowerCase().includes(t) && !r.sku?.toLowerCase().includes(t) && !r.channel?.toLowerCase().includes(t)) return false; }
+    if (paymentFilter === 'cod' && !r.cod) return false;
+    if (paymentFilter === 'prepaid' && r.cod) return false;
+    if (channelFilter && r.channel !== channelFilter) return false;
+    return true;
+  }), [allRows, search, paymentFilter, channelFilter]);
 
-  // Apply client-side filters
-  const filtered = useMemo(() => {
-    return allRows.filter((row) => {
-      // Search filter
-      if (search) {
-        const term = search.toLowerCase();
-        if (!row.code?.toLowerCase().includes(term) &&
-          !row.sku?.toLowerCase().includes(term) &&
-          !row.channel?.toLowerCase().includes(term)) {
-          return false;
-        }
-      }
-      // Size filter
-      if (sizeFilter && row.size !== sizeFilter) return false;
-      // Payment filter
-      if (paymentFilter === 'cod' && !row.cashOnDelivery) return false;
-      if (paymentFilter === 'prepaid' && row.cashOnDelivery) return false;
-      // Channel filter
-      if (channelFilter && row.channel !== channelFilter) return false;
-      return true;
-    });
-  }, [allRows, search, sizeFilter, paymentFilter, channelFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  // Client-side pagination of filtered results
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const clientPage = Math.min(page - 1, totalPages - 1);
-  const paginated = filtered.slice(clientPage * PAGE_SIZE, (clientPage + 1) * PAGE_SIZE);
+  const todayS = summaryData?.summary || {};
+  const weekS = weekData?.summary || {};
 
-  const todaySummary = summaryData?.summary || {};
-  const weekSummary = weekData?.summary || {};
+  /* quick stats from current filtered data */
+  const filteredRevenue = useMemo(() => filtered.reduce((s, r) => s + (r.price || 0), 0), [filtered]);
+  const codCount = useMemo(() => filtered.filter((r) => r.cod).length, [filtered]);
+  const prepaidCount = filtered.length - codCount;
 
-  const statusColors: Record<string, string> = {
-    CREATED: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200',
-    PROCESSING: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200',
-    COMPLETE: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200',
-    CANCELLED: 'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200',
-    DISPATCHED: 'bg-violet-100 dark:bg-violet-900/30 text-violet-800 dark:text-violet-200',
-    SHIPPED: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-200',
-    DELIVERED: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200',
-  };
-
-  const columns: Column<any>[] = [
-    {
-      key: 'date', header: 'Date', width: '14%',
-      render: (value) => value ? new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-',
-    },
-    {
-      key: 'code', header: 'Order Code', width: '15%',
-      render: (value) => <span className="font-mono text-xs font-semibold text-primary-700 dark:text-primary-300">{value}</span>,
-    },
-    {
-      key: 'channel', header: 'Channel', width: '11%',
-      render: (value) => <span className="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium">{value}</span>,
-    },
-    {
-      key: 'status', header: 'Status', width: '10%',
-      render: (value) => <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[value] || 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>{value}</span>,
-    },
-    {
-      key: 'sku', header: 'SKU', width: '15%',
-      render: (value) => <span className="font-mono text-xs text-slate-700 dark:text-slate-300">{value}</span>,
-    },
-    {
-      key: 'size', header: 'Size', width: '7%',
-      render: (value) => <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-xs font-medium">{value}</span>,
-    },
-    {
-      key: 'price', header: 'Price', width: '10%',
-      render: (value) => <span className="text-emerald-600 dark:text-emerald-400 font-semibold">₹{(value || 0).toFixed(0)}</span>,
-    },
-    {
-      key: 'cashOnDelivery', header: 'Payment', width: '9%',
-      render: (value) => (
-        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${value ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200'}`}>
-          {value ? 'COD' : 'Prepaid'}
-        </span>
-      ),
-    },
-  ];
+  /* pagination numbers */
+  const pageNums = useMemo(() => {
+    const nums: (number | '...')[] = [];
+    if (totalPages <= 7) { for (let i = 1; i <= totalPages; i++) nums.push(i); return nums; }
+    nums.push(1);
+    if (safePage > 3) nums.push('...');
+    for (let i = Math.max(2, safePage - 1); i <= Math.min(totalPages - 1, safePage + 1); i++) nums.push(i);
+    if (safePage < totalPages - 2) nums.push('...');
+    nums.push(totalPages);
+    return nums;
+  }, [safePage, totalPages]);
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Sales Transactions" description="Item-wise transactions from Unicommerce" />
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <StatCard title="Today's Orders" value={loadingSummary ? '...' : (todaySummary.total_orders || 0)} icon="🛒" color="blue" />
-        <StatCard title="Today's Revenue" value={loadingSummary ? '...' : `₹${((todaySummary.total_revenue || 0) / 1000).toFixed(1)}K`} icon="💰" color="green" />
-        <StatCard title="7-Day Orders" value={loadingWeek ? '...' : (weekSummary.total_orders || 0)} icon="📊" color="purple" />
-        <StatCard title="7-Day Revenue" value={loadingWeek ? '...' : `₹${((weekSummary.total_revenue || 0) / 1000).toFixed(1)}K`} icon="💵" color="indigo" />
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Sales Transactions</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Item-level transaction breakdown from Unicommerce</p>
+        </div>
+        <div className="flex gap-1.5 bg-slate-100 dark:bg-slate-700/60 rounded-xl p-1 self-start">
+          {[{ key: 'today', label: 'Today' }, { key: 'yesterday', label: 'Yesterday' }, { key: 'custom', label: 'Custom' }].map((p) => (
+            <button key={p.key} onClick={() => { setPeriod(p.key); setPage(1); }}
+              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all ${period === p.key ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}>
+              {p.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Filters Section */}
-      <div className="card">
-        <div className="flex flex-wrap gap-4 items-center">
-          {/* Period */}
-          <div className="flex gap-2">
-            {[
-              { key: 'today', label: 'Today' },
-              { key: 'yesterday', label: 'Yesterday' },
-              { key: 'custom', label: 'Custom' },
-            ].map((p) => (
-              <button key={p.key} onClick={() => { setPeriod(p.key); setPage(1); }}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${period === p.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
-                {p.label}
+      {/* Custom date picker */}
+      {period === 'custom' && (
+        <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
+          <div className="flex gap-3 items-center flex-wrap">
+            <span className="text-sm text-slate-500 dark:text-slate-400">From</span>
+            <input type="date" value={customFrom} onChange={(e) => { setCustomFrom(e.target.value); setPage(1); }}
+              max={new Date().toISOString().split('T')[0]}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/40 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
+            <span className="text-sm text-slate-500 dark:text-slate-400">to</span>
+            <input type="date" value={customTo} onChange={(e) => { setCustomTo(e.target.value); setPage(1); }}
+              max={new Date().toISOString().split('T')[0]}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/40 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
+          </div>
+        </div>
+      )}
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        {([
+          { label: "Today's Orders", value: todayS.total_orders, loading: loadingSummary, icon: '🛒', gradient: 'from-blue-500 to-blue-600' },
+          { label: "Today's Revenue", value: todayS.total_revenue, loading: loadingSummary, icon: '💰', gradient: 'from-emerald-500 to-emerald-600', isCur: true },
+          { label: '7-Day Orders', value: weekS.total_orders, loading: loadingWeek, icon: '📊', gradient: 'from-violet-500 to-violet-600' },
+          { label: '7-Day Revenue', value: weekS.total_revenue, loading: loadingWeek, icon: '💵', gradient: 'from-green-500 to-green-600', isCur: true },
+          { label: 'Filtered Revenue', value: filteredRevenue, loading: false, icon: '🔍', gradient: 'from-amber-500 to-amber-600', isCur: true },
+          { label: 'Items Shown', value: filtered.length, loading: false, icon: '📋', gradient: 'from-rose-500 to-rose-600' },
+        ] as const).map((c) => (
+          <div key={c.label} className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
+            <div className={`absolute -top-4 -right-4 h-16 w-16 rounded-full bg-gradient-to-br ${c.gradient} opacity-10`} />
+            <span className="text-xl">{c.icon}</span>
+            <p className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">{c.label}</p>
+            <p className="text-xl font-bold text-slate-900 dark:text-white tabular-nums">
+              {c.loading ? '…' : (c as any).isCur ? fmt(c.value || 0) : (c.value?.toLocaleString() ?? '-')}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter bar */}
+      <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
+        <div className="flex flex-wrap gap-3 items-center">
+          {/* Payment pills */}
+          <div className="flex gap-1.5 bg-slate-100 dark:bg-slate-700/60 rounded-xl p-1">
+            {[{ key: 'all', label: 'All' }, { key: 'prepaid', label: `Prepaid (${prepaidCount})` }, { key: 'cod', label: `COD (${codCount})` }].map((f) => (
+              <button key={f.key} onClick={() => { setPaymentFilter(f.key); setPage(1); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${paymentFilter === f.key ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300'}`}>
+                {f.label}
               </button>
             ))}
           </div>
 
-          {/* Custom Date Range */}
-          {period === 'custom' && (
-            <div className="flex gap-2 items-center">
-              <input type="date" value={customFrom} onChange={(e) => { setCustomFrom(e.target.value); setPage(1); }}
-                max={new Date().toISOString().split('T')[0]}
-                className="input w-auto text-sm" />
-              <span className="text-sm text-slate-500">to</span>
-              <input type="date" value={customTo} onChange={(e) => { setCustomTo(e.target.value); setPage(1); }}
-                max={new Date().toISOString().split('T')[0]}
-                className="input w-auto text-sm" />
-            </div>
-          )}
-
-          {/* Channel */}
+          {/* Channel select */}
           <select value={channelFilter} onChange={(e) => { setChannelFilter(e.target.value); setPage(1); }}
-            className="input w-auto">
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/40 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40">
             <option value="">All Channels</option>
-            {uniqueChannels.map((ch) => <option key={ch} value={ch}>{ch}</option>)}
-          </select>
-
-          {/* Payment */}
-          <select value={paymentFilter} onChange={(e) => { setPaymentFilter(e.target.value); setPage(1); }}
-            className="input w-auto">
-            <option value="all">All Payments</option>
-            <option value="prepaid">Prepaid</option>
-            <option value="cod">COD</option>
-          </select>
-
-          {/* Size */}
-          <select value={sizeFilter} onChange={(e) => { setSizeFilter(e.target.value); setPage(1); }}
-            className="input w-auto">
-            <option value="">All Sizes</option>
-            {uniqueSizes.map((s) => <option key={s} value={s}>{s}</option>)}
+            {uniqueChannels.map((ch) => <option key={ch} value={ch}>{channelLabel(ch)}</option>)}
           </select>
 
           {/* Search */}
-          <input type="text" placeholder="Search order, SKU, channel..."
-            className="input flex-1 min-w-[200px]"
-            value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-        </div>
-        <div className="mt-3 text-xs text-slate-500">
-          {filtered.length} items found
+          <div className="relative flex-1 min-w-[200px]">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input type="text" placeholder="Search order code, SKU, channel…"
+              className="w-full pl-10 pr-4 py-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/40 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+              value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+          </div>
+
+          <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">
+            {filtered.length} items · Page {safePage}/{totalPages}
+            {isFetching && !isLoading && <span className="ml-1 animate-pulse">⟳</span>}
+          </span>
         </div>
       </div>
 
+      {/* Error */}
       {error && (
-        <div className="card bg-rose-50 dark:bg-rose-900/20">
-          <p className="text-rose-600 dark:text-rose-400">Error: {(error as any)?.message || 'Failed to load transactions'}</p>
+        <div className="rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4">
+          <p className="text-sm text-rose-600 dark:text-rose-400">{(error as any)?.message || 'Failed to load transactions'}</p>
         </div>
       )}
 
-      {/* Transactions Table */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-slate-900 dark:text-white">Transactions ({filtered.length})</h2>
-        </div>
-        {loadingOrders ? (
-          <LoadingSpinner message="Fetching transactions from Unicommerce..." />
+      {/* Table */}
+      <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="flex flex-col items-center gap-3">
+              <div className="h-8 w-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+              <p className="text-sm text-slate-500 dark:text-slate-400">Fetching transactions…</p>
+            </div>
+          </div>
+        ) : paginated.length === 0 ? (
+          <div className="flex items-center justify-center py-20">
+            <p className="text-sm text-slate-500 dark:text-slate-400">No transactions found for the selected filters.</p>
+          </div>
         ) : (
-          <DataTable data={paginated} columns={columns} emptyMessage="No transactions found for the selected filters." />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
+                  {['Time', 'Order Code', 'Channel', 'Status', 'SKU', 'Size', 'Price', 'Payment'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
+                {paginated.map((r, idx) => {
+                  const st = statusStyle[r.status] || defaultSt;
+                  const chGrad = channelColors[r.channel] || 'from-slate-500 to-slate-600';
+                  const time = r.date ? r.date.replace(/^\d{4}-\d{2}-\d{2}\s/, '').slice(0, 5) : '-';
+                  const dateStr = r.date ? new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '';
+                  return (
+                    <tr key={r.code + r.sku + idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors">
+                      <td className="px-4 py-3">
+                        <span className="text-xs text-slate-900 dark:text-white font-medium tabular-nums">{time}</span>
+                        {dateStr && <p className="text-[10px] text-slate-400">{dateStr}</p>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-xs font-medium text-slate-900 dark:text-white">{r.code}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300">
+                          <span className={`h-2 w-2 rounded-full bg-gradient-to-br ${chGrad}`} />
+                          {channelLabel(r.channel)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${st.bg}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="inline-block px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-mono text-xs font-semibold">{r.sku}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {r.size !== '-' ? <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300">{r.size}</span> : <span className="text-slate-400 text-xs">-</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">₹{(r.price || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded-md text-[11px] font-medium ${r.cod ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'}`}>
+                          {r.cod ? 'COD' : 'Prepaid'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
+      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex justify-between items-center">
-          <button disabled={page <= 1} onClick={() => setPage(page - 1)}
-            className="btn btn-secondary disabled:opacity-40">← Previous</button>
-          <span className="text-sm text-slate-600 dark:text-slate-400">Page {page} of {totalPages}</span>
-          <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}
-            className="btn btn-secondary disabled:opacity-40">Next →</button>
+          <button disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}
+            className="px-4 py-2 rounded-xl text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors shadow-sm">
+            ← Previous
+          </button>
+          <div className="flex items-center gap-1">
+            {pageNums.map((n, i) => n === '...' ? (
+              <span key={`e${i}`} className="px-2 text-slate-400 text-sm">…</span>
+            ) : (
+              <button key={n} onClick={() => setPage(n as number)}
+                className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-colors ${n === safePage ? 'bg-blue-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                {n}
+              </button>
+            ))}
+          </div>
+          <button disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}
+            className="px-4 py-2 rounded-xl text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors shadow-sm">
+            Next →
+          </button>
         </div>
       )}
     </div>
