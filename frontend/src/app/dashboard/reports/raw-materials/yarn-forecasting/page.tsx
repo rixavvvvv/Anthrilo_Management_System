@@ -27,22 +27,27 @@ export default function TopSellersPage() {
   const avgQtyPerSku = summary.total_skus > 0 ? (summary.total_quantity / summary.total_skus) : 0;
 
   const columns: Column<any>[] = [
-    { key: 'rank', header: '#', width: '5%',
+    {
+      key: 'rank', header: '#', width: '5%',
       render: (value: any) => <span className="font-bold text-gray-500">{value}</span>,
     },
     { key: 'sku', header: 'SKU', width: '14%' },
     { key: 'name', header: 'Product Name', width: '22%' },
-    { key: 'total_quantity', header: 'Units Sold', width: '10%',
+    {
+      key: 'total_quantity', header: 'Units Sold', width: '10%',
       render: (value) => <span className="font-bold text-gray-900 dark:text-gray-100">{value}</span>,
     },
-    { key: 'total_revenue', header: 'Revenue', width: '13%',
+    {
+      key: 'total_revenue', header: 'Revenue', width: '13%',
       render: (value) => <span className="text-green-600 dark:text-green-400 font-bold">₹{(value || 0).toFixed(2)}</span>,
     },
     { key: 'order_count', header: 'Orders', width: '8%' },
-    { key: 'avg_selling_price', header: 'Avg Price', width: '10%',
+    {
+      key: 'avg_selling_price', header: 'Avg Price', width: '10%',
       render: (value) => <span className="text-gray-900 dark:text-gray-100">₹{(value || 0).toFixed(0)}</span>,
     },
-    { key: 'channels', header: 'Top Channel', width: '13%',
+    {
+      key: 'channels', header: 'Top Channel', width: '13%',
       render: (value) => {
         if (!value || typeof value !== 'object') return '-';
         const sorted = Object.entries(value).sort((a: any, b: any) => (b[1]?.quantity || 0) - (a[1]?.quantity || 0));

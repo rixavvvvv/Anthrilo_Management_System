@@ -57,26 +57,32 @@ export default function DiscountAnalysisPage() {
   const columns: Column<any>[] = [
     { key: 'sku', header: 'SKU', width: '14%' },
     { key: 'name', header: 'Product Name', width: '20%' },
-    { key: 'total_quantity', header: 'Qty', width: '6%',
+    {
+      key: 'total_quantity', header: 'Qty', width: '6%',
       render: (value) => <span className="font-semibold text-slate-900 dark:text-slate-100">{value}</span>,
     },
-    { key: 'total_revenue', header: 'Gross Revenue', width: '12%',
+    {
+      key: 'total_revenue', header: 'Gross Revenue', width: '12%',
       render: (value) => <span className="text-slate-900 dark:text-slate-100">₹{(value || 0).toFixed(2)}</span>,
     },
-    { key: 'total_discount', header: 'Discount', width: '10%',
+    {
+      key: 'total_discount', header: 'Discount', width: '10%',
       render: (value) => <span className="text-orange-600 dark:text-orange-400 font-semibold">₹{(value || 0).toFixed(2)}</span>,
     },
-    { key: 'discount_pct', header: 'Disc %', width: '8%',
+    {
+      key: 'discount_pct', header: 'Disc %', width: '8%',
       render: (value) => {
         const v = value || 0;
         const c = v > 30 ? 'text-rose-600 dark:text-rose-400' : v > 15 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400';
         return <span className={`font-bold ${c}`}>{v.toFixed(1)}%</span>;
       },
     },
-    { key: 'net_after_discount', header: 'Net Revenue', width: '12%',
+    {
+      key: 'net_after_discount', header: 'Net Revenue', width: '12%',
       render: (value) => <span className="text-emerald-600 dark:text-emerald-400 font-bold">₹{(value || 0).toFixed(2)}</span>,
     },
-    { key: 'avg_selling_price', header: 'Avg SP', width: '10%',
+    {
+      key: 'avg_selling_price', header: 'Avg SP', width: '10%',
       render: (value) => <span className="text-slate-900 dark:text-slate-100">₹{(value || 0).toFixed(2)}</span>,
     },
   ];

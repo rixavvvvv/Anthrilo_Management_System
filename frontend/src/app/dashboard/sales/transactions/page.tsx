@@ -17,13 +17,13 @@ const channelColors: Record<string, string> = {
 const channelLabel = (c: string) => c.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()).replace(/ New$/, '').replace(/ Api$/, '').replace(/ 26$/, '');
 
 const statusStyle: Record<string, { bg: string; dot: string }> = {
-  CREATED:    { bg: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300', dot: 'bg-blue-500' },
+  CREATED: { bg: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300', dot: 'bg-blue-500' },
   PROCESSING: { bg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300', dot: 'bg-amber-500' },
-  COMPLETE:   { bg: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
-  CANCELLED:  { bg: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300', dot: 'bg-rose-500' },
+  COMPLETE: { bg: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
+  CANCELLED: { bg: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300', dot: 'bg-rose-500' },
   DISPATCHED: { bg: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300', dot: 'bg-violet-500' },
-  SHIPPED:    { bg: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300', dot: 'bg-indigo-500' },
-  DELIVERED:  { bg: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300', dot: 'bg-green-500' },
+  SHIPPED: { bg: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300', dot: 'bg-indigo-500' },
+  DELIVERED: { bg: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300', dot: 'bg-green-500' },
   PENDING_VERIFICATION: { bg: 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300', dot: 'bg-slate-400' },
 };
 const defaultSt = { bg: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300', dot: 'bg-slate-400' };
@@ -191,7 +191,7 @@ export default function SalesTransactionsPage() {
 
           {/* Search */}
           <div className="relative flex-1 min-w-[200px]">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             <input type="text" placeholder="Search order code, SKU, channel…"
               className="w-full pl-10 pr-4 py-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/40 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
               value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />

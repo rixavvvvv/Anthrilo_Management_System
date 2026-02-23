@@ -221,8 +221,8 @@ export default function GarmentMasterPage() {
             ]).map((f) => (
               <button key={f.key} onClick={() => setStockFilter(f.key)}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${stockFilter === f.key
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                   }`}>
                 {f.label}
               </button>
@@ -384,7 +384,7 @@ export default function GarmentMasterPage() {
                     {needsInventory && (
                       <td className="px-4 py-3">
                         <span className={`font-bold text-sm tabular-nums ${item.inventory > 0 ? 'text-emerald-600 dark:text-emerald-400' :
-                            'text-rose-600 dark:text-rose-400'
+                          'text-rose-600 dark:text-rose-400'
                           }`}>
                           {item.inventory}
                         </span>

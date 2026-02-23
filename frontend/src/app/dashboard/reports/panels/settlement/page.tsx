@@ -29,27 +29,34 @@ export default function ChannelRevenuePage() {
   const totalOrders = data?.total_orders || 0;
 
   const columns: Column<any>[] = [
-    { key: 'channel', header: 'Channel / Marketplace', width: '18%',
+    {
+      key: 'channel', header: 'Channel / Marketplace', width: '18%',
       render: (value) => (
         <span className="px-3 py-1 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium">{value}</span>
       ),
     },
-    { key: 'orders', header: 'Orders', width: '10%',
+    {
+      key: 'orders', header: 'Orders', width: '10%',
       render: (value) => <span className="font-semibold text-gray-900 dark:text-gray-100">{value}</span>,
     },
-    { key: 'revenue', header: 'Gross Revenue', width: '14%',
+    {
+      key: 'revenue', header: 'Gross Revenue', width: '14%',
       render: (value) => <span className="text-gray-900 dark:text-gray-100 font-semibold">₹{(value || 0).toFixed(2)}</span>,
     },
-    { key: 'percentage', header: 'Share %', width: '10%',
+    {
+      key: 'percentage', header: 'Share %', width: '10%',
       render: (value) => <span className="font-bold text-primary-600 dark:text-primary-400">{(value || 0).toFixed(1)}%</span>,
     },
-    { key: 'commission_est', header: 'Commission (~10%)', width: '14%',
+    {
+      key: 'commission_est', header: 'Commission (~10%)', width: '14%',
       render: (value) => <span className="text-blue-600 dark:text-blue-400 font-semibold">₹{(value || 0).toFixed(2)}</span>,
     },
-    { key: 'logistics_est', header: 'Logistics (~5%)', width: '14%',
+    {
+      key: 'logistics_est', header: 'Logistics (~5%)', width: '14%',
       render: (value) => <span className="text-orange-600 dark:text-orange-400">₹{(value || 0).toFixed(2)}</span>,
     },
-    { key: 'net_payable', header: 'Est. Net (~85%)', width: '14%',
+    {
+      key: 'net_payable', header: 'Est. Net (~85%)', width: '14%',
       render: (value) => <span className="text-green-600 dark:text-green-400 font-bold text-lg">₹{(value || 0).toFixed(2)}</span>,
     },
   ];

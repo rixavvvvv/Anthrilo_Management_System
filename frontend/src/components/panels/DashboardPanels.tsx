@@ -449,8 +449,8 @@ export function FetchInfoPanel({ fetchInfo, loading = false }: FetchInfoPanelPro
                     )}
                     {fetchInfo.reconciliation_passed !== undefined && (
                         <div className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold ${fetchInfo.reconciliation_passed
-                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                            : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
                             }`}>
                             <span>{fetchInfo.reconciliation_passed ? '✓' : '✗'}</span>
                             <span>Reconciliation</span>

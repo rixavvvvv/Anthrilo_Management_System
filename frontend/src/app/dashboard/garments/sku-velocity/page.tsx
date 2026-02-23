@@ -276,8 +276,8 @@ export default function SkuVelocityPage() {
                         <button
                             onClick={() => setB2cOnly(!b2cOnly)}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${b2cOnly
-                                    ? 'bg-primary-600'
-                                    : 'bg-slate-300 dark:bg-slate-600'
+                                ? 'bg-primary-600'
+                                : 'bg-slate-300 dark:bg-slate-600'
                                 }`}
                         >
                             <span
