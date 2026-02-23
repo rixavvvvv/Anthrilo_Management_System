@@ -27,7 +27,19 @@ export default function GarmentMasterPage() {
 
   useEffect(() => { setPage(0); }, [selectedCategory]);
 
-  /* ── 1) Big fetch for stats & categories (1000 SKUs, cached long) ── */
+  /* ── 1a) Accurate inventory summary from dedicated API (all SKUs) ── */
+  const { data: summaryData, isLoading: summaryLoading } = useQuery({
+    queryKey: ['uc-inventory-summary'],
+    queryFn: async () => {
+      const res = await ucCatalog.getInventorySummary();
+      return res.data;
+    },
+    staleTime: 15 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  /* ── 1b) Category breakdown (1000 SKU sample, for categories only) ── */
   const { data: statsData, isLoading: statsLoading } = useQuery({
     queryKey: ['uc-catalog-stats'],
     queryFn: async () => {
@@ -76,27 +88,37 @@ export default function GarmentMasterPage() {
       enabled: item.enabled,
       ean: item.ean || item.scanIdentifier || '-',
     })),
-  [data]);
+    [data]);
 
   const totalRecords = data?.totalRecords || 0;
   const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
   const currentPage = page + 1;
 
-  /* ── stats from the 1000-SKU fetch ─────────────────────────── */
+  /* ── accurate stats from inventory summary API ──────────────── */
+  const accurateStats = useMemo(() => {
+    if (!summaryData?.successful) return null;
+    return {
+      totalCatalog: summaryData.totalSKUs ?? summaryData.totalProducts ?? 0,
+      enabled: summaryData.activeSKUs ?? 0,
+      inStock: summaryData.skusWithStock ?? 0,
+      outOfStock: summaryData.skusOutOfStock ?? 0,
+      totalInventory: summaryData.totalRealInventory ?? 0,
+      blocked: summaryData.totalVirtualInventory ?? 0,
+      outOfStockPercent: summaryData.outOfStockPercent ?? 0,
+      totalStockValue: summaryData.totalStockValue ?? 0,
+    };
+  }, [summaryData]);
+
+  /* ── category breakdown from the 1000-SKU sample ────────────── */
   const stats = useMemo(() => {
     const elems = statsData?.elements || [];
     if (!elems.length) return null;
 
-    let enabled = 0, inStock = 0, outOfStock = 0, totalInv = 0;
     const catMap: Record<string, { skus: number; inventory: number }> = {};
 
     for (const item of elems) {
-      if (item.enabled) enabled++;
       const snap = item.inventorySnapshots?.[0];
       const inv = snap?.inventory ?? snap?.goodInventory ?? 0;
-      if (inv > 0) inStock++;
-      else outOfStock++;
-      totalInv += inv;
 
       const cat = item.categoryName || 'Uncategorized';
       if (!catMap[cat]) catMap[cat] = { skus: 0, inventory: 0 };
@@ -109,12 +131,7 @@ export default function GarmentMasterPage() {
       .sort((a, b) => b.inventory - a.inventory);
 
     return {
-      sampleSize: elems.length,
       totalCatalog: statsData?.totalRecords || 0,
-      enabled,
-      inStock,
-      outOfStock,
-      totalInventory: totalInv,
       categories,
     };
   }, [statsData]);
@@ -130,7 +147,7 @@ export default function GarmentMasterPage() {
           Product Master Data
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          {fmt(stats?.totalCatalog || totalRecords)} SKUs across {categories.length} categories
+          {fmt(accurateStats?.totalCatalog || stats?.totalCatalog || totalRecords)} SKUs across {categories.length} categories
           <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
             Unicommerce API
           </span>
@@ -140,11 +157,11 @@ export default function GarmentMasterPage() {
       {/* ── Stats Row ───────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { label: 'Total Catalog', value: fmt(stats?.totalCatalog || totalRecords), icon: '📦', bg: 'bg-blue-50 dark:bg-blue-950/30', ring: 'ring-blue-200/50 dark:ring-blue-800/30' },
-          { label: 'Enabled SKUs', value: stats ? fmt(stats.enabled) : (statsLoading ? '…' : '-'), icon: '✅', bg: 'bg-emerald-50 dark:bg-emerald-950/30', ring: 'ring-emerald-200/50 dark:ring-emerald-800/30' },
-          { label: 'In Stock', value: stats ? fmt(stats.inStock) : (statsLoading ? '…' : '-'), icon: '📊', bg: 'bg-green-50 dark:bg-green-950/30', ring: 'ring-green-200/50 dark:ring-green-800/30' },
-          { label: 'Out of Stock', value: stats ? fmt(stats.outOfStock) : (statsLoading ? '…' : '-'), icon: '⚠️', bg: 'bg-rose-50 dark:bg-rose-950/30', ring: 'ring-rose-200/50 dark:ring-rose-800/30' },
-          { label: 'Total Inventory', value: stats ? fmt(stats.totalInventory) : (statsLoading ? '…' : '-'), icon: '🏭', bg: 'bg-violet-50 dark:bg-violet-950/30', ring: 'ring-violet-200/50 dark:ring-violet-800/30' },
+          { label: 'Total Catalog', value: fmt(accurateStats?.totalCatalog || stats?.totalCatalog || totalRecords), icon: '📦', bg: 'bg-blue-50 dark:bg-blue-950/30', ring: 'ring-blue-200/50 dark:ring-blue-800/30' },
+          { label: 'Enabled SKUs', value: accurateStats ? fmt(accurateStats.enabled) : (summaryLoading ? '…' : '-'), icon: '✅', bg: 'bg-emerald-50 dark:bg-emerald-950/30', ring: 'ring-emerald-200/50 dark:ring-emerald-800/30' },
+          { label: 'In Stock', value: accurateStats ? fmt(accurateStats.inStock) : (summaryLoading ? '…' : '-'), icon: '📊', bg: 'bg-green-50 dark:bg-green-950/30', ring: 'ring-green-200/50 dark:ring-green-800/30' },
+          { label: 'Out of Stock', value: accurateStats ? fmt(accurateStats.outOfStock) : (summaryLoading ? '…' : '-'), icon: '⚠️', bg: 'bg-rose-50 dark:bg-rose-950/30', ring: 'ring-rose-200/50 dark:ring-rose-800/30' },
+          { label: 'Total Inventory', value: accurateStats ? fmt(accurateStats.totalInventory) : (summaryLoading ? '…' : '-'), icon: '🏭', bg: 'bg-violet-50 dark:bg-violet-950/30', ring: 'ring-violet-200/50 dark:ring-violet-800/30' },
           { label: 'Categories', value: categories.length.toString(), icon: '🏷️', bg: 'bg-indigo-50 dark:bg-indigo-950/30', ring: 'ring-indigo-200/50 dark:ring-indigo-800/30' },
         ].map((s) => (
           <div key={s.label}
@@ -167,7 +184,7 @@ export default function GarmentMasterPage() {
           {/* Search */}
           <div className="relative flex-1 min-w-[220px]">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               type="text"
@@ -183,7 +200,7 @@ export default function GarmentMasterPage() {
               <button onClick={() => setSearch('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             )}
@@ -192,17 +209,16 @@ export default function GarmentMasterPage() {
           {/* Category toggle */}
           <button
             onClick={() => setShowCategories(!showCategories)}
-            className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-              showCategories || selectedCategory
+            className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${showCategories || selectedCategory
                 ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/25'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-            }`}
+              }`}
           >
             <span className="text-base">🏷️</span>
             {selectedCategory || 'Categories'}
             {selectedCategory && (
               <svg className="w-3.5 h-3.5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7"/>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
               </svg>
             )}
           </button>
@@ -232,11 +248,10 @@ export default function GarmentMasterPage() {
             <div className="flex flex-wrap gap-2 max-h-52 overflow-y-auto pr-1">
               <button
                 onClick={() => { setSelectedCategory(null); setSearch(''); setShowCategories(false); }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  !selectedCategory
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${!selectedCategory
                     ? 'bg-primary-600 text-white shadow-sm'
                     : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
-                }`}
+                  }`}
               >
                 All ({fmt(stats?.totalCatalog || totalRecords)})
               </button>
@@ -248,11 +263,10 @@ export default function GarmentMasterPage() {
                     setSearch('');
                     setShowCategories(false);
                   }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    selectedCategory === cat.name
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${selectedCategory === cat.name
                       ? 'bg-primary-600 text-white shadow-sm'
                       : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-700 hover:bg-primary-50 dark:hover:bg-primary-950/20'
-                  }`}
+                    }`}
                 >
                   {cat.name}
                   <span className="ml-1 opacity-50">({cat.skus})</span>
@@ -286,7 +300,7 @@ export default function GarmentMasterPage() {
           </h2>
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"/>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Live
             </span>
           </div>
@@ -294,7 +308,7 @@ export default function GarmentMasterPage() {
 
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-10 h-10 border-[3px] border-slate-200 dark:border-slate-700 border-t-primary-500 rounded-full animate-spin"/>
+            <div className="w-10 h-10 border-[3px] border-slate-200 dark:border-slate-700 border-t-primary-500 rounded-full animate-spin" />
             <p className="mt-4 text-sm text-slate-400">Fetching product catalog…</p>
           </div>
         ) : items.length === 0 ? (
@@ -307,7 +321,7 @@ export default function GarmentMasterPage() {
             <table className="min-w-full">
               <thead>
                 <tr className="bg-slate-50/70 dark:bg-slate-800/40">
-                  {['SKU Code','Product Name','Category','Color','Size','Brand','HSN','MRP','Weight','Status'].map((h) => (
+                  {['SKU Code', 'Product Name', 'Category', 'Color', 'Size', 'Brand', 'HSN', 'MRP', 'Weight', 'Status'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
                       {h}
                     </th>
@@ -346,7 +360,7 @@ export default function GarmentMasterPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
                         <span className="w-3 h-3 rounded-full border border-slate-200 dark:border-slate-600 flex-shrink-0"
-                          style={{ backgroundColor: item.color !== '-' ? item.color.toLowerCase().replace(/\s+/g, '') : '#94a3b8' }}/>
+                          style={{ backgroundColor: item.color !== '-' ? item.color.toLowerCase().replace(/\s+/g, '') : '#94a3b8' }} />
                         <span className="text-xs text-slate-600 dark:text-slate-400">{item.color}</span>
                       </div>
                     </td>
@@ -372,12 +386,11 @@ export default function GarmentMasterPage() {
                     </td>
                     {/* Status */}
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                        item.enabled
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${item.enabled
                           ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${item.enabled ? 'bg-emerald-500' : 'bg-slate-400'}`}/>
+                        }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${item.enabled ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                         {item.enabled ? 'Active' : 'Off'}
                       </span>
                     </td>
@@ -398,7 +411,7 @@ export default function GarmentMasterPage() {
               text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800
               disabled:opacity-40 disabled:pointer-events-none transition-all shadow-sm">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             Previous
           </button>
@@ -420,11 +433,10 @@ export default function GarmentMasterPage() {
                   <span key={`dots-${idx}`} className="px-1 text-slate-400 text-xs">…</span>
                 ) : (
                   <button key={p} onClick={() => setPage((p as number) - 1)}
-                    className={`min-w-[32px] h-8 rounded-lg text-xs font-semibold transition-all ${
-                      p === currentPage
+                    className={`min-w-[32px] h-8 rounded-lg text-xs font-semibold transition-all ${p === currentPage
                         ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/25'
                         : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}>
+                      }`}>
                     {p}
                   </button>
                 )
@@ -439,7 +451,7 @@ export default function GarmentMasterPage() {
               disabled:opacity-40 disabled:pointer-events-none transition-all shadow-sm">
             Next
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
         </div>
@@ -455,16 +467,17 @@ export default function GarmentMasterPage() {
                 ({categories.length} categories · top {Math.min(20, categories.length)} shown)
               </span>
             </h2>
-            {stats && (
+            {accurateStats && (
               <span className="text-[11px] text-slate-400 tabular-nums">
-                Based on {fmt(stats.sampleSize)} sampled SKUs
+                {fmt(accurateStats.totalCatalog)} total SKUs
               </span>
             )}
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {categories.slice(0, 20).map((cat) => {
-              const pct = stats && stats.totalInventory > 0 ? (cat.inventory / stats.totalInventory) * 100 : 0;
+              const totalInv = accurateStats?.totalInventory || categories.reduce((s, c) => s + c.inventory, 0);
+              const pct = totalInv > 0 ? (cat.inventory / totalInv) * 100 : 0;
               return (
                 <button
                   key={cat.name}
@@ -487,7 +500,7 @@ export default function GarmentMasterPage() {
                   {/* Progress bar */}
                   <div className="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-full mt-2 overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-primary-400 to-primary-600 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(pct, 100)}%` }}/>
+                      style={{ width: `${Math.min(pct, 100)}%` }} />
                   </div>
                 </button>
               );
