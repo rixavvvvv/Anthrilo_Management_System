@@ -286,8 +286,21 @@ export default function DailySalesReportPage() {
                         ))}
                       </Pie>
                       <RTooltip
-                        formatter={(value: any) => fmtFull(value)}
-                        contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 13, boxShadow: '0 4px 12px rgba(0,0,0,.08)' }}
+                        content={({ active, payload }) => {
+                          if (!active || !payload?.length) return null;
+                          const d = payload[0].payload;
+                          const pct = ((d.value / totalRev) * 100).toFixed(1);
+                          return (
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg px-3.5 py-2.5 min-w-[150px]">
+                              <p className="text-xs font-semibold text-slate-900 dark:text-white mb-1">{d.name}</p>
+                              <div className="flex items-center gap-2">
+                                <span className="h-2.5 w-2.5 rounded-full" style={{ background: d.color }} />
+                                <span className="text-sm font-bold tabular-nums text-slate-700 dark:text-slate-200">{fmtFull(d.value)}</span>
+                              </div>
+                              <p className="text-[11px] text-slate-400 mt-0.5">{pct}% of total</p>
+                            </div>
+                          );
+                        }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -312,7 +325,22 @@ export default function DailySalesReportPage() {
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
                       <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                       <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                      <RTooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 13, boxShadow: '0 4px 12px rgba(0,0,0,.08)' }} />
+                      <RTooltip
+                        cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                        content={({ active, payload }) => {
+                          if (!active || !payload?.length) return null;
+                          const d = payload[0].payload;
+                          return (
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg px-3.5 py-2.5 min-w-[140px]">
+                              <p className="text-xs font-semibold text-slate-900 dark:text-white mb-1">{d.name}</p>
+                              <div className="flex items-center gap-2">
+                                <span className="h-2.5 w-2.5 rounded-full" style={{ background: d.fill }} />
+                                <span className="text-sm font-bold tabular-nums text-slate-700 dark:text-slate-200">{d.orders} orders</span>
+                              </div>
+                            </div>
+                          );
+                        }}
+                      />
                       <Bar dataKey="orders" radius={[0, 6, 6, 0]} animationDuration={800}>
                         {barData.map((entry: any, i: number) => (
                           <Cell key={i} fill={entry.fill} />
