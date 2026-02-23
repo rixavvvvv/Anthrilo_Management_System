@@ -81,7 +81,7 @@ export default function DailySalesReportPage() {
     const d = new Date(); d.setDate(d.getDate() - 1);
     return d.toISOString().split('T')[0];
   });
-  const [showReport, setShowReport] = useState(false);
+  const [showReport, setShowReport] = useState(true);
   const [calOpen, setCalOpen] = useState(false);
   const calRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState('');
@@ -186,7 +186,7 @@ export default function DailySalesReportPage() {
   const SortIcon = ({ k }: { k: SortKey }) =>
     sortKey === k ? (sortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 opacity-30" />;
 
-  const dateLabel = new Date(reportDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const dateLabel = format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'EEEE, dd MMMM yyyy');
 
   /* ══════════════════════════════════════════════════════════════════ */
   return (
@@ -220,7 +220,7 @@ export default function DailySalesReportPage() {
                     <DayPicker
                       mode="single"
                       selected={parse(reportDate, 'yyyy-MM-dd', new Date())}
-                      onSelect={(day) => { if (day) { setReportDate(format(day, 'yyyy-MM-dd')); setCalOpen(false); } }}
+                      onSelect={(day) => { if (day) { setReportDate(format(day, 'yyyy-MM-dd')); setShowReport(false); setCalOpen(false); } }}
                       disabled={{ after: new Date() }}
                       defaultMonth={parse(reportDate, 'yyyy-MM-dd', new Date())}
                       classNames={{
