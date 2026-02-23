@@ -27,7 +27,7 @@ export function LoadingPanel() {
             <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 space-y-1">
                 <p className="flex items-center gap-2">
                     <span className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                    <span>Fetching data from Unicommerce API...</span>
+                    <span>Fetching data from Anthrilo...</span>
                 </p>
                 <p className="ml-4">⏱️ First load: 30-120 seconds (depends on data volume)</p>
                 <p className="ml-4">⚡ Cached loads: Instant (&lt; 2 seconds, 15 min cache)</p>
@@ -58,7 +58,7 @@ export function ErrorPanel({ message }: { message: string }) {
                             <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1 list-disc list-inside">
                                 <li>Wait 2-3 minutes and refresh - data is now cached and will load instantly</li>
                                 <li>Try a shorter period first (Today/Yesterday) to verify system is working</li>
-                                <li>Check your internet connection and Unicommerce API status</li>
+                                <li>Check your internet connection and Anthrilo API status</li>
                                 <li>The wait is worth it - you get 100% accurate data for business decisions!</li>
                             </ul>
                         </div>
@@ -449,8 +449,8 @@ export function FetchInfoPanel({ fetchInfo, loading = false }: FetchInfoPanelPro
                     )}
                     {fetchInfo.reconciliation_passed !== undefined && (
                         <div className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold ${fetchInfo.reconciliation_passed
-                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                            : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
                             }`}>
                             <span>{fetchInfo.reconciliation_passed ? '✓' : '✗'}</span>
                             <span>Reconciliation</span>

@@ -52,7 +52,7 @@ export default function BestSkusPage() {
                     {row.unpriced && (
                         <span
                             className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400"
-                            title="Wholesale/B2B order — pricing not stored in Unicommerce (invoiced externally)"
+                            title="Wholesale/B2B order — pricing not stored in Anthrilo (invoiced externally)"
                         >W</span>
                     )}
                 </span>
@@ -71,7 +71,7 @@ export default function BestSkusPage() {
             render: (value: number, row: any) => {
                 if (row.unpriced) {
                     return (
-                        <span className="text-orange-500 dark:text-orange-400 text-sm" title="Price not available in Unicommerce — wholesale order billed externally">
+                        <span className="text-orange-500 dark:text-orange-400 text-sm" title="Price not available in Anthrilo — wholesale order billed externally">
                             N/A <span className="text-[10px]">(wholesale)</span>
                         </span>
                     );
@@ -121,7 +121,7 @@ export default function BestSkusPage() {
 
     return (
         <div className="space-y-6">
-            <PageHeader title="Best Performing SKUs" description="Monthly top-selling SKUs from Unicommerce" />
+            <PageHeader title="Best Performing SKUs" description="Monthly top-selling SKUs from Anthrilo" />
 
             {/* Controls */}
             <div className="card">
@@ -172,7 +172,7 @@ export default function BestSkusPage() {
                 <div className="card bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
                     <p className="text-sm text-orange-800 dark:text-orange-300">
                         <span className="font-semibold">W = Wholesale/B2B:</span> {unpricedCount} SKU{unpricedCount !== 1 ? 's' : ''} in this list
-                        are sold through bulk B2B SHOPIFY orders where Unicommerce stores no unit prices
+                        are sold through bulk B2B SHOPIFY orders where Anthrilo stores no unit prices
                         (invoicing is handled externally). Revenue shows <strong>N/A</strong> for these.
                         Toggle <strong>B2C Only</strong> above to hide them and see retail-only rankings.
                     </p>

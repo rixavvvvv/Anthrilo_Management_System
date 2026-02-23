@@ -540,7 +540,7 @@ export default function SalesReportsPage() {
                                     ✅ Revenue: sellingPrice only
                                 </span>
                                 <span>
-                                    <span className="font-medium">Source:</span> Unicommerce OMS
+                                    <span className="font-medium">Source:</span> Anthrilo OMS
                                 </span>
                             </div>
                         </div>

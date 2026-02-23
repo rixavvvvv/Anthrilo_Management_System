@@ -16,6 +16,7 @@ export default function GarmentMasterPage() {
   const [page, setPage] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showCategories, setShowCategories] = useState(false);
+  const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -26,6 +27,7 @@ export default function GarmentMasterPage() {
   }, [search]);
 
   useEffect(() => { setPage(0); }, [selectedCategory]);
+  useEffect(() => { setPage(0); }, [stockFilter]);
 
   /* ── 1a) Accurate inventory summary from dedicated API (all SKUs) ── */
   const { data: summaryData, isLoading: summaryLoading } = useQuery({
@@ -55,14 +57,15 @@ export default function GarmentMasterPage() {
     refetchOnWindowFocus: false,
   });
 
-  /* ── 2) Paginated catalog (fast, no inventory snapshot) ──────── */
+  /* ── 2) Paginated catalog ──────────────────────────────────── */
+  const needsInventory = stockFilter !== 'all';
   const { data, isLoading, error, isFetching } = useQuery({
-    queryKey: ['uc-catalog', page, debouncedSearch, selectedCategory],
+    queryKey: ['uc-catalog', page, debouncedSearch, selectedCategory, stockFilter],
     queryFn: async () => {
       const response = await ucCatalog.searchItems({
         displayStart: page * PAGE_SIZE,
-        displayLength: PAGE_SIZE,
-        getInventorySnapshot: false,
+        displayLength: needsInventory ? PAGE_SIZE * 4 : PAGE_SIZE,
+        getInventorySnapshot: needsInventory,
         keyword: (debouncedSearch || selectedCategory) || undefined,
       });
       return response.data;
@@ -72,23 +75,31 @@ export default function GarmentMasterPage() {
   });
 
   /* ── derived data ────────────────────────────────────────────── */
-  const items = useMemo(() =>
-    (data?.elements || []).map((item: any) => ({
-      skuCode: item.skuCode || '-',
-      name: item.name || '-',
-      description: item.description || '',
-      categoryName: item.categoryName || '-',
-      categoryCode: item.categoryCode || '',
-      color: item.color || '-',
-      size: item.size || '-',
-      brand: item.brand || '-',
-      price: item.price || 0,
-      hsnCode: item.hsnCode || '-',
-      weight: item.weight || 0,
-      enabled: item.enabled,
-      ean: item.ean || item.scanIdentifier || '-',
-    })),
-    [data]);
+  const items = useMemo(() => {
+    const mapped = (data?.elements || []).map((item: any) => {
+      const snap = item.inventorySnapshots?.[0];
+      return {
+        skuCode: item.skuCode || '-',
+        name: item.name || '-',
+        description: item.description || '',
+        categoryName: item.categoryName || '-',
+        categoryCode: item.categoryCode || '',
+        color: item.color || '-',
+        size: item.size || '-',
+        brand: item.brand || '-',
+        price: item.price || 0,
+        hsnCode: item.hsnCode || '-',
+        weight: item.weight || 0,
+        enabled: item.enabled,
+        ean: item.ean || item.scanIdentifier || '-',
+        inventory: snap?.inventory ?? snap?.goodInventory ?? 0,
+      };
+    });
+    // Apply stock filter client-side
+    if (stockFilter === 'in_stock') return mapped.filter((i: any) => i.inventory > 0).slice(0, PAGE_SIZE);
+    if (stockFilter === 'out_of_stock') return mapped.filter((i: any) => i.inventory <= 0).slice(0, PAGE_SIZE);
+    return mapped;
+  }, [data, stockFilter]);
 
   const totalRecords = data?.totalRecords || 0;
   const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
@@ -100,6 +111,7 @@ export default function GarmentMasterPage() {
     return {
       totalCatalog: summaryData.totalSKUs ?? summaryData.totalProducts ?? 0,
       enabled: summaryData.activeSKUs ?? 0,
+      facilitySKUs: summaryData.facilitySKUs ?? 0,
       inStock: summaryData.skusWithStock ?? 0,
       outOfStock: summaryData.skusOutOfStock ?? 0,
       totalInventory: summaryData.totalRealInventory ?? 0,
@@ -109,16 +121,20 @@ export default function GarmentMasterPage() {
     };
   }, [summaryData]);
 
-  /* ── category breakdown from the 1000-SKU sample ────────────── */
+  /* ── category breakdown + quick estimates from the 1000-SKU sample ── */
   const stats = useMemo(() => {
     const elems = statsData?.elements || [];
     if (!elems.length) return null;
 
     const catMap: Record<string, { skus: number; inventory: number }> = {};
+    let enabledCount = 0, inStockCount = 0, totalInv = 0;
 
     for (const item of elems) {
       const snap = item.inventorySnapshots?.[0];
       const inv = snap?.inventory ?? snap?.goodInventory ?? 0;
+      if (item.enabled) enabledCount++;
+      if (inv > 0) inStockCount++;
+      totalInv += inv;
 
       const cat = item.categoryName || 'Uncategorized';
       if (!catMap[cat]) catMap[cat] = { skus: 0, inventory: 0 };
@@ -130,9 +146,18 @@ export default function GarmentMasterPage() {
       .map(([name, d]) => ({ name, ...d }))
       .sort((a, b) => b.inventory - a.inventory);
 
+    const total = statsData?.totalRecords || 0;
+    const sampleSize = elems.length;
+    const scale = sampleSize > 0 ? total / sampleSize : 1;
+
     return {
-      totalCatalog: statsData?.totalRecords || 0,
+      totalCatalog: total,
       categories,
+      // Quick estimates (extrapolated from sample)
+      estEnabled: Math.round(enabledCount * scale),
+      estInStock: inStockCount,
+      estOutOfStock: total - inStockCount,
+      estInventory: Math.round(totalInv * scale),
     };
   }, [statsData]);
 
@@ -149,19 +174,20 @@ export default function GarmentMasterPage() {
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
           {fmt(accurateStats?.totalCatalog || stats?.totalCatalog || totalRecords)} SKUs across {categories.length} categories
           <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-            Unicommerce API
+            Anthrilo
           </span>
         </p>
       </div>
 
       {/* ── Stats Row ───────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
         {[
           { label: 'Total Catalog', value: fmt(accurateStats?.totalCatalog || stats?.totalCatalog || totalRecords), icon: '📦', bg: 'bg-blue-50 dark:bg-blue-950/30', ring: 'ring-blue-200/50 dark:ring-blue-800/30' },
-          { label: 'Enabled SKUs', value: accurateStats ? fmt(accurateStats.enabled) : (summaryLoading ? '…' : '-'), icon: '✅', bg: 'bg-emerald-50 dark:bg-emerald-950/30', ring: 'ring-emerald-200/50 dark:ring-emerald-800/30' },
-          { label: 'In Stock', value: accurateStats ? fmt(accurateStats.inStock) : (summaryLoading ? '…' : '-'), icon: '📊', bg: 'bg-green-50 dark:bg-green-950/30', ring: 'ring-green-200/50 dark:ring-green-800/30' },
-          { label: 'Out of Stock', value: accurateStats ? fmt(accurateStats.outOfStock) : (summaryLoading ? '…' : '-'), icon: '⚠️', bg: 'bg-rose-50 dark:bg-rose-950/30', ring: 'ring-rose-200/50 dark:ring-rose-800/30' },
-          { label: 'Total Inventory', value: accurateStats ? fmt(accurateStats.totalInventory) : (summaryLoading ? '…' : '-'), icon: '🏭', bg: 'bg-violet-50 dark:bg-violet-950/30', ring: 'ring-violet-200/50 dark:ring-violet-800/30' },
+          { label: 'Facility SKUs', value: accurateStats ? fmt(accurateStats.facilitySKUs) : (summaryLoading ? '…' : '-'), icon: '🏭', bg: 'bg-cyan-50 dark:bg-cyan-950/30', ring: 'ring-cyan-200/50 dark:ring-cyan-800/30' },
+          { label: 'In Stock', value: accurateStats ? fmt(accurateStats.inStock) : (stats ? `~${fmt(stats.estInStock)}` : (summaryLoading ? '…' : '-')), icon: '✅', bg: 'bg-green-50 dark:bg-green-950/30', ring: 'ring-green-200/50 dark:ring-green-800/30' },
+          { label: 'Out of Stock', value: accurateStats ? `${fmt(accurateStats.outOfStock)} (${accurateStats.outOfStockPercent}%)` : (stats ? `~${fmt(stats.estOutOfStock)}` : (summaryLoading ? '…' : '-')), icon: '⚠️', bg: 'bg-rose-50 dark:bg-rose-950/30', ring: 'ring-rose-200/50 dark:ring-rose-800/30' },
+          { label: 'Total Inventory', value: accurateStats ? fmt(accurateStats.totalInventory) : (stats ? `~${fmt(stats.estInventory)}` : (summaryLoading ? '…' : '-')), icon: '📊', bg: 'bg-violet-50 dark:bg-violet-950/30', ring: 'ring-violet-200/50 dark:ring-violet-800/30' },
+          { label: 'Enabled SKUs', value: accurateStats ? fmt(accurateStats.enabled) : (stats ? `~${fmt(stats.estEnabled)}` : (summaryLoading ? '…' : '-')), icon: '🔓', bg: 'bg-emerald-50 dark:bg-emerald-950/30', ring: 'ring-emerald-200/50 dark:ring-emerald-800/30' },
           { label: 'Categories', value: categories.length.toString(), icon: '🏷️', bg: 'bg-indigo-50 dark:bg-indigo-950/30', ring: 'ring-indigo-200/50 dark:ring-indigo-800/30' },
         ].map((s) => (
           <div key={s.label}
@@ -170,7 +196,12 @@ export default function GarmentMasterPage() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{s.label}</p>
-                <p className="text-xl font-extrabold text-slate-900 dark:text-white mt-1 tabular-nums">{s.value}</p>
+                <p className="text-xl font-extrabold text-slate-900 dark:text-white mt-1 tabular-nums">
+                  {s.value}
+                  {!accurateStats && summaryLoading && typeof s.value === 'string' && s.value.startsWith('~') && (
+                    <span className="ml-1 inline-block w-2.5 h-2.5 border-2 border-primary-400 border-t-transparent rounded-full animate-spin align-middle" />
+                  )}
+                </p>
               </div>
               <span className="text-xl leading-none">{s.icon}</span>
             </div>
@@ -181,6 +212,23 @@ export default function GarmentMasterPage() {
       {/* ── Search & Category Bar ───────────────────────────────── */}
       <div className="rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
         <div className="flex gap-3 items-center flex-wrap">
+          {/* Stock filter pills */}
+          <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+            {([
+              { key: 'all' as const, label: 'All' },
+              { key: 'in_stock' as const, label: 'In Stock' },
+              { key: 'out_of_stock' as const, label: 'Out of Stock' },
+            ]).map((f) => (
+              <button key={f.key} onClick={() => setStockFilter(f.key)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${stockFilter === f.key
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                  }`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+
           {/* Search */}
           <div className="relative flex-1 min-w-[220px]">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -210,8 +258,8 @@ export default function GarmentMasterPage() {
           <button
             onClick={() => setShowCategories(!showCategories)}
             className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${showCategories || selectedCategory
-                ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/25'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/25'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
               }`}
           >
             <span className="text-base">🏷️</span>
@@ -249,8 +297,8 @@ export default function GarmentMasterPage() {
               <button
                 onClick={() => { setSelectedCategory(null); setSearch(''); setShowCategories(false); }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${!selectedCategory
-                    ? 'bg-primary-600 text-white shadow-sm'
-                    : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                  ? 'bg-primary-600 text-white shadow-sm'
+                  : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
                   }`}
               >
                 All ({fmt(stats?.totalCatalog || totalRecords)})
@@ -264,8 +312,8 @@ export default function GarmentMasterPage() {
                     setShowCategories(false);
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${selectedCategory === cat.name
-                      ? 'bg-primary-600 text-white shadow-sm'
-                      : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-700 hover:bg-primary-50 dark:hover:bg-primary-950/20'
+                    ? 'bg-primary-600 text-white shadow-sm'
+                    : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-700 hover:bg-primary-50 dark:hover:bg-primary-950/20'
                     }`}
                 >
                   {cat.name}
@@ -321,7 +369,7 @@ export default function GarmentMasterPage() {
             <table className="min-w-full">
               <thead>
                 <tr className="bg-slate-50/70 dark:bg-slate-800/40">
-                  {['SKU Code', 'Product Name', 'Category', 'Color', 'Size', 'Brand', 'HSN', 'MRP', 'Weight', 'Status'].map((h) => (
+                  {[...(needsInventory ? ['Stock'] : []), 'SKU Code', 'Product Name', 'Category', 'Color', 'Size', 'Brand', 'HSN', 'MRP', 'Weight', 'Status'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
                       {h}
                     </th>
@@ -332,6 +380,16 @@ export default function GarmentMasterPage() {
                 {items.map((item: any, i: number) => (
                   <tr key={item.skuCode + i}
                     className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors duration-100">
+                    {/* Stock (shown when filter active) */}
+                    {needsInventory && (
+                      <td className="px-4 py-3">
+                        <span className={`font-bold text-sm tabular-nums ${item.inventory > 0 ? 'text-emerald-600 dark:text-emerald-400' :
+                          'text-rose-600 dark:text-rose-400'
+                          }`}>
+                          {item.inventory}
+                        </span>
+                      </td>
+                    )}
                     {/* SKU */}
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs font-bold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 px-2 py-0.5 rounded-md">
@@ -387,8 +445,8 @@ export default function GarmentMasterPage() {
                     {/* Status */}
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${item.enabled
-                          ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500'
+                        ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500'
                         }`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${item.enabled ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                         {item.enabled ? 'Active' : 'Off'}
@@ -434,8 +492,8 @@ export default function GarmentMasterPage() {
                 ) : (
                   <button key={p} onClick={() => setPage((p as number) - 1)}
                     className={`min-w-[32px] h-8 rounded-lg text-xs font-semibold transition-all ${p === currentPage
-                        ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/25'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/25'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                       }`}>
                     {p}
                   </button>

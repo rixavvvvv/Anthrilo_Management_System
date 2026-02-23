@@ -1,14 +1,14 @@
 'use client';
-
+ 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { rawMaterialsReports } from '@/lib/api/reports';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { PageHeader, LoadingSpinner, StatCard, ErrorPanel } from '@/components/ui/Common';
-
+ 
 export default function YarnForecastingPage() {
   const [forecastDays, setForecastDays] = useState(30);
-
+ 
   const { data, isLoading, error } = useQuery({
     queryKey: ['yarn-forecasting', forecastDays],
     queryFn: async () => {
@@ -17,9 +17,9 @@ export default function YarnForecastingPage() {
     },
     staleTime: 120_000,
   });
-
+ 
   const items: any[] = Array.isArray(data) ? data : [];
-
+ 
   // Computed summary stats
   const totalYarnTypes = items.length;
   const criticalCount = items.filter((i) => i.days_until_stockout < 14).length;
@@ -28,7 +28,7 @@ export default function YarnForecastingPage() {
     items.length > 0
       ? items.reduce((sum, i) => sum + Math.min(i.days_until_stockout, 999), 0) / items.length
       : 0;
-
+ 
   // Status helper
   const getStockoutBadge = (days: number) => {
     if (days < 7)
@@ -55,7 +55,7 @@ export default function YarnForecastingPage() {
       </span>
     );
   };
-
+ 
   const columns: Column<any>[] = [
     {
       key: 'yarn_type',
@@ -110,14 +110,14 @@ export default function YarnForecastingPage() {
         ),
     },
   ];
-
+ 
   return (
     <div>
       <PageHeader
         title="Yarn Demand Forecasting"
         description="AI-driven demand forecasting based on production plans & consumption patterns"
       />
-
+ 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
         <StatCard title="Yarn Types" value={totalYarnTypes} icon="🧶" color="blue" />
@@ -140,7 +140,7 @@ export default function YarnForecastingPage() {
           color="green"
         />
       </div>
-
+ 
       {/* Forecast Period Selector */}
       <div className="card mb-4">
         <div className="flex items-center gap-3">
@@ -168,10 +168,10 @@ export default function YarnForecastingPage() {
           </div>
         </div>
       </div>
-
+ 
       {/* Error */}
       {error && <ErrorPanel message={(error as any)?.message || 'Failed to load forecasting data'} />}
-
+ 
       {/* Data Table */}
       <div className="card">
         <h2 className="mb-4 text-gray-900 dark:text-gray-100 text-lg font-semibold">
@@ -186,3 +186,5 @@ export default function YarnForecastingPage() {
     </div>
   );
 }
+ 
+ 

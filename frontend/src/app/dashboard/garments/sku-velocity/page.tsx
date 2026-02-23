@@ -31,7 +31,7 @@ function skuColumns(showRevenue = true): Column<any>[] {
                     {row.unpriced && (
                         <span
                             className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400"
-                            title="Wholesale/B2B order — pricing not stored in Unicommerce"
+                            title="Wholesale/B2B order — pricing not stored in Anthrilo"
                         >
                             W
                         </span>
@@ -193,7 +193,7 @@ export default function SkuVelocityPage() {
         <div className="space-y-6">
             <PageHeader
                 title="SKU Velocity"
-                description="Monthly fast-moving and slow-moving SKUs from Unicommerce"
+                description="Monthly fast-moving and slow-moving SKUs from Anthrilo"
             />
 
             {/* Controls */}
@@ -276,8 +276,8 @@ export default function SkuVelocityPage() {
                         <button
                             onClick={() => setB2cOnly(!b2cOnly)}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${b2cOnly
-                                    ? 'bg-primary-600'
-                                    : 'bg-slate-300 dark:bg-slate-600'
+                                ? 'bg-primary-600'
+                                : 'bg-slate-300 dark:bg-slate-600'
                                 }`}
                         >
                             <span

@@ -50,7 +50,7 @@ export default function GarmentsPage() {
     },
     {
       title: 'Orders',
-      description: 'Real-time orders from Unicommerce',
+      description: 'Real-time orders from Anthrilo',
       icon: '🛒',
       href: '/dashboard/garments/production',
       color: 'from-purple-500 to-violet-500',

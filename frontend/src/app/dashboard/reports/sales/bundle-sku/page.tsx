@@ -40,22 +40,28 @@ export default function SKUSalesPage() {
   const columns: Column<any>[] = [
     { key: 'sku', header: 'SKU', width: '15%' },
     { key: 'name', header: 'Product Name', width: '22%' },
-    { key: 'total_quantity', header: 'Units Sold', width: '9%',
+    {
+      key: 'total_quantity', header: 'Units Sold', width: '9%',
       render: (value) => <span className="font-semibold text-slate-900 dark:text-slate-100">{value}</span>,
     },
-    { key: 'order_count', header: 'Orders', width: '8%',
+    {
+      key: 'order_count', header: 'Orders', width: '8%',
       render: (value) => <span className="text-slate-700 dark:text-slate-300">{value}</span>,
     },
-    { key: 'total_revenue', header: 'Revenue', width: '12%',
+    {
+      key: 'total_revenue', header: 'Revenue', width: '12%',
       render: (value) => <span className="text-emerald-600 dark:text-emerald-400 font-bold">₹{(value || 0).toFixed(2)}</span>,
     },
-    { key: 'total_discount', header: 'Discount', width: '10%',
+    {
+      key: 'total_discount', header: 'Discount', width: '10%',
       render: (value) => <span className="text-orange-600 dark:text-orange-400 font-semibold">₹{(value || 0).toFixed(2)}</span>,
     },
-    { key: 'avg_selling_price', header: 'Avg Price', width: '10%',
+    {
+      key: 'avg_selling_price', header: 'Avg Price', width: '10%',
       render: (value) => <span className="text-slate-900 dark:text-slate-100">₹{(value || 0).toFixed(2)}</span>,
     },
-    { key: 'channels', header: 'Channels', width: '14%',
+    {
+      key: 'channels', header: 'Channels', width: '14%',
       render: (value) => {
         if (!value || typeof value !== 'object') return <span className="text-slate-400">-</span>;
         return (
@@ -73,7 +79,7 @@ export default function SKUSalesPage() {
 
   return (
     <div>
-      <PageHeader title="SKU Sales Report" description="Sales performance by SKU from Unicommerce" />
+      <PageHeader title="SKU Sales Report" description="Sales performance by SKU from Anthrilo" />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
         <StatCard title="Total SKUs Sold" value={summary.total_skus || 0} icon="📦" color="blue" />
@@ -114,7 +120,7 @@ export default function SKUSalesPage() {
           <span className="text-sm text-slate-500 dark:text-slate-400">{filtered.length} SKUs</span>
         </div>
         {isLoading ? (
-          <LoadingSpinner message="Fetching SKU sales from Unicommerce..." />
+          <LoadingSpinner message="Fetching SKU sales from Anthrilo..." />
         ) : (
           <DataTable data={paginated} columns={columns} emptyMessage="No SKU sales data for this period." />
         )}
