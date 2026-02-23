@@ -96,7 +96,7 @@ export default function OrdersPage() {
       itemSku: o.items?.[0]?.itemSku || o.items?.[0]?.sku || '-',
     }));
     if (!channelFilter) return mapped;
-    return mapped.filter((o) => o.channel === channelFilter);
+    return mapped.filter((o: any) => o.channel === channelFilter);
   }, [rawOrders, channelFilter]);
 
   const totalOrders = ordersData?.pagination?.total_orders || ordersData?.total || rawOrders.length;
@@ -277,7 +277,7 @@ export default function OrdersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                {orders.map((o, idx) => {
+                {orders.map((o: any, idx: number) => {
                   const st = statusStyle[o.status] || defaultStatus;
                   const chGrad = channelColors[o.channel] || 'from-slate-500 to-slate-600';
                   return (
