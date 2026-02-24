@@ -57,6 +57,12 @@ Param(
     $Prompt
 )
 
+<# Guard: skip if this venv is already active (prevents VS Code double-activation) #>
+$_thisVenv = Split-Path -Parent $MyInvocation.MyCommand.Path | Split-Path -Parent
+if ($Env:VIRTUAL_ENV -and (Resolve-Path $Env:VIRTUAL_ENV -ErrorAction SilentlyContinue).Path -eq (Resolve-Path $_thisVenv -ErrorAction SilentlyContinue).Path) {
+    return
+}
+
 <# Function declarations --------------------------------------------------- #>
 
 <#

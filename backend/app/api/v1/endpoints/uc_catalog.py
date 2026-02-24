@@ -11,10 +11,16 @@ Covers:
 """
 
 from fastapi import APIRouter, Body
+import csv
+import io
+import httpx
+import asyncio
+import time as time_module
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from app.services.unicommerce_api_service import get_uc_api_service
+from app.core.token_manager import get_token_manager
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -198,7 +204,8 @@ async def search_items(payload: Dict[str, Any] = Body(...)):
                 try:
                     snap_result = await svc.post(
                         "/inventory/inventorySnapshot/get",
-                        {"itemTypeSKUs": sku_codes}
+                        {"itemTypeSKUs": sku_codes},
+                        facility_code="anthrilo",
                     )
                     if snap_result.get("successful"):
                         for snap in snap_result.get("inventorySnapshots", []):
@@ -361,217 +368,340 @@ async def _compute_inventory_aggregates(svc, base_payload: Dict[str, Any]) -> Di
 
 
 # =============================================================================
-# INVENTORY SUMMARY (DEDICATED ENDPOINT FOR TOTALS)
+# INVENTORY SUMMARY — Export Job API (fastest: ~3 API calls for any volume)
 # =============================================================================
+
+# Export columns matching the working curl — every field we need
+INVENTORY_EXPORT_COLUMNS = [
+    "facility", "itemTypeName", "ean", "upc", "isbn",
+    "color", "size", "brand", "categoryName",
+    "openSale", "inventory", "inventoryBlocked", "badInventory",
+    "putawayPending", "pendingInventoryAssessment", "openPurchase",
+    "enabled", "updated", "costPrice",
+]
+
+EXPORT_MAX_POLL_SECONDS = 300
+EXPORT_INITIAL_POLL_INTERVAL = 2
+EXPORT_MAX_POLL_INTERVAL = 10
+EXPORT_POLL_BACKOFF = 1.5
+
+
+async def _create_inventory_export_job() -> Optional[str]:
+    """Create an 'Inventory Snapshot' export job on Unicommerce. Returns jobCode."""
+    tm = get_token_manager()
+    base_url = f"https://{tm.tenant}.unicommerce.com/services/rest/v1"
+    url = f"{base_url}/export/job/create"
+    timeout = httpx.Timeout(60.0, connect=15.0)
+
+    payload = {
+        "exportJobTypeName": "Inventory Snapshot",
+        "frequency": "ONETIME",
+        "exportColums": INVENTORY_EXPORT_COLUMNS,
+        "exportFilters": [],
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            headers = await tm.get_headers()
+            headers["Facility"] = "anthrilo"
+
+            resp = await client.post(url, json=payload, headers=headers)
+
+            if resp.status_code == 401:
+                tm.invalidate_token()
+                await tm.get_valid_token()
+                headers = await tm.get_headers()
+                headers["Facility"] = "anthrilo"
+                resp = await client.post(url, json=payload, headers=headers)
+
+            if resp.status_code >= 400:
+                logger.error(f"INV_EXPORT: Job create HTTP {resp.status_code}: {resp.text[:500]}")
+                return None
+
+            data = resp.json()
+            if data.get("successful"):
+                job_code = data.get("jobCode")
+                logger.info(f"INV_EXPORT: Job created → {job_code}")
+                return job_code
+            else:
+                logger.error(f"INV_EXPORT: Job create failed: {data}")
+                return None
+    except Exception as e:
+        logger.error(f"INV_EXPORT: Job create exception: {e}", exc_info=True)
+        return None
+
+
+async def _poll_inventory_export(job_code: str) -> Optional[str]:
+    """Poll until COMPLETE, return download URL."""
+    tm = get_token_manager()
+    base_url = f"https://{tm.tenant}.unicommerce.com/services/rest/v1"
+    url = f"{base_url}/export/job/status"
+    timeout = httpx.Timeout(60.0, connect=15.0)
+    payload = {"jobCode": job_code}
+
+    t0 = time_module.time()
+    interval = EXPORT_INITIAL_POLL_INTERVAL
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            while (time_module.time() - t0) < EXPORT_MAX_POLL_SECONDS:
+                headers = await tm.get_headers()
+                headers["Facility"] = "anthrilo"
+
+                resp = await client.post(url, json=payload, headers=headers)
+
+                if resp.status_code == 401:
+                    tm.invalidate_token()
+                    await tm.get_valid_token()
+                    headers = await tm.get_headers()
+                    headers["Facility"] = "anthrilo"
+                    resp = await client.post(url, json=payload, headers=headers)
+
+                resp.raise_for_status()
+                data = resp.json()
+
+                if data.get("successful"):
+                    status = data.get("status", "")
+                    elapsed = time_module.time() - t0
+
+                    if status == "COMPLETE":
+                        file_path = data.get("filePath", "")
+                        logger.info(f"INV_EXPORT: COMPLETE in {elapsed:.1f}s → {file_path}")
+                        return file_path
+                    elif status in ("FAILED", "CANCELLED"):
+                        logger.error(f"INV_EXPORT: {status} after {elapsed:.1f}s")
+                        return None
+                    else:
+                        logger.debug(f"INV_EXPORT: status={status} ({elapsed:.1f}s)")
+
+                await asyncio.sleep(interval)
+                interval = min(interval * EXPORT_POLL_BACKOFF, EXPORT_MAX_POLL_INTERVAL)
+
+    except Exception as e:
+        logger.error(f"INV_EXPORT: Poll exception: {e}", exc_info=True)
+        return None
+
+    logger.error(f"INV_EXPORT: Timed out after {EXPORT_MAX_POLL_SECONDS}s")
+    return None
+
+
+def _safe_int(val) -> int:
+    """Parse a CSV cell to int, handling floats like '3.0' and blanks."""
+    if val is None or val == "":
+        return 0
+    try:
+        return int(float(val))
+    except (ValueError, TypeError):
+        return 0
+
+
+def _safe_float(val) -> float:
+    if val is None or val == "":
+        return 0.0
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+async def _download_parse_inventory_csv(download_url: str) -> List[Dict[str, Any]]:
+    """Download the Inventory Snapshot CSV and return a list of row dicts."""
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=15.0)) as client:
+            resp = await client.get(download_url)
+
+            if resp.status_code in (401, 403):
+                tm = get_token_manager()
+                headers = await tm.get_headers()
+                resp = await client.get(download_url, headers=headers)
+
+            resp.raise_for_status()
+            csv_text = resp.text
+
+        if not csv_text or not csv_text.strip():
+            logger.warning("INV_EXPORT: Downloaded CSV is empty")
+            return []
+
+        reader = csv.DictReader(io.StringIO(csv_text))
+        logger.info(f"INV_EXPORT: CSV columns: {reader.fieldnames}")
+
+        rows: List[Dict[str, Any]] = []
+        for row in reader:
+            rows.append(row)
+
+        logger.info(f"INV_EXPORT: Parsed {len(rows)} inventory rows from CSV")
+        return rows
+
+    except Exception as e:
+        logger.error(f"INV_EXPORT: CSV download/parse error: {e}", exc_info=True)
+        return []
+
 
 @router.get("/inventory/summary")
 async def get_inventory_summary(force_refresh: bool = False):
     """
-    Get aggregated inventory summary across all SKUs.
+    Aggregated inventory summary across ALL SKUs using the
+    Unicommerce **Export Job API** (Inventory Snapshot export).
 
-    OPTIMIZED TWO-PHASE APPROACH (much faster than catalog+snapshot):
-      Phase 1: Catalog search WITHOUT inventory snapshots (lightweight, fast)
-               → gets SKU codes, enabled status, prices
-      Phase 2: Dedicated /inventory/inventorySnapshot/get API in 5K batches
-               → gets actual stock numbers (much lighter payloads)
+    Flow:
+      1. Create export job  →  1 API call
+      2. Poll until COMPLETE →  ~3-8 polls
+      3. Download CSV        →  1 HTTP GET
+      4. Parse & aggregate in-memory
 
-    Uses Redis caching with 4-hour TTL.
+    ~3 API calls total regardless of catalog size. ~10-30s.
+    Redis-cached for 4 hours.
     """
-    import asyncio
     from app.services.cache_service import CacheService
 
-    cache_key = "uc:inventory:summary:all"
+    cache_key = "uc:inventory:summary:v3"
+
+    # Clean up old cache keys
+    CacheService.delete("uc:inventory:summary:all")
+    CacheService.delete("uc:inventory:summary:v2")
 
     if not force_refresh:
         cached = CacheService.get(cache_key)
         if cached:
-            logger.info("Returning cached inventory summary")
+            logger.info("Returning cached inventory summary (v3-export)")
             return cached
 
     try:
-        svc = get_uc_api_service()
+        # ── Step 1: Create export job ──
+        job_code = await _create_inventory_export_job()
+        if not job_code:
+            return {"successful": False, "error": "Failed to create inventory export job"}
 
-        # ── Get total record count (1 lightweight call) ──
-        initial_result = await svc.post("/product/itemType/search", {
-            "getInventorySnapshot": False,
-            "searchOptions": {"displayStart": 0, "displayLength": 1}
-        })
+        # ── Step 2: Poll until complete ──
+        download_url = await _poll_inventory_export(job_code)
+        if not download_url:
+            return {"successful": False, "error": "Inventory export job failed or timed out"}
 
-        if not initial_result.get("successful"):
-            return {"successful": False, "error": "Failed to fetch initial data"}
+        # ── Step 3: Download & parse CSV ──
+        rows = await _download_parse_inventory_csv(download_url)
+        if not rows:
+            return {"successful": False, "error": "Inventory export CSV was empty"}
 
-        total_catalog_records = initial_result.get("totalRecords", 0)
-        logger.info(f"Inventory summary: {total_catalog_records} catalog records")
-
-        if total_catalog_records == 0:
-            result = {
-                "successful": True, "totalProducts": 0, "totalSKUs": 0,
-                "activeSKUs": 0, "facilitySKUs": 0, "skusWithStock": 0,
-                "skusOutOfStock": 0, "outOfStockPercent": 0,
-                "totalRealInventory": 0, "totalVirtualInventory": 0,
-                "totalStockValue": 0
-            }
-            CacheService.set(cache_key, result, 14400)
-            return result
-
-        # ══════════════════════════════════════════════════════════
-        # PHASE 1: Fetch catalog WITHOUT inventory (fast, ~5-10s)
-        # Gets: SKU codes, enabled status, prices only
-        # ══════════════════════════════════════════════════════════
-        catalog_batch_size = 10000  # Max per UC API call
-        catalog_concurrency = 4
-
-        all_skus = []          # ordered list of SKU codes
-        sku_price_map = {}     # sku_code → price
+        # ── Step 4: Aggregate ──
+        total_skus = len(rows)
         active_count = 0
+        facility_skus = 0
+        skus_with_stock = 0
+        skus_out_of_stock = 0
+        total_real_inventory = 0
+        total_virtual_inventory = 0  # not in this export; will stay 0
+        total_stock_value = 0.0
 
-        async def fetch_catalog_batch(start: int):
-            """Fetch one catalog batch (no inventory) → SKU metadata."""
-            res = await svc.post("/product/itemType/search", {
-                "getInventorySnapshot": False,
-                "searchOptions": {
-                    "displayStart": start,
-                    "displayLength": min(catalog_batch_size, total_catalog_records - start)
-                }
-            })
-            if not res.get("successful"):
-                logger.warning(f"Catalog batch failed at start={start}")
-                return []
-            return [
-                (item.get("skuCode", ""), item.get("enabled", False), item.get("price", 0) or 0)
-                for item in res.get("elements", [])
-                if item.get("skuCode")
-            ]
+        category_totals: Dict[str, Dict[str, int]] = {}
 
-        sem1 = asyncio.Semaphore(catalog_concurrency)
-        async def limited_catalog(start: int):
-            async with sem1:
-                return await fetch_catalog_batch(start)
+        for row in rows:
+            # Column names are Title Case from UC export CSV
+            # Try multiple possible header names
+            cat = (
+                row.get("Category Name")
+                or row.get("categoryName")
+                or row.get("Category")
+                or "Uncategorized"
+            ).strip() or "Uncategorized"
 
-        catalog_starts = list(range(0, total_catalog_records, catalog_batch_size))
-        logger.info(f"Phase 1: {len(catalog_starts)} catalog batches (no inventory)")
+            enabled_raw = (
+                row.get("Enabled")
+                or row.get("enabled")
+                or ""
+            ).strip().lower()
+            enabled = enabled_raw in ("true", "1", "yes", "y")
 
-        catalog_results = await asyncio.gather(*[limited_catalog(s) for s in catalog_starts])
-
-        for batch in catalog_results:
-            for sku_code, enabled, price in batch:
-                all_skus.append(sku_code)
-                sku_price_map[sku_code] = price
-                if enabled:
-                    active_count += 1
-
-        logger.info(f"Phase 1 done: {len(all_skus)} SKUs, {active_count} active")
-
-        # ══════════════════════════════════════════════════════════
-        # PHASE 2: Dedicated inventory snapshot API (fast, ~15-20s)
-        # /inventory/inventorySnapshot/get — up to 10K SKUs per call
-        # Returns ONLY inventory data, much lighter than catalog+snapshot
-        # ══════════════════════════════════════════════════════════
-        snapshot_batch_size = 5000
-        snapshot_concurrency = 3
-
-        totals = {
-            "totalRealInventory": 0, "totalVirtualInventory": 0,
-            "totalStockValue": 0, "facilitySKUs": 0,
-            "skusWithStock": 0, "skusOutOfStock": 0,
-        }
-
-        async def fetch_snapshot_batch(sku_batch: list):
-            """Fetch inventory snapshots for a batch of SKUs."""
-            partial = {
-                "facilitySKUs": 0, "skusWithStock": 0, "skusOutOfStock": 0,
-                "totalRealInventory": 0, "totalVirtualInventory": 0, "totalStockValue": 0,
-            }
-            snap_result = await svc.post(
-                "/inventory/inventorySnapshot/get",
-                {"itemTypeSKUs": sku_batch}
+            inv = _safe_int(
+                row.get("Inventory")
+                or row.get("inventory")
             )
-            if not snap_result.get("successful"):
-                logger.warning(f"Snapshot batch failed for {len(sku_batch)} SKUs")
-                partial["skusOutOfStock"] = len(sku_batch)
-                return partial
+            open_sale = _safe_int(
+                row.get("Open Sale")
+                or row.get("openSale")
+            )
+            inv_blocked = _safe_int(
+                row.get("Inventory Blocked")
+                or row.get("inventoryBlocked")
+            )
+            bad_inv = _safe_int(
+                row.get("Bad Inventory")
+                or row.get("badInventory")
+            )
+            putaway = _safe_int(
+                row.get("Putaway Pending")
+                or row.get("putawayPending")
+            )
+            open_purchase = _safe_int(
+                row.get("Open Purchase")
+                or row.get("openPurchase")
+            )
+            pending_assess = _safe_int(
+                row.get("Pending Inventory Assessment")
+                or row.get("pendingInventoryAssessment")
+            )
+            cost_price = _safe_float(
+                row.get("Cost Price")
+                or row.get("costPrice")
+            )
 
-            # Build SKU → snapshot map
-            snapshot_map = {}
-            for snap in snap_result.get("inventorySnapshots", []):
-                sku = snap.get("itemTypeSKU", "")
-                if sku:
-                    snapshot_map[sku] = snap
+            if enabled:
+                active_count += 1
 
-            for sku in sku_batch:
-                snap = snapshot_map.get(sku)
-                if not snap:
-                    partial["skusOutOfStock"] += 1
-                    continue
+            # A SKU is "at facility" if any inventory-related field is non-zero
+            has_activity = any(x != 0 for x in [
+                inv, open_sale, inv_blocked, bad_inv,
+                putaway, open_purchase, pending_assess,
+            ])
+            if has_activity:
+                facility_skus += 1
 
-                inv = 0
-                for field in ["inventory", "goodInventory", "availableInventory"]:
-                    val = snap.get(field)
-                    if val is not None and val != 0:
-                        inv = int(val)
-                        break
+            total_real_inventory += inv
+            total_stock_value += inv * cost_price
 
-                has_activity = any(
-                    (snap.get(f) or 0) != 0
-                    for f in ["inventory", "goodInventory", "availableInventory",
-                              "openSale", "openPurchase", "badInventory",
-                              "putawayPending", "pendingInventoryAssessment",
-                              "pendingStockTransfer", "vendorInventory",
-                              "virtualInventory", "inventoryBlocked"]
-                )
-                if has_activity:
-                    partial["facilitySKUs"] += 1
+            # Category breakdown
+            if cat not in category_totals:
+                category_totals[cat] = {
+                    "skus": 0, "inventory": 0, "inStock": 0, "outOfStock": 0,
+                }
+            category_totals[cat]["skus"] += 1
+            category_totals[cat]["inventory"] += inv
 
-                vi = snap.get("virtualInventory", 0) or 0
-                partial["totalVirtualInventory"] += int(vi)
+            if inv > 0:
+                skus_with_stock += 1
+                category_totals[cat]["inStock"] += 1
+            else:
+                skus_out_of_stock += 1
+                category_totals[cat]["outOfStock"] += 1
 
-                if inv > 0:
-                    partial["skusWithStock"] += 1
-                else:
-                    partial["skusOutOfStock"] += 1
+        oos_pct = round((skus_out_of_stock / total_skus) * 100) if total_skus > 0 else 0
 
-                partial["totalRealInventory"] += inv
-                partial["totalStockValue"] += inv * sku_price_map.get(sku, 0)
-
-            return partial
-
-        sku_batches = [all_skus[i:i + snapshot_batch_size]
-                       for i in range(0, len(all_skus), snapshot_batch_size)]
-        logger.info(f"Phase 2: {len(sku_batches)} snapshot batches of {snapshot_batch_size}")
-
-        sem2 = asyncio.Semaphore(snapshot_concurrency)
-        async def limited_snapshot(batch):
-            async with sem2:
-                return await fetch_snapshot_batch(batch)
-
-        snapshot_results = await asyncio.gather(*[limited_snapshot(b) for b in sku_batches])
-
-        for partial in snapshot_results:
-            for key in totals:
-                totals[key] += partial.get(key, 0)
-
-        out_of_stock_percent = 0
-        if total_catalog_records > 0:
-            out_of_stock_percent = round(
-                (totals["skusOutOfStock"] / total_catalog_records) * 100)
-
-        logger.info(f"Inventory summary: {totals}, OOS%: {out_of_stock_percent}")
+        categories_list = sorted(
+            [{"name": n, **d} for n, d in category_totals.items()],
+            key=lambda c: c["inventory"],
+            reverse=True,
+        )
 
         result = {
             "successful": True,
-            "totalProducts": total_catalog_records,
-            "totalSKUs": total_catalog_records,
+            "totalProducts": total_skus,
+            "totalSKUs": total_skus,
             "activeSKUs": active_count,
-            "facilitySKUs": totals["facilitySKUs"],
-            "skusWithStock": totals["skusWithStock"],
-            "skusOutOfStock": totals["skusOutOfStock"],
-            "outOfStockPercent": out_of_stock_percent,
-            "totalRealInventory": totals["totalRealInventory"],
-            "totalVirtualInventory": totals["totalVirtualInventory"],
-            "totalStockValue": totals["totalStockValue"]
+            "facilitySKUs": facility_skus,
+            "skusWithStock": skus_with_stock,
+            "skusOutOfStock": skus_out_of_stock,
+            "outOfStockPercent": oos_pct,
+            "totalRealInventory": total_real_inventory,
+            "totalVirtualInventory": total_virtual_inventory,
+            "totalStockValue": round(total_stock_value, 2),
+            "categories": categories_list,
         }
 
-        CacheService.set(cache_key, result, 14400)
+        logger.info(
+            f"INV_EXPORT: Summary done — {total_skus} SKUs, "
+            f"{skus_with_stock} in-stock, {len(categories_list)} categories"
+        )
+
+        CacheService.set(cache_key, result, 14400)  # 4h TTL
         return result
 
     except Exception as e:
