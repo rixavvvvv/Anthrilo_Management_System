@@ -549,3 +549,5 @@ export const CommandPalette = memo(function CommandPalette({ open, onClose }: Co
     </AnimatePresence>
   );
 });
+
+export default CommandPalette;

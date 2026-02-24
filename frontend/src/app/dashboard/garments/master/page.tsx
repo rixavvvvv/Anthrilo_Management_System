@@ -41,22 +41,6 @@ export default function GarmentMasterPage() {
     refetchOnWindowFocus: false,
   });
 
-  /* ── 1b) Category breakdown (1000 SKU sample, for categories only) ── */
-  const { data: statsData, isLoading: statsLoading } = useQuery({
-    queryKey: ['uc-catalog-stats'],
-    queryFn: async () => {
-      const res = await ucCatalog.searchItems({
-        displayStart: 0,
-        displayLength: 1000,
-        getInventorySnapshot: true,
-      });
-      return res.data;
-    },
-    staleTime: 15 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
-
   /* ── 2) Paginated catalog ──────────────────────────────────── */
   const needsInventory = stockFilter !== 'all';
   const { data, isLoading, error, isFetching } = useQuery({
@@ -118,50 +102,11 @@ export default function GarmentMasterPage() {
       blocked: summaryData.totalVirtualInventory ?? 0,
       outOfStockPercent: summaryData.outOfStockPercent ?? 0,
       totalStockValue: summaryData.totalStockValue ?? 0,
+      categories: (summaryData.categories ?? []) as { name: string; skus: number; inventory: number; inStock: number; outOfStock: number }[],
     };
   }, [summaryData]);
 
-  /* ── category breakdown + quick estimates from the 1000-SKU sample ── */
-  const stats = useMemo(() => {
-    const elems = statsData?.elements || [];
-    if (!elems.length) return null;
-
-    const catMap: Record<string, { skus: number; inventory: number }> = {};
-    let enabledCount = 0, inStockCount = 0, totalInv = 0;
-
-    for (const item of elems) {
-      const snap = item.inventorySnapshots?.[0];
-      const inv = snap?.inventory ?? snap?.goodInventory ?? 0;
-      if (item.enabled) enabledCount++;
-      if (inv > 0) inStockCount++;
-      totalInv += inv;
-
-      const cat = item.categoryName || 'Uncategorized';
-      if (!catMap[cat]) catMap[cat] = { skus: 0, inventory: 0 };
-      catMap[cat].skus++;
-      catMap[cat].inventory += inv;
-    }
-
-    const categories = Object.entries(catMap)
-      .map(([name, d]) => ({ name, ...d }))
-      .sort((a, b) => b.inventory - a.inventory);
-
-    const total = statsData?.totalRecords || 0;
-    const sampleSize = elems.length;
-    const scale = sampleSize > 0 ? total / sampleSize : 1;
-
-    return {
-      totalCatalog: total,
-      categories,
-      // Quick estimates (extrapolated from sample)
-      estEnabled: Math.round(enabledCount * scale),
-      estInStock: inStockCount,
-      estOutOfStock: total - inStockCount,
-      estInventory: Math.round(totalInv * scale),
-    };
-  }, [statsData]);
-
-  const categories = stats?.categories || [];
+  const categories = accurateStats?.categories ?? [];
 
   /* ── RENDER ──────────────────────────────────────────────────── */
   return (
@@ -172,7 +117,7 @@ export default function GarmentMasterPage() {
           Product Master Data
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          {fmt(accurateStats?.totalCatalog || stats?.totalCatalog || totalRecords)} SKUs across {categories.length} categories
+          {fmt(accurateStats?.totalCatalog || totalRecords)} SKUs across {categories.length} categories
           <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
             Anthrilo
           </span>
@@ -182,13 +127,13 @@ export default function GarmentMasterPage() {
       {/* ── Stats Row ───────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
         {[
-          { label: 'Total Catalog', value: fmt(accurateStats?.totalCatalog || stats?.totalCatalog || totalRecords), icon: '📦', bg: 'bg-blue-50 dark:bg-blue-950/30', ring: 'ring-blue-200/50 dark:ring-blue-800/30' },
+          { label: 'Total Catalog', value: accurateStats ? fmt(accurateStats.totalCatalog) : (summaryLoading ? '…' : fmt(totalRecords)), icon: '📦', bg: 'bg-blue-50 dark:bg-blue-950/30', ring: 'ring-blue-200/50 dark:ring-blue-800/30' },
           { label: 'Facility SKUs', value: accurateStats ? fmt(accurateStats.facilitySKUs) : (summaryLoading ? '…' : '-'), icon: '🏭', bg: 'bg-cyan-50 dark:bg-cyan-950/30', ring: 'ring-cyan-200/50 dark:ring-cyan-800/30' },
-          { label: 'In Stock', value: accurateStats ? fmt(accurateStats.inStock) : (stats ? `~${fmt(stats.estInStock)}` : (summaryLoading ? '…' : '-')), icon: '✅', bg: 'bg-green-50 dark:bg-green-950/30', ring: 'ring-green-200/50 dark:ring-green-800/30' },
-          { label: 'Out of Stock', value: accurateStats ? `${fmt(accurateStats.outOfStock)} (${accurateStats.outOfStockPercent}%)` : (stats ? `~${fmt(stats.estOutOfStock)}` : (summaryLoading ? '…' : '-')), icon: '⚠️', bg: 'bg-rose-50 dark:bg-rose-950/30', ring: 'ring-rose-200/50 dark:ring-rose-800/30' },
-          { label: 'Total Inventory', value: accurateStats ? fmt(accurateStats.totalInventory) : (stats ? `~${fmt(stats.estInventory)}` : (summaryLoading ? '…' : '-')), icon: '📊', bg: 'bg-violet-50 dark:bg-violet-950/30', ring: 'ring-violet-200/50 dark:ring-violet-800/30' },
-          { label: 'Enabled SKUs', value: accurateStats ? fmt(accurateStats.enabled) : (stats ? `~${fmt(stats.estEnabled)}` : (summaryLoading ? '…' : '-')), icon: '🔓', bg: 'bg-emerald-50 dark:bg-emerald-950/30', ring: 'ring-emerald-200/50 dark:ring-emerald-800/30' },
-          { label: 'Categories', value: categories.length.toString(), icon: '🏷️', bg: 'bg-indigo-50 dark:bg-indigo-950/30', ring: 'ring-indigo-200/50 dark:ring-indigo-800/30' },
+          { label: 'In Stock', value: accurateStats ? fmt(accurateStats.inStock) : (summaryLoading ? '…' : '-'), icon: '✅', bg: 'bg-green-50 dark:bg-green-950/30', ring: 'ring-green-200/50 dark:ring-green-800/30' },
+          { label: 'Out of Stock', value: accurateStats ? `${fmt(accurateStats.outOfStock)} (${accurateStats.outOfStockPercent}%)` : (summaryLoading ? '…' : '-'), icon: '⚠️', bg: 'bg-rose-50 dark:bg-rose-950/30', ring: 'ring-rose-200/50 dark:ring-rose-800/30' },
+          { label: 'Total Inventory', value: accurateStats ? fmt(accurateStats.totalInventory) : (summaryLoading ? '…' : '-'), icon: '📊', bg: 'bg-violet-50 dark:bg-violet-950/30', ring: 'ring-violet-200/50 dark:ring-violet-800/30' },
+          { label: 'Enabled SKUs', value: accurateStats ? fmt(accurateStats.enabled) : (summaryLoading ? '…' : '-'), icon: '🔓', bg: 'bg-emerald-50 dark:bg-emerald-950/30', ring: 'ring-emerald-200/50 dark:ring-emerald-800/30' },
+          { label: 'Categories', value: summaryLoading ? '…' : categories.length.toString(), icon: '🏷️', bg: 'bg-indigo-50 dark:bg-indigo-950/30', ring: 'ring-indigo-200/50 dark:ring-indigo-800/30' },
         ].map((s) => (
           <div key={s.label}
             className={`relative overflow-hidden rounded-2xl ring-1 ${s.ring} ${s.bg} p-4
@@ -198,7 +143,7 @@ export default function GarmentMasterPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{s.label}</p>
                 <p className="text-xl font-extrabold text-slate-900 dark:text-white mt-1 tabular-nums">
                   {s.value}
-                  {!accurateStats && summaryLoading && typeof s.value === 'string' && s.value.startsWith('~') && (
+                  {summaryLoading && s.value === '…' && (
                     <span className="ml-1 inline-block w-2.5 h-2.5 border-2 border-primary-400 border-t-transparent rounded-full animate-spin align-middle" />
                   )}
                 </p>
@@ -301,7 +246,7 @@ export default function GarmentMasterPage() {
                   : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
                   }`}
               >
-                All ({fmt(stats?.totalCatalog || totalRecords)})
+                All ({fmt(accurateStats?.totalCatalog || totalRecords)})
               </button>
               {categories.map((cat) => (
                 <button
@@ -534,7 +479,7 @@ export default function GarmentMasterPage() {
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {categories.slice(0, 20).map((cat) => {
-              const totalInv = accurateStats?.totalInventory || categories.reduce((s, c) => s + c.inventory, 0);
+              const totalInv = accurateStats?.totalInventory || categories.reduce((s: number, c: any) => s + c.inventory, 0);
               const pct = totalInv > 0 ? (cat.inventory / totalInv) * 100 : 0;
               return (
                 <button
@@ -554,6 +499,10 @@ export default function GarmentMasterPage() {
                   <div className="flex items-center justify-between mt-1">
                     <span className="text-[10px] text-slate-400 tabular-nums">{cat.skus} SKUs</span>
                     <span className="text-[10px] font-semibold text-primary-600 dark:text-primary-400 tabular-nums">{pct.toFixed(1)}%</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 tabular-nums">{fmt(cat.inStock)} in</span>
+                    <span className="text-[10px] text-rose-500 dark:text-rose-400 tabular-nums">{fmt(cat.outOfStock)} out</span>
                   </div>
                   {/* Progress bar */}
                   <div className="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-full mt-2 overflow-hidden">

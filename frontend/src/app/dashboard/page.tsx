@@ -4,9 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import Link from 'next/link';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import dynamic from 'next/dynamic';
 import {
   ShoppingCart, DollarSign, TrendingUp, Package,
   Clock, Zap,
@@ -19,23 +18,11 @@ import { ComparisonCard } from '@/components/dashboard/ComparisonCard';
 import { InsightsPanel } from '@/components/dashboard/InsightsPanel';
 import { ChartSkeleton } from '@/components/dashboard/charts/ChartSkeleton';
 
-// -- Lazy-loaded Charts (no SSR, with skeleton fallback) --
-const RevenueTrendChart = dynamic(
-  () => import('@/components/dashboard/charts/RevenueTrendChart'),
-  { ssr: false, loading: () => <ChartSkeleton /> }
-);
-const OrdersTrendChart = dynamic(
-  () => import('@/components/dashboard/charts/OrdersTrendChart'),
-  { ssr: false, loading: () => <ChartSkeleton /> }
-);
-const ChannelBarChart = dynamic(
-  () => import('@/components/dashboard/charts/ChannelBarChart'),
-  { ssr: false, loading: () => <ChartSkeleton /> }
-);
-const ChannelDonutChart = dynamic(
-  () => import('@/components/dashboard/charts/ChannelDonutChart'),
-  { ssr: false, loading: () => <ChartSkeleton /> }
-);
+// -- Lazy-loaded Charts (React.lazy avoids next/dynamic _next/undefined chunk bug) --
+const RevenueTrendChart = lazy(() => import('@/components/dashboard/charts/RevenueTrendChart'));
+const OrdersTrendChart  = lazy(() => import('@/components/dashboard/charts/OrdersTrendChart'));
+const ChannelBarChart   = lazy(() => import('@/components/dashboard/charts/ChannelBarChart'));
+const ChannelDonutChart = lazy(() => import('@/components/dashboard/charts/ChannelDonutChart'));
 
 // -- Helpers --
 const formatCurrency = (v: number) =>
@@ -381,12 +368,12 @@ export default function DashboardPage() {
         </h2>
         {/* Revenue — primary metric, full width */}
         <ChartCard title="Revenue Trend" subtitle="Daily revenue — last 7 days">
-          <RevenueTrendChart data={dailyTrend} />
+          <Suspense fallback={<ChartSkeleton />}><RevenueTrendChart data={dailyTrend} /></Suspense>
         </ChartCard>
         {/* Orders & Items — secondary, below */}
         <div className="mt-4">
           <ChartCard title="Orders & Items" subtitle="Daily volume — last 7 days">
-            <OrdersTrendChart data={dailyTrend} />
+            <Suspense fallback={<ChartSkeleton />}><OrdersTrendChart data={dailyTrend} /></Suspense>
           </ChartCard>
         </div>
       </section>
@@ -398,10 +385,10 @@ export default function DashboardPage() {
         </h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ChartCard title="Revenue by Channel" subtitle="Top channels — last 7 days">
-            <ChannelBarChart data={channelChartData} />
+            <Suspense fallback={<ChartSkeleton />}><ChannelBarChart data={channelChartData} /></Suspense>
           </ChartCard>
           <ChartCard title="Order Distribution" subtitle="Orders split by channel">
-            <ChannelDonutChart data={channelDonutData} />
+            <Suspense fallback={<ChartSkeleton />}><ChannelDonutChart data={channelDonutData} /></Suspense>
           </ChartCard>
         </div>
       </section>
