@@ -20,8 +20,8 @@ import { ChartSkeleton } from '@/components/dashboard/charts/ChartSkeleton';
 
 // -- Lazy-loaded Charts (React.lazy avoids next/dynamic _next/undefined chunk bug) --
 const RevenueTrendChart = lazy(() => import('@/components/dashboard/charts/RevenueTrendChart'));
-const OrdersTrendChart  = lazy(() => import('@/components/dashboard/charts/OrdersTrendChart'));
-const ChannelBarChart   = lazy(() => import('@/components/dashboard/charts/ChannelBarChart'));
+const OrdersTrendChart = lazy(() => import('@/components/dashboard/charts/OrdersTrendChart'));
+const ChannelBarChart = lazy(() => import('@/components/dashboard/charts/ChannelBarChart'));
 const ChannelDonutChart = lazy(() => import('@/components/dashboard/charts/ChannelDonutChart'));
 
 // -- Helpers --
