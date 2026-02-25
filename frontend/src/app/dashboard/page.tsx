@@ -367,12 +367,12 @@ export default function DashboardPage() {
           Trend Over Time
         </h2>
         {/* Revenue — primary metric, full width */}
-        <ChartCard title="Revenue Trend" subtitle="Daily revenue — last 7 days">
+        <ChartCard title="Revenue Trend" subtitle="Daily revenue — last 7 days" downloadable={false}>
           <Suspense fallback={<ChartSkeleton />}><RevenueTrendChart data={dailyTrend} /></Suspense>
         </ChartCard>
         {/* Orders & Items — secondary, below */}
         <div className="mt-4">
-          <ChartCard title="Orders & Items" subtitle="Daily volume — last 7 days">
+          <ChartCard title="Orders & Items" subtitle="Daily volume — last 7 days" downloadable={false}>
             <Suspense fallback={<ChartSkeleton />}><OrdersTrendChart data={dailyTrend} /></Suspense>
           </ChartCard>
         </div>
@@ -384,10 +384,10 @@ export default function DashboardPage() {
           Channel Contribution
         </h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <ChartCard title="Revenue by Channel" subtitle="Top channels — last 7 days">
+          <ChartCard title="Revenue by Channel" subtitle="Top channels — last 7 days" downloadable={false}>
             <Suspense fallback={<ChartSkeleton />}><ChannelBarChart data={channelChartData} /></Suspense>
           </ChartCard>
-          <ChartCard title="Order Distribution" subtitle="Orders split by channel">
+          <ChartCard title="Order Distribution" subtitle="Orders split by channel" downloadable={false}>
             <Suspense fallback={<ChartSkeleton />}><ChannelDonutChart data={channelDonutData} /></Suspense>
           </ChartCard>
         </div>
