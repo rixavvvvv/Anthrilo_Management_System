@@ -38,7 +38,7 @@ async def root():
         "version": "2.0.0",
         "features": ["Redis Caching", "WebSocket Live Feed", "Two-Phase Fetch"],
         "docs": f"{settings.API_V1_STR}/docs",
-        "websocket": f"ws://localhost:8000{settings.API_V1_STR}/integrations/ws/sales"
+        "websocket_path": f"{settings.API_V1_STR}/integrations/ws/sales"
     }
 
 

@@ -1452,11 +1452,11 @@ class UnicommerceServiceProduction:
             total_discount += calc["discount"]
             total_tax += calc["tax"]
             total_refund += calc["refund"]
-            total_items += calc.get("quantity", 0)  # NEW: Accumulate items
 
             if calc["include_in_revenue"]:
                 valid_orders += 1
                 total_revenue += calc["net_revenue"]
+                total_items += calc.get("quantity", 0)  # Only count valid orders' items
 
                 channel = calc["channel"]
                 if channel not in channel_stats:

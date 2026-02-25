@@ -35,7 +35,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>
+      <body className={inter.className}>
         <Providers>
           {children}
         </Providers>

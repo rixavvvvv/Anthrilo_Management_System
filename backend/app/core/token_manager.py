@@ -20,9 +20,14 @@ import httpx
 import json
 import logging
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Optional, Any
+
+
+def _utcnow() -> datetime:
+    """Return current UTC time as naive datetime (Python 3.12+ compatible)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 from app.core.config import settings
 
@@ -86,8 +91,8 @@ class TokenManager:
                 self._access_token = settings.UNICOMMERCE_ACCESS_TOKEN
                 self._refresh_token = settings.UNICOMMERCE_REFRESH_TOKEN
                 # Set expiry to trigger refresh check
-                self._token_expires_at = datetime.utcnow() + timedelta(hours=1)
-                self._refresh_expires_at = datetime.utcnow() + timedelta(days=29)
+                self._token_expires_at = _utcnow() + timedelta(hours=1)
+                self._refresh_expires_at = _utcnow() + timedelta(days=29)
                 self._save_tokens()
                 logger.info("Loaded tokens from environment variables")
 
@@ -132,7 +137,7 @@ class TokenManager:
                     if self._refresh_expires_at
                     else None
                 ),
-                "last_updated": datetime.utcnow().isoformat(),
+                "last_updated": _utcnow().isoformat(),
             }
             with open(self.token_file, "w") as f:
                 json.dump(data, f, indent=2)
@@ -177,21 +182,20 @@ class TokenManager:
                         self._refresh_token = data.get("refresh_token")
 
                         expires_in = data.get("expires_in", 86400)
-                        self._token_expires_at = datetime.utcnow() + timedelta(
+                        self._token_expires_at = _utcnow() + timedelta(
                             seconds=expires_in
                         )
 
                         refresh_expires_in = data.get(
                             "refresh_expires_in", 2592000
                         )
-                        self._refresh_expires_at = datetime.utcnow() + timedelta(
+                        self._refresh_expires_at = _utcnow() + timedelta(
                             seconds=refresh_expires_in
                         )
 
                         self._save_tokens()
                         self._auth_stats["level3_reauths"] += 1
-                        self._auth_stats["last_auth"] = datetime.utcnow(
-                        ).isoformat()
+                        self._auth_stats["last_auth"] = _utcnow().isoformat()
                         logger.info(
                             f"Login successful! Token expires in {expires_in}s"
                         )
@@ -208,11 +212,11 @@ class TokenManager:
         if self.access_code:
             logger.info("  Using access code as bearer token (fallback)")
             self._access_token = self.access_code
-            self._token_expires_at = datetime.utcnow() + timedelta(days=365)
-            self._refresh_expires_at = datetime.utcnow() + timedelta(days=365)
+            self._token_expires_at = _utcnow() + timedelta(days=365)
+            self._refresh_expires_at = _utcnow() + timedelta(days=365)
             self._save_tokens()
             self._auth_stats["level3_reauths"] += 1
-            self._auth_stats["last_auth"] = datetime.utcnow().isoformat()
+            self._auth_stats["last_auth"] = _utcnow().isoformat()
             return True
 
         logger.error("All authentication methods failed")
@@ -257,14 +261,14 @@ class TokenManager:
                         self._refresh_token = data.get("refresh_token")
 
                     expires_in = data.get("expires_in", 86400)
-                    self._token_expires_at = datetime.utcnow() + timedelta(
+                    self._token_expires_at = _utcnow() + timedelta(
                         seconds=expires_in
                     )
 
                     self._save_tokens()
                     self._auth_stats["level2_refreshes"] += 1
                     self._auth_stats["last_refresh"] = (
-                        datetime.utcnow().isoformat()
+                        _utcnow().isoformat()
                     )
                     logger.info("Token refresh successful")
                     return True
@@ -293,7 +297,7 @@ class TokenManager:
         - If token expiring in < 60 seconds: refresh (LEVEL 2)
         - If refresh fails: re-authenticate (LEVEL 3)
         """
-        now = datetime.utcnow()
+        now = _utcnow()
 
         # LEVEL 1: Check if current token is valid (not expiring within 60s)
         if self._access_token and self._token_expires_at:
@@ -307,7 +311,7 @@ class TokenManager:
         # Token needs refresh - acquire lock so only ONE refresh happens
         async with self._refresh_lock:
             # Double-check after acquiring lock (another coroutine may have refreshed)
-            now = datetime.utcnow()
+            now = _utcnow()
             if self._access_token and self._token_expires_at:
                 if now < (
                     self._token_expires_at
@@ -340,7 +344,7 @@ class TokenManager:
         Called when we get a 401 from the server, indicating the token is invalid.
         """
         logger.warning("Invalidating current token to force refresh")
-        self._token_expires_at = datetime.utcnow() - timedelta(seconds=1)
+        self._token_expires_at = _utcnow() - timedelta(seconds=1)
 
     async def get_headers(self) -> Dict[str, str]:
         """Get authenticated headers with a valid token."""
@@ -355,7 +359,7 @@ class TokenManager:
 
     def get_token_status(self) -> Dict[str, Any]:
         """Get current token status for monitoring/debugging."""
-        now = datetime.utcnow()
+        now = _utcnow()
 
         access_remaining = None
         refresh_remaining = None
