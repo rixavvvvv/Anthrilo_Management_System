@@ -1,13 +1,11 @@
 'use client';
 
-import { useState, useCallback, useEffect, memo, lazy, Suspense } from 'react';
+import { useState, useCallback, useEffect, memo } from 'react';
 import { Search, Moon, Sun, Command } from 'lucide-react';
 import { Breadcrumbs } from './Breadcrumbs';
 import { NotificationDropdown } from './NotificationDropdown';
 import { AvatarMenu } from './AvatarMenu';
-
-// Lazy-load command palette — only needed when opened (React.lazy avoids next/dynamic _next/undefined bug)
-const CommandPalette = lazy(() => import('./CommandPalette'));
+import CommandPalette from './CommandPalette';
 
 // ─── Theme Toggle ──────────────────────────────────────────────────────────
 const ThemeToggle = memo(function ThemeToggle() {
@@ -127,10 +125,8 @@ export function Navbar() {
         </div>
       </header>
 
-      {/* Command Palette (lazy) */}
-      <Suspense fallback={null}>
-        <CommandPalette open={paletteOpen} onClose={closePalette} />
-      </Suspense>
+      {/* Command Palette */}
+      <CommandPalette open={paletteOpen} onClose={closePalette} />
     </>
   );
 }
