@@ -1,9 +1,21 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Home() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
+
+  // Auto-redirect authenticated users to dashboard
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.replace('/dashboard');
+    }
+  }, [isLoading, isAuthenticated, router]);
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-violet-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       {/* Navigation */}
@@ -18,8 +30,8 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-3">
               <ThemeToggle />
-              <Link href="/dashboard" className="px-5 py-2 rounded-xl bg-gradient-to-r from-primary-600 to-violet-600 text-white text-sm font-semibold shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-all">
-                Open Dashboard
+              <Link href="/login" className="px-5 py-2 rounded-xl bg-gradient-to-r from-primary-600 to-violet-600 text-white text-sm font-semibold shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-all">
+                Sign In
               </Link>
             </div>
           </div>
@@ -42,7 +54,7 @@ export default function Home() {
             Real-time inventory, sales, and financial analytics powered by Anthrilo — all in one modern dashboard.
           </p>
           <div className="mt-10 flex justify-center gap-4">
-            <Link href="/dashboard" className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-primary-600 to-violet-600 text-white font-semibold shadow-xl shadow-primary-500/25 hover:shadow-primary-500/40 hover:-translate-y-0.5 transition-all text-lg">
+            <Link href="/login" className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-primary-600 to-violet-600 text-white font-semibold shadow-xl shadow-primary-500/25 hover:shadow-primary-500/40 hover:-translate-y-0.5 transition-all text-lg">
               Get Started
             </Link>
             <a href="#features" className="px-8 py-3.5 rounded-2xl bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold hover:bg-white dark:hover:bg-slate-800 transition-all text-lg">

@@ -15,9 +15,61 @@ class User(Base):
     full_name = Column(String(255))
     is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False)
-    role = Column(String(50), nullable=False)
+    role = Column(String(50), nullable=False, default="staff")  # admin | manager | staff
+    last_login = Column(DateTime, nullable=True)
+    # Preferences
+    timezone = Column(String(100), default="Asia/Kolkata")
+    language = Column(String(10), default="en")
+    email_notifications = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    login_history = relationship("LoginHistory", back_populates="user", cascade="all, delete-orphan")
+    activity_logs = relationship("ActivityLog", back_populates="user", cascade="all, delete-orphan")
+    sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+
+
+class LoginHistory(Base):
+    __tablename__ = "login_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    ip_address = Column(String(45))
+    user_agent = Column(String(512))
+    status = Column(String(20), nullable=False, default="success")  # success | failed
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="login_history")
+
+
+class ActivityLog(Base):
+    __tablename__ = "activity_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    action = Column(String(100), nullable=False)  # login, logout, create_user, update_user, etc.
+    detail = Column(Text)
+    ip_address = Column(String(45))
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="activity_logs")
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    refresh_token_hash = Column(String(255), nullable=False)  # SHA-256 hash of refresh token
+    ip_address = Column(String(45))
+    user_agent = Column(String(512))
+    device_label = Column(String(100))  # e.g. "Chrome on Windows"
+    is_current = Column(Boolean, default=False)  # flagged for caller's session
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+
+    user = relationship("User", back_populates="sessions")
 
 
 class Yarn(Base):
