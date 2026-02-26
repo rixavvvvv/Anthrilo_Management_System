@@ -1,71 +1,89 @@
-# Python
+# --- Python -----------------------------------------------
 __pycache__/
 *.py[cod]
-*$py.class
+*.class
 *.so
 .Python
-env/
+
+# Virtual environments
+.venv/
 venv/
+env/
 ENV/
-build/
-develop-eggs/
+
+# Build / packaging
 dist/
+develop-eggs/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
 wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
+
+# Test / coverage
 .pytest_cache/
 .coverage
 htmlcov/
-*.log
 
-# Node.js
+# --- Node.js ----------------------------------------------
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+
+# Next.js build output
 .next/
 out/
 .vercel
 *.tsbuildinfo
 
-# Environment
+# --- Environment files ------------------------------------
+# Real env files (never commit secrets)
 .env
 .env.local
+.env.production
 .env.development.local
 .env.test.local
 .env.production.local
+.env.prod
 
-# Sensitive tokens
+# .env.example files are intentionally tracked (team templates)
+!.env.example
+!*.env.example
+
+# --- Sensitive tokens -------------------------------------
 backend/app/data/unicommerce_tokens.json
 
-# IDEs
-.vscode/
+# --- IDEs -------------------------------------------------
+# .vscode is intentionally tracked - team shares tasks.json and settings
 .idea/
 *.swp
 *.swo
 *.swn
 .DS_Store
+Thumbs.db
 
-# Database
+# --- Database ---------------------------------------------
 *.db
 *.sqlite
 *.sqlite3
 
-# Docker
+# --- Logs -------------------------------------------------
 *.log
+logs/
 
-# Misc
+# --- Docker -----------------------------------------------
+# Local override compose (machine-specific, not for prod)
+docker-compose.override.yml
+
+# --- Misc -------------------------------------------------
 .cache/
 .temp/
 .tmp/
+sdist/
+var/
+parts/

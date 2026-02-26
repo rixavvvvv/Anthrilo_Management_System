@@ -55,23 +55,23 @@ export default function GarmentInventoryPage() {
 
   /* ── Derived ── */
   const items = useMemo(() => {
-    const raw = data?.items ?? data?.elements ?? [];
+    const raw = data?.inventorySnapshots ?? data?.items ?? [];
     if (stockFilter === 'out_of_stock') return raw.filter((i: any) => (i.inventory ?? i.openSale ?? 0) <= 0);
     return raw;
   }, [data, stockFilter]);
 
-  const totalRecords = data?.total ?? data?.totalRecords ?? 0;
-  const totalPages = data?.total_pages ?? Math.ceil(totalRecords / PAGE_SIZE);
+  const totalRecords = data?.totalCount ?? data?.totalRecords ?? 0;
+  const totalPages = data?.totalPages ?? data?.total_pages ?? Math.ceil(totalRecords / PAGE_SIZE);
 
   const stats = useMemo(() => {
     if (!summaryData) return null;
-    const s = summaryData.summary ?? summaryData;
+    const s = (summaryData.summary ?? summaryData) as any;
     return {
       totalSKUs: s.total_skus ?? s.totalSKUs ?? 0,
       inStock: s.in_stock ?? s.skusWithStock ?? 0,
       outOfStock: s.out_of_stock ?? s.skusOutOfStock ?? 0,
       totalInventory: s.total_inventory ?? s.totalRealInventory ?? 0,
-      categories: (s.categories ?? summaryData.categories ?? []) as { name: string; skus: number; inventory: number }[],
+      categories: (s.categories ?? (summaryData as any).categories ?? []) as { name: string; skus: number; inventory: number }[],
     };
   }, [summaryData]);
 
