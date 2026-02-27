@@ -1,10 +1,4 @@
-"""
-Unicommerce Facility API Endpoints
-====================================
-Covers:
-- Search Facility
-- Get Facility Details
-"""
+"""Unicommerce facility endpoints."""
 
 from fastapi import APIRouter, Body
 import logging

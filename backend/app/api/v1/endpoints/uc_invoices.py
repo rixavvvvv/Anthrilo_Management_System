@@ -1,15 +1,4 @@
-"""
-Unicommerce Invoice API Endpoints
-===================================
-Covers:
-- Create Invoice
-- Create Invoice with Sale Order Code
-- Create Invoice and Label by Shipping Package Code
-- Create Invoice with Details
-- Get Invoice Details
-- Get Invoice PDF by Invoice Code
-- Get Invoice Label
-"""
+"""Unicommerce invoice endpoints."""
 
 from fastapi import APIRouter, Body, Query
 from fastapi.responses import Response

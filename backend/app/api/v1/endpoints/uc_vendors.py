@@ -1,12 +1,4 @@
-"""
-Unicommerce Vendor & Purchase Order API Endpoints
-===================================================
-Covers:
-- Create/Update Vendor Catalog
-- Get Vendor Backorder Items
-- Create, Search, Approve, Close Purchase Orders
-- Get Purchase Order Details
-"""
+"""Unicommerce vendor endpoints."""
 
 from fastapi import APIRouter, Body
 import logging
@@ -18,10 +10,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# VENDOR CATALOG
-# =============================================================================
-
+# Vendor catalog
 @router.post("/vendor-catalog/create-or-edit")
 async def create_or_update_vendor_catalog(
     vendor_code: str = Body(...),
@@ -78,10 +67,7 @@ async def get_vendor_backorder_items(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# PURCHASE ORDERS
-# =============================================================================
-
+# Purchase orders
 @router.post("/purchase-order/create")
 async def create_purchase_order(
     payload: Dict[str, Any] = Body(...),

@@ -1,15 +1,4 @@
-"""
-Unicommerce Generic API Service
-================================
-Provides a reusable HTTP client for ALL Unicommerce REST APIs.
-Uses the centralized TokenManager for authentication.
-
-Supports:
-- Tenant-level APIs (no Facility header)
-- Facility-level APIs (requires Facility header)
-- POST and GET methods
-- Automatic retry on 401 (token refresh)
-"""
+"""Reusable HTTP client for Unicommerce REST APIs with token management."""
 
 import httpx
 import logging
@@ -21,13 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 class UnicommerceAPIService:
-    """
-    Generic Unicommerce API client.
-    All Unicommerce endpoints follow a consistent pattern:
-    - POST with JSON payload to /services/rest/v1/...
-    - Bearer token auth
-    - Optional Facility header for facility-level APIs
-    """
 
     def __init__(self):
         self.token_manager = get_token_manager()
@@ -216,10 +198,7 @@ class UnicommerceAPIService:
                 raise
 
 
-# =========================================================================
-# SINGLETON
-# =========================================================================
-
+# Singleton
 _uc_api_service: Optional[UnicommerceAPIService] = None
 
 

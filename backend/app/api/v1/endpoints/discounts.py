@@ -44,10 +44,10 @@ def create_discount(discount: DiscountCreate, db: Session = Depends(get_db)):
     db.add(db_discount)
     db.commit()
     db.refresh(db_discount)
-    
+
     # Invalidate cache
     CacheService.invalidate_discounts_cache()
-    
+
     return db_discount
 
 
@@ -60,21 +60,21 @@ def list_discounts(
 ):
     """List all discounts with pagination and Redis caching."""
     skip = (page - 1) * page_size
-    
+
     # Check cache
     cache_key = f"discounts:list:{page}:{page_size}:{is_active}"
     cached = CacheService.get(cache_key)
     if cached:
         return PaginatedResponse[DiscountSchema](**cached)
-    
+
     # Build query
     query = db.query(Discount)
     if is_active is not None:
         query = query.filter(Discount.is_active == is_active)
-    
+
     total = query.count()
     discounts = query.offset(skip).limit(page_size).all()
-    
+
     items = [DiscountSchema.from_orm(d) for d in discounts]
     result = {
         "items": [item.model_dump(mode='json') for item in items],
@@ -83,10 +83,10 @@ def list_discounts(
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size
     }
-    
+
     # Cache result
     CacheService.set(cache_key, result, CacheService.TTL_MEDIUM)
-    
+
     return PaginatedResponse[DiscountSchema](**result)
 
 
@@ -98,14 +98,14 @@ def get_discount(discount_id: int, db: Session = Depends(get_db)):
     cached = CacheService.get(cache_key)
     if cached:
         return cached
-    
+
     discount = db.query(Discount).filter(Discount.id == discount_id).first()
     if not discount:
         raise HTTPException(status_code=404, detail="Discount not found")
-    
+
     result = DiscountSchema.from_orm(discount)
-    
+
     # Cache result (serialize before caching)
     CacheService.set(cache_key, result.model_dump(mode='json'), CacheService.TTL_LONG)
-    
+
     return result

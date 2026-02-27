@@ -1,10 +1,7 @@
 import { unicommerceApi } from './index';
 import { apiClient } from '@/lib/api-client';
 
-/**
- * Legacy exports for backward compatibility
- * All functionality is now in unicommerceApi in index.ts
- */
+// Re-exports for backward compatibility
 
 // Sales-related APIs
 export const ucSales = {

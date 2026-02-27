@@ -56,8 +56,7 @@ export const productionApi = {
     apiClient.post<ProductionPlan>('/production/plans', data),
 };
 
-// Unicommerce Integration API - PRODUCTION VERSION
-// Revenue calculated using sellingPrice ONLY
+// Unicommerce integration API
 export const unicommerceApi = {
   // Summary endpoints (for dashboard cards)
   getToday: () => apiClient.get('/integrations/unicommerce/today'),

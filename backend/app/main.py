@@ -12,13 +12,12 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     version="2.0.0",
-    description="Enterprise ERP system for textile manufacturing and garment production management"
+    description="Anthrilo management system"
 )
 
-# GZip compression for responses > 500 bytes (reduces payload size ~60-80%)
+# GZip responses over 500 bytes
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
-# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -27,7 +26,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
@@ -36,7 +34,6 @@ async def root():
     return {
         "message": "Anthrilo Management System API",
         "version": "2.0.0",
-        "features": ["Redis Caching", "WebSocket Live Feed", "Two-Phase Fetch"],
         "docs": f"{settings.API_V1_STR}/docs",
         "websocket_path": f"{settings.API_V1_STR}/integrations/ws/sales"
     }

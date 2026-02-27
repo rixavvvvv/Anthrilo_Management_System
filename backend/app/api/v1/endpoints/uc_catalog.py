@@ -1,14 +1,4 @@
-"""
-Unicommerce Catalog & Product API Endpoints
-=============================================
-Covers:
-- Create/Update Category
-- Create/Update Item (single & multiple)
-- Create/Update Channel Item Type
-- Get Item Details
-- Get Item Barcode Details
-- Search Items
-"""
+"""Unicommerce catalog and item type endpoints."""
 
 from fastapi import APIRouter, Body
 import csv
@@ -26,10 +16,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# CATEGORIES
-# =============================================================================
-
+# Categories
 @router.post("/category/create-or-edit")
 async def create_or_update_category(payload: Dict[str, Any] = Body(...)):
     """
@@ -49,10 +36,7 @@ async def create_or_update_category(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# ITEMS (SINGLE)
-# =============================================================================
-
+# Items (single)
 @router.post("/item/create-or-edit")
 async def create_or_update_item(payload: Dict[str, Any] = Body(...)):
     """
@@ -74,10 +58,7 @@ async def create_or_update_item(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# ITEMS (MULTIPLE)
-# =============================================================================
-
+# Items (multiple)
 @router.post("/items/create-or-edit")
 async def create_or_update_items(payload: Dict[str, Any] = Body(...)):
     """
@@ -97,10 +78,7 @@ async def create_or_update_items(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# CHANNEL ITEM TYPE
-# =============================================================================
-
+# Channel item type
 @router.post("/channel-item/create-or-edit")
 async def create_or_update_channel_item_type(payload: Dict[str, Any] = Body(...)):
     """
@@ -120,10 +98,7 @@ async def create_or_update_channel_item_type(payload: Dict[str, Any] = Body(...)
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# GET ITEM DETAILS
-# =============================================================================
-
+# Get item details
 @router.post("/item/get")
 async def get_item_details(payload: Dict[str, Any] = Body(...)):
     """
@@ -153,10 +128,7 @@ async def get_item_barcode_details(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# SEARCH ITEMS
-# =============================================================================
-
+# Search items
 @router.post("/item/search")
 async def search_items(payload: Dict[str, Any] = Body(...)):
     """
@@ -312,7 +284,7 @@ async def _compute_inventory_aggregates(svc, base_payload: Dict[str, Any]) -> Di
         }
 
         # Limit to first 10,000 items for performance (configurable)
-        # NOTE: For accurate totals across ALL SKUs, use /inventory/summary endpoint instead
+        # For accurate totals across ALL SKUs, use /inventory/summary endpoint instead
         max_items = min(total_records, 10000)
 
         for start in range(0, max_items, batch_size):
@@ -367,9 +339,7 @@ async def _compute_inventory_aggregates(svc, base_payload: Dict[str, Any]) -> Di
         return {}
 
 
-# =============================================================================
-# INVENTORY SUMMARY — Export Job API (fastest: ~3 API calls for any volume)
-# =============================================================================
+# Inventory summary via export job
 
 # Export columns matching the working curl — every field we need
 INVENTORY_EXPORT_COLUMNS = [
@@ -415,19 +385,19 @@ async def _create_inventory_export_job() -> Optional[str]:
                 resp = await client.post(url, json=payload, headers=headers)
 
             if resp.status_code >= 400:
-                logger.error(f"INV_EXPORT: Job create HTTP {resp.status_code}: {resp.text[:500]}")
+                logger.error(f"Inventory export: Job create HTTP {resp.status_code}: {resp.text[:500]}")
                 return None
 
             data = resp.json()
             if data.get("successful"):
                 job_code = data.get("jobCode")
-                logger.info(f"INV_EXPORT: Job created → {job_code}")
+                logger.info(f"Inventory export: Job created {job_code}")
                 return job_code
             else:
-                logger.error(f"INV_EXPORT: Job create failed: {data}")
+                logger.error(f"Inventory export: Job create failed: {data}")
                 return None
     except Exception as e:
-        logger.error(f"INV_EXPORT: Job create exception: {e}", exc_info=True)
+        logger.error(f"Inventory export: Job create exception: {e}", exc_info=True)
         return None
 
 
@@ -466,22 +436,22 @@ async def _poll_inventory_export(job_code: str) -> Optional[str]:
 
                     if status == "COMPLETE":
                         file_path = data.get("filePath", "")
-                        logger.info(f"INV_EXPORT: COMPLETE in {elapsed:.1f}s → {file_path}")
+                        logger.info(f"Inventory export: COMPLETE in {elapsed:.1f}s {file_path}")
                         return file_path
                     elif status in ("FAILED", "CANCELLED"):
-                        logger.error(f"INV_EXPORT: {status} after {elapsed:.1f}s")
+                        logger.error(f"Inventory export: {status} after {elapsed:.1f}s")
                         return None
                     else:
-                        logger.debug(f"INV_EXPORT: status={status} ({elapsed:.1f}s)")
+                        logger.debug(f"Inventory export: status={status} ({elapsed:.1f}s)")
 
                 await asyncio.sleep(interval)
                 interval = min(interval * EXPORT_POLL_BACKOFF, EXPORT_MAX_POLL_INTERVAL)
 
     except Exception as e:
-        logger.error(f"INV_EXPORT: Poll exception: {e}", exc_info=True)
+        logger.error(f"Inventory export: Poll exception: {e}", exc_info=True)
         return None
 
-    logger.error(f"INV_EXPORT: Timed out after {EXPORT_MAX_POLL_SECONDS}s")
+    logger.error(f"Inventory export: Timed out after {EXPORT_MAX_POLL_SECONDS}s")
     return None
 
 
@@ -519,21 +489,21 @@ async def _download_parse_inventory_csv(download_url: str) -> List[Dict[str, Any
             csv_text = resp.text
 
         if not csv_text or not csv_text.strip():
-            logger.warning("INV_EXPORT: Downloaded CSV is empty")
+            logger.warning("Inventory export: Downloaded CSV is empty")
             return []
 
         reader = csv.DictReader(io.StringIO(csv_text))
-        logger.info(f"INV_EXPORT: CSV columns: {reader.fieldnames}")
+        logger.info(f"Inventory export: CSV columns: {reader.fieldnames}")
 
         rows: List[Dict[str, Any]] = []
         for row in reader:
             rows.append(row)
 
-        logger.info(f"INV_EXPORT: Parsed {len(rows)} inventory rows from CSV")
+        logger.info(f"Inventory export: Parsed {len(rows)} inventory rows from CSV")
         return rows
 
     except Exception as e:
-        logger.error(f"INV_EXPORT: CSV download/parse error: {e}", exc_info=True)
+        logger.error(f"Inventory export: CSV download/parse error: {e}", exc_info=True)
         return []
 
 
@@ -544,9 +514,9 @@ async def get_inventory_summary(force_refresh: bool = False):
     Unicommerce **Export Job API** (Inventory Snapshot export).
 
     Flow:
-      1. Create export job  →  1 API call
-      2. Poll until COMPLETE →  ~3-8 polls
-      3. Download CSV        →  1 HTTP GET
+      1. Create export job   1 API call
+      2. Poll until COMPLETE  ~3-8 polls
+      3. Download CSV         1 HTTP GET
       4. Parse & aggregate in-memory
 
     ~3 API calls total regardless of catalog size. ~10-30s.

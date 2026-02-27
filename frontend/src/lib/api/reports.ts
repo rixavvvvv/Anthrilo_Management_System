@@ -21,7 +21,7 @@ export const rawMaterialsReports = {
   getYarnForecasting: (params?: { forecast_days?: number }) =>
     apiClient.get('/reports/yarn/forecasting', { params }),
 
-  // Purchase Raise for Yarn Report (NEW)
+  // Purchase raise for yarn
   getPurchaseRaiseForYarn: (params?: { threshold?: number; forecast_days?: number }) =>
     apiClient.get('/reports/yarn/purchase-raise', { params }),
 };
@@ -43,15 +43,15 @@ export const salesReports = {
   getSalesAnalytics: (params?: ReportFilters) =>
     apiClient.get('/reports/sales/analytics', { params }),
 
-  // Bundle SKU Sales Report (NEW)
+  // Bundle SKU sales
   getBundleSKUSales: (params?: { start_date?: string; end_date?: string }) =>
     apiClient.get('/reports/sales/bundle-sku', { params }),
 
-  // General Discount Report (NEW)
+  // General discount report
   getGeneralDiscountReport: (params?: { start_date?: string; end_date?: string }) =>
     apiClient.get('/reports/discounts/general', { params }),
 
-  // Discount by Panel Report (NEW)
+  // Discount by panel
   getDiscountByPanel: (params?: { panel_id?: number; start_date?: string; end_date?: string }) =>
     apiClient.get('/reports/discounts/by-panel', { params }),
 };
@@ -66,7 +66,7 @@ export const panelReports = {
   getTopPerforming: (params?: { limit?: number; start_date?: string; end_date?: string }) =>
     apiClient.get('/reports/panels/top-performing', { params }),
 
-  // Panel Settlement Report (NEW)
+  // Panel settlement
   getPanelSettlement: (params?: { panel_id?: number; start_date?: string; end_date?: string }) =>
     apiClient.get('/reports/settlements/panel-settlement', { params }),
 };

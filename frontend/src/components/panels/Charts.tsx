@@ -1,16 +1,6 @@
-/**
- * Chart Components for Dashboard
- * ===============================
- * Reusable chart components for data visualization
- */
-
 'use client';
 
 import React from 'react';
-
-// ============================================================================
-// BAR CHART - For Channel Comparison
-// ============================================================================
 
 interface BarChartProps {
     data: Array<{
@@ -76,10 +66,6 @@ export function BarChart({ data, title, valuePrefix = '', height = '400px' }: Ba
         </div>
     );
 }
-
-// ============================================================================
-// DONUT CHART - For Status / Category Distribution
-// ============================================================================
 
 interface DonutChartProps {
     data: Array<{
@@ -194,10 +180,6 @@ export function DonutChart({ data, title, centerLabel, centerValue }: DonutChart
     );
 }
 
-// ============================================================================
-// TREND LINE CHART - For Time Series Data
-// ============================================================================
-
 interface TrendLineProps {
     current: number;
     previous: number;
@@ -222,10 +204,6 @@ export function TrendIndicator({ current, previous, label }: TrendLineProps) {
         </div>
     );
 }
-
-// ============================================================================
-// COMPARISON CARDS - For Period Comparison
-// ============================================================================
 
 interface ComparisonCardProps {
     period: string;
@@ -276,10 +254,6 @@ export function ComparisonCard({ period, revenue, orders, isActive, trend }: Com
         </div>
     );
 }
-
-// ============================================================================
-// METRIC CARD WITH SPARKLINE
-// ============================================================================
 
 interface MetricCardProps {
     title: string;

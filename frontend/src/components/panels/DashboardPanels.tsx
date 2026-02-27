@@ -1,18 +1,6 @@
-/**
- * Dashboard Panel Components
- * ==========================
- * Reusable panel components for building modern analytics dashboards
- * 
- * Each component clearly documents its data source (Phase 1 or Phase 2)
- */
-
 'use client';
 
 import React from 'react';
-
-// ============================================================================
-// LOADING & ERROR STATES
-// ============================================================================
 
 export function LoadingPanel() {
     return (
@@ -29,8 +17,6 @@ export function LoadingPanel() {
                     <span className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
                     <span>Fetching data from Anthrilo...</span>
                 </p>
-                <p className="ml-4">⏱️ First load: 30-120 seconds (depends on data volume)</p>
-                <p className="ml-4">⚡ Cached loads: Instant (&lt; 2 seconds, 15 min cache)</p>
             </div>
         </div>
     );
@@ -49,17 +35,15 @@ export function ErrorPanel({ message }: { message: string }) {
 
                     {isTimeout && (
                         <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">💡 Why this happened:</p>
+                            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">Why this happens:</p>
                             <p className="text-xs text-blue-800 dark:text-blue-200 mb-2">
-                                You&apos;re fetching ALL orders (no limits) for complete business accuracy.
-                                Large datasets (5000+ orders) may take 3-5 minutes on first load.
+                                Large datasets may take a few minutes on first load.
                             </p>
-                            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">✅ Try these solutions:</p>
+                            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">Suggestions:</p>
                             <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1 list-disc list-inside">
                                 <li>Wait 2-3 minutes and refresh - data is now cached and will load instantly</li>
                                 <li>Try a shorter period first (Today/Yesterday) to verify system is working</li>
-                                <li>Check your internet connection and Anthrilo API status</li>
-                                <li>The wait is worth it - you get 100% accurate data for business decisions!</li>
+                                <li>Check your internet connection</li>
                             </ul>
                         </div>
                     )}
@@ -68,10 +52,6 @@ export function ErrorPanel({ message }: { message: string }) {
         </div>
     );
 }
-
-// ============================================================================
-// KPI CARD - For Overview Metrics
-// ============================================================================
 
 interface KPICardProps {
     title: string;
@@ -84,12 +64,6 @@ interface KPICardProps {
         isPositive: boolean;
     };
     loading?: boolean;
-    /**
-     * Documentation field: Indicates data source
-     * - 'phase1' = saleOrder/search (order codes, status, counts)
-     * - 'phase2' = saleorder/get (revenue, sellingPrice)
-     */
-    dataSource?: 'phase1' | 'phase2';
 }
 
 const colorMap = {
@@ -109,7 +83,6 @@ export function KPICard({
     color = 'blue',
     trend,
     loading = false,
-    dataSource,
 }: KPICardProps) {
     if (loading) {
         return <LoadingPanel />;
@@ -148,20 +121,9 @@ export function KPICard({
                     </div>
                 )}
             </div>
-            {dataSource && (
-                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Source: {dataSource === 'phase1' ? 'Order Search API' : 'Order Details API (Revenue)'}
-                    </p>
-                </div>
-            )}
         </div>
     );
 }
-
-// ============================================================================
-// REVENUE PANEL - Specifically for Phase 2 Revenue Data
-// ============================================================================
 
 interface RevenuePanelProps {
     title: string;
@@ -223,25 +185,9 @@ export function RevenuePanel({
                     </div>
                 </div>
             </div>
-
-            {/* Data Source Documentation */}
-            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="flex items-start gap-2">
-                    <span className="text-xs text-blue-600 dark:text-blue-400 font-mono bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded">
-                        PHASE 2 DATA
-                    </span>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                        Revenue calculated from <code className="text-xs bg-gray-100 dark:bg-gray-800 px-1 rounded">item.sellingPrice</code> using saleorder/get API
-                    </p>
-                </div>
-            </div>
         </div>
     );
 }
-
-// ============================================================================
-// CHANNEL BREAKDOWN PANEL
-// ============================================================================
 
 interface ChannelBreakdownProps {
     channels: Record<string, { orders: number; revenue: number }>;
@@ -311,20 +257,9 @@ export function ChannelBreakdownPanel({
                     );
                 })}
             </div>
-
-            {/* Data Source Documentation */}
-            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                    <span className="font-mono text-blue-600 dark:text-blue-400">Phase 2:</span> Revenue from sellingPrice
-                </p>
-            </div>
         </div>
     );
 }
-
-// ============================================================================
-// STATUS BREAKDOWN PANEL
-// ============================================================================
 
 interface StatusBreakdownProps {
     statuses: Record<string, number>;
@@ -387,20 +322,9 @@ export function StatusBreakdownPanel({ statuses, loading = false }: StatusBreakd
                     );
                 })}
             </div>
-
-            {/* Data Source Documentation */}
-            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                    <span className="font-mono text-blue-600 dark:text-blue-400">Phase 1:</span> Order counts from search API
-                </p>
-            </div>
         </div>
     );
 }
-
-// ============================================================================
-// FETCH INFO PANEL - Shows API Performance
-// ============================================================================
 
 interface FetchInfoPanelProps {
     fetchInfo: {
@@ -516,13 +440,6 @@ export function FetchInfoPanel({ fetchInfo, loading = false }: FetchInfoPanelPro
                         </div>
                     )}
                 </div>
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800">
-                <p className="text-xs text-gray-600 dark:text-gray-400">
-                    <span className="font-semibold">Two-Phase API v2:</span> Date-chunked identifier collection + batched detail resolution with retry & deduplication
-                    {wasCached && <span className="text-green-600 dark:text-green-400"> • Data served from 15-min cache</span>}
-                </p>
             </div>
         </div>
     );

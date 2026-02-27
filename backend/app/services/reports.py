@@ -15,7 +15,6 @@ class ReportsService:
     def __init__(self, db: Session):
         self.db = db
 
-    # ==================== RAW MATERIALS REPORTS ====================
 
     def raw_materials_stock_analysis(self, category: Optional[str] = None) -> list:
         """Combined raw materials stock analysis for yarn + fabric"""
@@ -103,7 +102,6 @@ class ReportsService:
 
         return result
 
-    # ==================== FABRIC REPORTS ====================
 
     def fabric_stock_sheet_total(self) -> Dict[str, Any]:
         """Generate total fabric stock sheet across all types"""
@@ -277,7 +275,6 @@ class ReportsService:
             "detailed_costs": cost_data
         }
 
-    # ==================== SALES REPORTS ====================
 
     def daily_sales_report(self, report_date: date) -> Dict[str, Any]:
         """Generate daily sales report for a specific date"""
@@ -488,7 +485,6 @@ class ReportsService:
             "inactive_panels": inactive_panels
         }
 
-    # ==================== INVENTORY REPORTS ====================
 
     def slow_moving_inventory_report(self, days_period: int = 90) -> Dict[str, Any]:
         """Identify slow-moving inventory based on sales velocity"""
@@ -601,7 +597,6 @@ class ReportsService:
             "fast_moving_items": fast_movers
         }
 
-    # ==================== PRODUCTION REPORTS ====================
 
     def production_plan_report(
         self,
@@ -723,7 +718,6 @@ class ReportsService:
             "variance_details": variance_data
         }
 
-    # ==================== BUNDLE SKU REPORTS ====================
 
     def bundle_sku_sales_report(
         self,
@@ -810,7 +804,6 @@ class ReportsService:
             "bundles": bundles_list
         }
 
-    # ==================== DISCOUNT REPORTS ====================
 
     def discount_report_general(
         self,

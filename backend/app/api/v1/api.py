@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 from app.api.v1.endpoints import auth, yarns, fabrics, processes, garments, inventory, sales, panels, production, discounts, ads, reports
-# Use optimized integrations for accurate revenue calculation
-from app.api.v1.endpoints import integrations_optimized as integrations
+from app.api.v1.endpoints import integrations
 # Unicommerce API modules
 from app.api.v1.endpoints import (
     uc_vendors, uc_grn, uc_catalog, uc_inventory,
@@ -48,9 +47,7 @@ api_router.include_router(
 api_router.include_router(
     integrations.router, prefix="/integrations", tags=["External Integrations"])
 
-# =========================================================================
 # Unicommerce API Integrations (All 101 endpoints)
-# =========================================================================
 
 # Vendors & Purchase Orders
 api_router.include_router(

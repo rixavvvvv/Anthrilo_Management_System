@@ -36,7 +36,7 @@ async def create_inventory(inventory: InventoryCreate, db: Session = Depends(get
 
     # Invalidate inventory cache
     CacheService.invalidate_inventory_cache()
-    
+
     # Broadcast update
     await broadcast_inventory_update({
         "action": "inventory_created",
@@ -90,10 +90,10 @@ async def update_inventory(inventory_id: int, inventory_update: InventoryUpdate,
     db_inventory.last_updated = datetime.utcnow()
     db.commit()
     db.refresh(db_inventory)
-    
+
     # Invalidate cache
     CacheService.invalidate_inventory_cache()
-    
+
     # Broadcast update
     await broadcast_inventory_update({
         "action": "inventory_updated",
@@ -102,7 +102,7 @@ async def update_inventory(inventory_id: int, inventory_update: InventoryUpdate,
         "good_stock": db_inventory.good_stock,
         "timestamp": datetime.now().isoformat()
     })
-    
+
     return db_inventory
 
 

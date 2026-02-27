@@ -1,22 +1,4 @@
-"""
-Unicommerce Sale Order API Endpoints
-======================================
-Covers:
-- Create Sale Order
-- Get Sale Order
-- Search Sale Order
-- Update Sale Order
-- Update Sale Order Metadata
-- Set Sale Order Priority
-- Verify Sale Order
-- Hold / Unhold Sale Order
-- Hold / Unhold Sale Order Items
-- Cancel Sale Order
-- Switch Facility for Sale Order Items
-- Update Item Details (Single & Multi SOI)
-- Create / Accept Alternate Item
-- Customer Create / Update
-"""
+"""Unicommerce order management endpoints."""
 
 from fastapi import APIRouter, Body
 import logging
@@ -28,10 +10,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# CUSTOMERS
-# =============================================================================
-
+# Customers
 @router.post("/customer/create")
 async def create_customer(payload: Dict[str, Any] = Body(...)):
     """
@@ -60,10 +39,7 @@ async def update_customer(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# SALE ORDER CRUD
-# =============================================================================
-
+# Sale order crud
 @router.post("/create")
 async def create_sale_order(payload: Dict[str, Any] = Body(...)):
     """
@@ -140,9 +116,7 @@ async def update_sale_order_metadata(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# PRIORITY / VERIFY
-# =============================================================================
+# Priority / verify
 
 @router.post("/set-priority")
 async def set_sale_order_priority(payload: Dict[str, Any] = Body(...)):
@@ -175,9 +149,7 @@ async def verify_sale_order(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# HOLD / UNHOLD
-# =============================================================================
+# Hold / unhold
 
 @router.post("/hold")
 async def hold_sale_order(payload: Dict[str, Any] = Body(...)):
@@ -235,10 +207,7 @@ async def unhold_sale_order_items(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# CANCEL
-# =============================================================================
-
+# Cancel
 @router.post("/cancel")
 async def cancel_sale_order(payload: Dict[str, Any] = Body(...)):
     """
@@ -253,10 +222,7 @@ async def cancel_sale_order(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# FACILITY SWITCHING
-# =============================================================================
-
+# Facility switching
 @router.post("/switch-facility")
 async def switch_facility_sale_order_items(payload: Dict[str, Any] = Body(...)):
     """
@@ -271,10 +237,7 @@ async def switch_facility_sale_order_items(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# ITEM DETAILS UPDATE
-# =============================================================================
-
+# Item details update
 @router.post("/item-detail/add")
 async def update_item_details_single(payload: Dict[str, Any] = Body(...)):
     """
@@ -305,10 +268,7 @@ async def update_item_details_multi(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# ALTERNATE ITEMS
-# =============================================================================
-
+# Alternate items
 @router.post("/alternate-item/create")
 async def create_alternate_item(payload: Dict[str, Any] = Body(...)):
     """
@@ -341,10 +301,7 @@ async def accept_alternate_item(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# SERVICEABILITY CHECK
-# =============================================================================
-
+# Serviceability check
 @router.post("/check-serviceability")
 async def check_serviceability(payload: Dict[str, Any] = Body(...)):
     """

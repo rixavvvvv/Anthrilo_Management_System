@@ -1,19 +1,4 @@
-"""
-Background Sync Service
-========================
-Handles background order syncing from Unicommerce to local DB.
-
-Architecture:
-1. Trigger sync via API endpoint (or schedule via cron)
-2. Fetch orders using two-phase approach
-3. Persist to SyncedOrder table
-4. Track progress in SyncStatus for resumability
-5. Frontend reads from DB for instant responses
-
-Resumability:
-- If sync fails mid-way, tracks last_synced_code and failed_codes
-- On retry, skips already-synced orders (idempotent upsert)
-"""
+"""Background sync service for Unicommerce -> local DB order syncing."""
 
 import logging
 from datetime import datetime
@@ -24,7 +9,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.db.session import SessionLocal
 from app.db.sync_models import SyncedOrder, SyncStatus
-from app.services.unicommerce_optimized import get_unicommerce_service
+from app.services.unicommerce import get_unicommerce_service
 
 logger = logging.getLogger(__name__)
 

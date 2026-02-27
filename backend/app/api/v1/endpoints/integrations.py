@@ -1,23 +1,11 @@
-"""
-Unicommerce Integration API Endpoints - PRODUCTION VERSION (v2)
-================================================================
-Accurate revenue using sellingPrice ONLY with two-phase fetch.
-
-Includes:
-- Summary endpoints (today, yesterday, 7-days, 30-days)
-- Paginated order listing
-- Background sync endpoints
-- Sync status monitoring
-- Cache management
-- Revenue validation
-"""
+"""Unicommerce integration API endpoints."""
 
 from fastapi import APIRouter, Query, BackgroundTasks, WebSocket, WebSocketDisconnect
 import logging
 import asyncio
 import json as json_module
 from datetime import datetime, timezone, timedelta
-from app.services.unicommerce_optimized import get_unicommerce_service
+from app.services.unicommerce import get_unicommerce_service
 from app.services.sync_service import get_sync_service
 from app.core.token_manager import get_token_manager
 from app.services.cache_service import CacheService
@@ -28,9 +16,7 @@ logger = logging.getLogger(__name__)
 IST = timezone(timedelta(hours=5, minutes=30))
 
 
-# =============================================================================
 # WEBSOCKET CONNECTION MANAGER
-# =============================================================================
 
 class ConnectionManager:
     """Manages WebSocket connections for real-time dashboard updates."""
@@ -65,9 +51,7 @@ class ConnectionManager:
 ws_manager = ConnectionManager()
 
 
-# =============================================================================
-# SUMMARY ENDPOINTS (For dashboard cards)
-# =============================================================================
+# Summary endpoints
 
 @router.get("/unicommerce/today")
 async def get_today_sales():
@@ -173,9 +157,7 @@ async def get_last_24_hours():
     return await get_today_sales()
 
 
-# =============================================================================
-# PAGINATED ENDPOINTS (For order listing - 12 orders per page)
-# =============================================================================
+# Paginated endpoints
 
 @router.get("/unicommerce/orders/today")
 async def get_today_orders_paginated(
@@ -245,9 +227,7 @@ async def get_custom_orders_paginated(
         return {"success": False, "error": str(e)}
 
 
-# =============================================================================
 # SALES REPORT ENDPOINT
-# =============================================================================
 
 @router.get("/unicommerce/sales-report")
 async def get_sales_report(
@@ -395,9 +375,7 @@ async def get_daily_sales_report(
         return {"success": False, "error": str(e)}
 
 
-# =============================================================================
 # CHANNEL BREAKDOWN ENDPOINT
-# =============================================================================
 
 @router.get("/unicommerce/channel-revenue")
 async def get_channel_revenue(
@@ -473,9 +451,7 @@ async def get_channel_revenue(
         return {"success": False, "error": str(e)}
 
 
-# =============================================================================
 # BACKGROUND SYNC ENDPOINTS
-# =============================================================================
 
 @router.post("/unicommerce/sync/{period}")
 async def trigger_sync(
@@ -562,9 +538,7 @@ async def get_sync_status(
         return {"success": False, "error": str(e)}
 
 
-# =============================================================================
 # VALIDATION ENDPOINT
-# =============================================================================
 
 @router.get("/unicommerce/validate")
 async def validate_revenue():
@@ -577,9 +551,7 @@ async def validate_revenue():
         return {"success": False, "error": str(e)}
 
 
-# =============================================================================
 # AUTH STATUS
-# =============================================================================
 
 @router.get("/unicommerce/auth/status")
 async def get_auth_status():
@@ -617,9 +589,7 @@ async def force_refresh_token():
         return {"success": False, "error": str(e)}
 
 
-# =============================================================================
 # BACKWARD COMPATIBILITY
-# =============================================================================
 
 @router.get("/unicommerce/search-orders")
 async def search_orders(
@@ -656,9 +626,7 @@ async def get_order_items(order_code: str):
         return {"success": False, "error": str(e)}
 
 
-# =============================================================================
 # CACHE MANAGEMENT
-# =============================================================================
 
 @router.post("/unicommerce/clear-cache")
 async def clear_cache():
@@ -751,9 +719,7 @@ async def check_cache_status():
         return {"success": False, "error": str(e)}
 
 
-# =============================================================================
-# SKU-LEVEL SALES BREAKDOWN (For reports)
-# =============================================================================
+# SKU-level sales breakdown
 
 @router.get("/unicommerce/sales-by-sku")
 async def get_sales_by_sku(
@@ -882,9 +848,7 @@ async def get_sales_by_sku(
         return {"success": False, "error": str(e), "skus": []}
 
 
-# =============================================================================
 # DAILY RETURN REPORT (Three-Phase: return/search + return/get + saleorder/get)
-# =============================================================================
 
 @router.get("/unicommerce/daily-return-report")
 async def get_daily_return_report(
@@ -924,12 +888,7 @@ async def get_daily_return_report(
         all_return_codes = []
         search_results = {}
 
-        # =====================================================================
-        # Phase 1: Search returns for each type
-        # API: POST /oms/return/search
-        # Response field: returnOrders[] with {code, created, updated}
-        # Strategy: Try createdFrom/To first, then updatedFrom/To as fallback
-        # =====================================================================
+        # Phase 1: search returns for each type
         async with httpx.AsyncClient(timeout=timeout) as client:
             for rtype in types_to_fetch:
                 search_url = f"{base_url}/oms/return/search"
@@ -1037,15 +996,7 @@ async def get_daily_return_report(
                 },
             }
 
-        # =====================================================================
-        # Phase 2: Get details for each return
-        # API: POST /oms/return/get  (with reversePickupCode)
-        # Response fields:
-        #   - returnSaleOrderItems[]: {skuCode, itemName, saleOrderCode,
-        #       saleOrderItemCode, channelProductId, saleOrderItemStatus, ...}
-        #   - returnSaleOrderValue: {returnStatus, saleOrderCode,
-        #       reversePickupCode, returnCreatedDate, ...}
-        # =====================================================================
+        # Phase 2: get details for each return
         return_details = []
         sale_order_codes = set()
         failed_rto_codes = []
@@ -1136,11 +1087,7 @@ async def get_daily_return_report(
             logger.warning(
                 f"Failed to get details for {len(failed_cir_codes)} CIR returns: {failed_cir_codes[:5]}")
 
-        # =====================================================================
-        # Phase 3: Fetch sale order details for channel + pricing
-        # API: POST /oms/saleorder/get  (with code)
-        # Response: saleOrderDTO.channel, saleOrderDTO.saleOrderItems[].sellingPrice
-        # =====================================================================
+        # Phase 3: fetch sale order details for channel + pricing
         so_details = {}  # saleOrderCode -> {channel, items: {saleOrderItemCode -> {sellingPrice, itemSku}}}
 
         if sale_order_codes:
@@ -1177,9 +1124,7 @@ async def get_daily_return_report(
                     except Exception as e:
                         logger.error(f"SaleOrder get {so_code} error: {e}")
 
-        # =====================================================================
-        # Aggregate data using return details + sale order details
-        # =====================================================================
+        # Aggregate return details with sale order info
         channel_map = {}
         sku_map = {}
         returns_list = []
@@ -1312,9 +1257,7 @@ async def get_daily_return_report(
         return {"success": False, "error": str(e)}
 
 
-# =============================================================================
-# BEST PERFORMING SKUs (Monthly)
-# =============================================================================
+# Best performing SKUs (monthly)
 
 @router.get("/unicommerce/best-skus-monthly")
 async def get_best_skus_monthly(
@@ -1451,9 +1394,7 @@ async def get_best_skus_monthly(
         return {"success": False, "error": str(e)}
 
 
-# =============================================================================
-# SKU VELOCITY - Fast & Slow Movers (Monthly)
-# =============================================================================
+# SKU velocity (monthly)
 
 @router.get("/unicommerce/sku-velocity")
 async def get_sku_velocity(
@@ -1599,9 +1540,7 @@ async def get_sku_velocity(
         return {"success": False, "error": str(e)}
 
 
-# =============================================================================
-# COD vs PREPAID (Monthly)
-# =============================================================================
+# COD vs prepaid (monthly)
 
 @router.get("/unicommerce/cod-vs-prepaid")
 async def get_cod_vs_prepaid(
@@ -1739,9 +1678,7 @@ async def get_cod_vs_prepaid(
         return {"success": False, "error": str(e)}
 
 
-# =============================================================================
-# WEBSOCKET ENDPOINTS (Real-time updates for different event types)
-# =============================================================================
+# WebSocket endpoints
 
 @router.websocket("/ws/sales")
 async def websocket_sales(websocket: WebSocket):
@@ -1862,9 +1799,7 @@ async def websocket_all(websocket: WebSocket):
         global_ws_manager.disconnect(websocket)
 
 
-# =============================================================================
 # REDIS CACHE MANAGEMENT ENDPOINTS
-# =============================================================================
 
 @router.get("/cache/redis/stats")
 async def get_redis_cache_stats():

@@ -7,7 +7,7 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 360000, // 6 minutes timeout - fetches ALL orders for business accuracy
+  timeout: 360000, // 6 min timeout for large order fetches
 });
 
 // Request interceptor to add auth token

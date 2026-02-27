@@ -9,8 +9,6 @@ from app.services.sales_service import get_daily_sales
 router = APIRouter()
 
 
-# ==================== RAW MATERIALS REPORTS ====================
-
 @router.get("/raw-materials/stock-analysis")
 def get_stock_analysis(
     category: Optional[str] = Query(
@@ -31,8 +29,6 @@ def get_yarn_forecasting(
     service = ReportsService(db)
     return service.yarn_forecasting_report(forecast_days)
 
-
-# ==================== FABRIC REPORTS ====================
 
 @router.get("/fabric/stock-sheet/total")
 def get_fabric_stock_sheet_total(db: Session = Depends(get_db)):
@@ -68,8 +64,6 @@ def get_fabric_cost_sheet(db: Session = Depends(get_db)):
     service = ReportsService(db)
     return service.fabric_cost_sheet()
 
-
-# ==================== SALES REPORTS ====================
 
 @router.get("/sales/daily/{report_date}")
 def get_daily_sales_report(
@@ -113,8 +107,6 @@ def get_inactive_panel_report(
     return service.inactive_panel_report(days_threshold)
 
 
-# ==================== INVENTORY REPORTS ====================
-
 @router.get("/inventory/slow-moving")
 def get_slow_moving_inventory_report(
     days_period: int = Query(90, description="Period in days to analyze"),
@@ -134,8 +126,6 @@ def get_fast_moving_inventory_report(
     service = ReportsService(db)
     return service.fast_moving_inventory_report(days_period)
 
-
-# ==================== PRODUCTION REPORTS ====================
 
 @router.get("/production/plan-status")
 def get_production_plan_report(
@@ -158,8 +148,6 @@ def get_daily_production_variance_report(
     return service.daily_production_variance_report(report_date)
 
 
-# ==================== COMBINED REPORTS ====================
-
 @router.get("/summary/all")
 def get_summary_report(db: Session = Depends(get_db)):
     """Get a comprehensive summary report combining key metrics"""
@@ -178,8 +166,6 @@ def get_summary_report(db: Session = Depends(get_db)):
     }
 
 
-# ==================== BUNDLE SKU REPORTS ====================
-
 @router.get("/sales/bundle-sku")
 def get_bundle_sku_sales_report(
     start_date: Optional[date] = Query(
@@ -192,8 +178,6 @@ def get_bundle_sku_sales_report(
     service = ReportsService(db)
     return service.bundle_sku_sales_report(start_date, end_date)
 
-
-# ==================== DISCOUNT REPORTS ====================
 
 @router.get("/discounts/general")
 def get_discount_report_general(
@@ -220,8 +204,6 @@ def get_discount_report_by_panel(
     service = ReportsService(db)
     return service.discount_report_by_panel(start_date, end_date)
 
-
-# ==================== SETTLEMENT REPORTS ====================
 
 @router.get("/settlements/panel-settlement")
 def get_settlement_report(

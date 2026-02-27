@@ -1,13 +1,3 @@
-/**
- * Unicommerce Sales Hooks (Adapter)
- * ==================================
- * Re-exports sales hooks with the interface expected by the panels page:
- *   { data, isLoading, error }
- *
- * Wraps the core hooks from useUnicommerce.ts which return:
- *   { data, loading, error (string) }
- */
-
 import { useTodaySales, useYesterdaySales, useLast7DaysSales } from './useUnicommerce';
 import type { SalesData } from './useUnicommerce';
 

@@ -18,17 +18,17 @@ async def create_fabric(fabric: FabricCreate, db: Session = Depends(get_db)):
     db.add(db_fabric)
     db.commit()
     db.refresh(db_fabric)
-    
+
     # Invalidate cache
     CacheService.invalidate_fabric_cache()
-    
+
     # Broadcast update
     await broadcast_inventory_update({
         "action": "fabric_created",
         "fabric_id": db_fabric.id,
         "timestamp": datetime.now().isoformat()
     })
-    
+
     return db_fabric
 
 
@@ -42,21 +42,21 @@ def list_fabrics(
     """List all fabric entries with pagination and Redis caching."""
     # Calculate skip
     skip = (page - 1) * page_size
-    
+
     # Check cache
     cache_key = f"fabric:list:{page}:{page_size}:{fabric_type}"
     cached = CacheService.get(cache_key)
     if cached:
         return PaginatedResponse[FabricSchema](**cached)
-    
+
     # Query database
     query = db.query(Fabric)
     if fabric_type:
         query = query.filter(Fabric.fabric_type == fabric_type)
-    
+
     total = query.count()
     fabrics = query.offset(skip).limit(page_size).all()
-    
+
     items = [FabricSchema.from_orm(f) for f in fabrics]
     result = {
         "items": [item.model_dump(mode='json') for item in items],
@@ -65,10 +65,10 @@ def list_fabrics(
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size
     }
-    
+
     # Cache result
     CacheService.set(cache_key, result, CacheService.TTL_LONG)
-    
+
     return PaginatedResponse[FabricSchema](**result)
 
 
@@ -79,16 +79,16 @@ def get_fabric(fabric_id: int, db: Session = Depends(get_db)):
     cached = CacheService.get_fabric_cache(fabric_id)
     if cached:
         return cached
-    
+
     fabric = db.query(Fabric).filter(Fabric.id == fabric_id).first()
     if not fabric:
         raise HTTPException(status_code=404, detail="Fabric not found")
-    
+
     result = FabricSchema.from_orm(fabric)
-    
+
     # Cache result (serialize before caching)
     CacheService.set_fabric_cache(result.model_dump(mode='json'), fabric_id)
-    
+
     return result
 
 
@@ -98,24 +98,24 @@ async def update_fabric(fabric_id: int, fabric_update: FabricUpdate, db: Session
     db_fabric = db.query(Fabric).filter(Fabric.id == fabric_id).first()
     if not db_fabric:
         raise HTTPException(status_code=404, detail="Fabric not found")
-    
+
     update_data = fabric_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(db_fabric, field, value)
-    
+
     db.commit()
     db.refresh(db_fabric)
-    
+
     # Invalidate cache
     CacheService.invalidate_fabric_cache()
-    
+
     # Broadcast update
     await broadcast_inventory_update({
         "action": "fabric_updated",
         "fabric_id": fabric_id,
         "timestamp": datetime.now().isoformat()
     })
-    
+
     return db_fabric
 
 
@@ -125,18 +125,18 @@ async def delete_fabric(fabric_id: int, db: Session = Depends(get_db)):
     db_fabric = db.query(Fabric).filter(Fabric.id == fabric_id).first()
     if not db_fabric:
         raise HTTPException(status_code=404, detail="Fabric not found")
-    
+
     db.delete(db_fabric)
     db.commit()
-    
+
     # Invalidate cache
     CacheService.invalidate_fabric_cache()
-    
+
     # Broadcast update
     await broadcast_inventory_update({
         "action": "fabric_deleted",
         "fabric_id": fabric_id,
         "timestamp": datetime.now().isoformat()
     })
-    
+
     return None
