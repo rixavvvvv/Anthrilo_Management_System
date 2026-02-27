@@ -1,7 +1,7 @@
 """Initial schema
 
 Revision ID: 001
-Revises: 
+Revises:
 Create Date: 2026-01-19 00:00:00.000000
 
 """
@@ -35,7 +35,7 @@ def upgrade() -> None:
         sa.UniqueConstraint('username')
     )
     op.create_index('ix_users_email', 'users', ['email'])
-    
+
     # Yarn Management
     op.create_table(
         'yarns',
@@ -52,7 +52,7 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), onupdate=sa.text('now()'), nullable=False),
         sa.PrimaryKeyConstraint('id')
     )
-    
+
     # Process Management
     op.create_table(
         'processes',
@@ -68,7 +68,7 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), onupdate=sa.text('now()'), nullable=False),
         sa.PrimaryKeyConstraint('id')
     )
-    
+
     # Fabric Management
     op.create_table(
         'fabrics',
@@ -87,7 +87,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index('ix_fabrics_fabric_type', 'fabrics', ['fabric_type'])
-    
+
     # Garment Master Data
     op.create_table(
         'garments',
@@ -108,7 +108,7 @@ def upgrade() -> None:
     )
     op.create_index('ix_garments_style_sku', 'garments', ['style_sku'])
     op.create_index('ix_garments_category', 'garments', ['category'])
-    
+
     # Inventory Management
     op.create_table(
         'inventory',
@@ -125,7 +125,7 @@ def upgrade() -> None:
         sa.UniqueConstraint('garment_id', 'size', name='uix_garment_size')
     )
     op.create_index('ix_inventory_garment_id', 'inventory', ['garment_id'])
-    
+
     # Panels (Sales Channels)
     op.create_table(
         'panels',
@@ -140,7 +140,7 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), onupdate=sa.text('now()'), nullable=False),
         sa.PrimaryKeyConstraint('id')
     )
-    
+
     # Sales Transactions
     op.create_table(
         'sales',
@@ -162,7 +162,7 @@ def upgrade() -> None:
     )
     op.create_index('ix_sales_transaction_date', 'sales', ['transaction_date'])
     op.create_index('ix_sales_panel_id', 'sales', ['panel_id'])
-    
+
     # Production Planning
     op.create_table(
         'production_plans',
@@ -180,7 +180,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.ForeignKeyConstraint(['garment_id'], ['garments.id'], ondelete='RESTRICT')
     )
-    
+
     # Production Activities
     op.create_table(
         'production_activities',
@@ -197,7 +197,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.ForeignKeyConstraint(['production_plan_id'], ['production_plans.id'], ondelete='CASCADE')
     )
-    
+
     # Discounts Management
     op.create_table(
         'discounts',
@@ -218,7 +218,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['panel_id'], ['panels.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['garment_id'], ['garments.id'], ondelete='CASCADE')
     )
-    
+
     # Paid Ads Tracking
     op.create_table(
         'paid_ads',

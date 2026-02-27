@@ -1,15 +1,3 @@
-/**
- * Unicommerce Data Hooks
- * ======================
- * React hooks for fetching data using TWO-PHASE API approach
- * 
- * CRITICAL CONSTRAINT:
- * - Phase 1: saleOrder/search - Gets order CODES only (NO pricing data)
- * - Phase 2: saleorder/get - Gets sellingPrice (THE ONLY SOURCE OF REVENUE)
- * 
- * Revenue = SUM of item.sellingPrice from Phase 2 responses ONLY
- */
-
 import { useState, useEffect, useCallback } from 'react';
 import { unicommerceApi } from '@/lib/api';
 
@@ -37,7 +25,7 @@ export interface SalesData {
         net_revenue: number;
         created: string;
         item_count: number;
-        quantity: number;  // NEW: Total quantity of items in order
+        quantity: number;
         include_in_revenue: boolean;
     }>;
     fetch_info: {
@@ -65,7 +53,7 @@ export interface PaginatedOrders {
         net_revenue: number;
         created: string;
         item_count: number;
-        quantity: number;  // NEW: Total quantity of items in order
+        quantity: number;
         include_in_revenue: boolean;
     }>;
     pagination: {
@@ -82,11 +70,6 @@ export interface PaginatedOrders {
     };
 }
 
-/**
- * Hook for fetching Today's sales summary
- * Uses TWO-PHASE API to get accurate revenue from sellingPrice
- * @param enabled - Only fetch data when true (default: true)
- */
 export function useTodaySales(enabled: boolean = true) {
     const [data, setData] = useState<SalesData | null>(null);
     const [loading, setLoading] = useState(enabled);
@@ -183,9 +166,7 @@ export function useLast7DaysSales(enabled: boolean = true) {
 }
 
 /**
- * Hook for fetching Last 30 Days sales summary
- * @deprecated REMOVED FROM UI - Use Last 7 Days instead for better performance
- * @param enabled - Only fetch data when true (default: true)
+ * @deprecated Use Last 7 Days instead
  */
 export function useLast30DaysSales(enabled: boolean = true) {
     const [data, setData] = useState<SalesData | null>(null);
@@ -216,10 +197,6 @@ export function useLast30DaysSales(enabled: boolean = true) {
     return { data, loading, error, refetch };
 }
 
-/**
- * Hook for fetching paginated orders
- * Uses TWO-PHASE approach for each page
- */
 export function usePaginatedOrders(period: 'today' | 'yesterday' | 'last-7-days', initialPage = 1) {
     const [data, setData] = useState<PaginatedOrders | null>(null);
     const [loading, setLoading] = useState(true);

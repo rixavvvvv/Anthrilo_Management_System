@@ -1,33 +1,12 @@
-"""
-Unicommerce Integration Service - PRODUCTION VERSION (v3)
-==========================================================
-Enterprise-grade Export Job API approach for fast, accurate revenue data.
+"""Unicommerce integration service.
 
-Architecture (PRIMARY - Export Job API):
-- Step 1: Create export job (/export/job/create) with date range
-- Step 2: Poll status (/export/job/status) until SUCCESSFUL
-- Step 3: Download CSV and parse into order objects
-- Only 3 API calls regardless of order volume!
-
-Fallback (Two-Phase - used only if export fails):
-- Phase 1 (Identifier Collection): saleOrder/search with pagination + date chunking
-- Phase 2 (Detail Resolution): saleorder/get with batching, retry, dedup
-
-CRITICAL RULES:
-1. Revenue = SUM of item.sellingPrice ONLY
-2. No order may be skipped or duplicated
-3. Data accuracy is paramount - used for business logic and reporting
-
-Performance:
-- Export Job: ~10-30s for any volume (async CSV bulk export)
-- Two-Phase fallback: O(n) API calls for n orders
-- 15-minute in-memory cache
-- Redis caching for expensive reports
-
-FETCHES ALL ORDERS (no limits) for complete business accuracy.
+Handles fetching and processing sale orders via the Unicommerce API.
+Uses the export job API for bulk CSV downloads, with a fallback
+to paginated search + detail fetch when the export isn't available.
 """
 
 import csv
+import re
 import io
 import time as time_module
 import httpx
@@ -43,89 +22,51 @@ logger = logging.getLogger(__name__)
 IST = timezone(timedelta(hours=5, minutes=30))
 
 
-class UnicommerceServiceProduction:
-    """
-    Production Unicommerce service with TWO-PHASE revenue fetching.
+class UnicommerceService:
+    """Fetches and aggregates Unicommerce sale orders."""
 
-    Phase 1 (Identifier Collection):
-      /saleOrder/search - Paginated, date-chunked to avoid API limits.
-      Collects ALL order codes. Deduplicates.
-
-    Phase 2 (Detail Resolution):
-      /saleorder/get - Batched (50), parallel with semaphore.
-      Retry failed orders up to 3x with exponential backoff.
-      Validates count consistency.
-
-    Revenue = SUM of item.sellingPrice from Phase 2 ONLY
-    """
-
-    # =========================================================================
-    # CONFIGURATION
-    # =========================================================================
-
-    # Phase 1: Search/Identifier Collection
-    # Orders per page for search API (not used - no pagination support)
     API_PAGE_SIZE = 200
-    MAX_CONCURRENT_PAGES = 30    # Parallel page fetches (not used)
-    # Chunk large date ranges into 1-day windows (OPTIMIZED: was 3)
+    MAX_CONCURRENT_PAGES = 30
     DATE_CHUNK_DAYS = 1
 
-    # Phase 2: Detail Resolution (PERFORMANCE CRITICAL)
-    # Orders per batch for saleorder/get (OPTIMIZED: was 50)
     DETAIL_BATCH_SIZE = 100
-    # Parallel order detail fetches (OPTIMIZED: was 80)
     MAX_CONCURRENT_ORDER_GETS = 150
 
-    # Retry configuration
-    MAX_RETRIES = 2              # Reduced from 3 for faster failure
-    # Initial delay in seconds (OPTIMIZED: was 0.5)
+    MAX_RETRIES = 2
     RETRY_DELAY = 0.3
-    RETRY_BACKOFF = 1.5          # Multiplier per retry (OPTIMIZED: was 2.0)
-    # Smaller batches for retries (OPTIMIZED: was 30)
+    RETRY_BACKOFF = 1.5
     RETRY_BATCH_SIZE = 50
-    # Delay between retry batches (OPTIMIZED: was 0.5)
     RETRY_BATCH_DELAY = 0.3
 
-    # Cache
-    CACHE_TTL_SECONDS = 900      # 15 minutes
+    CACHE_TTL_SECONDS = 900  # 15 min
 
-    # Status exclusions (excluded from revenue)
     EXCLUDED_STATUSES = {
         "CANCELLED", "CANCELED", "RETURNED", "REFUNDED",
         "FAILED", "UNFULFILLABLE", "ERROR", "PENDING_VERIFICATION"
     }
 
-    # =========================================================================
-    # EXPORT JOB API CONFIGURATION (PRIMARY - FAST PATH)
-    # =========================================================================
-
-    EXPORT_MAX_POLL_SECONDS = 300    # Max time to wait for export job
-    EXPORT_INITIAL_POLL_INTERVAL = 2  # Start polling every 2s
+    EXPORT_MAX_POLL_SECONDS = 300
+    EXPORT_INITIAL_POLL_INTERVAL = 2
     EXPORT_MAX_POLL_INTERVAL = 10     # Max poll interval (backoff cap)
     EXPORT_POLL_BACKOFF = 1.5         # Polling backoff multiplier
 
-    # Valid Unicommerce export column identifiers
-    # NOTE: API field name is "exportColums" (Unicommerce typo - missing 'n')
-    # NOTE: Filter field name is "exportFilters"
-    # CSV headers are Title Case (e.g., "Sale Order Code", "Selling Price")
+    # Columns for the export job (note: UC spells it "exportColums")
     EXPORT_COLUMNS = [
-        # Order-level
-        "saleOrderCode",     # → CSV: "Sale Order Code"
-        "channel",           # → CSV: "Channel Name"
-        "status",            # → CSV: "Sale Order Status"
-        "created",           # → CSV: "Created"
-        "updated",           # → CSV: "Updated"
-        "shippingMethod",    # → CSV: "Shipping Method"
-        "cod",               # → CSV: "COD" (1=COD, 0=Prepaid)
-        # Item-level (one CSV row per item unit)
-        "soicode",           # → CSV: "Sale Order Item Code"
-        "skuCode",           # → CSV: "Item SKU Code"
-        "sellingPrice",      # → CSV: "Selling Price"
-        "maxRetailPrice",    # → CSV: "MRP"
-        "discount",          # → CSV: "Discount"
-        "totalPrice",        # → CSV: "Total Price"
-        "channelProductId",  # → CSV: "Channel Product Id"
-        "itemDetails",       # → CSV: "Item Details"
+        "saleOrderCode",
+        "channel",
+        "status",
+        "created",
+        "updated",
+        "shippingMethod",
+        "cod",              # 1 = COD, 0 = Prepaid
+        "soicode",
+        "skuCode",
+        "sellingPrice",
+        "maxRetailPrice",
+        "discount",
+        "totalPrice",
+        "channelProductId",
+        "itemDetails",
     ]
 
     def __init__(self):
@@ -150,24 +91,18 @@ class UnicommerceServiceProduction:
             self.MAX_CONCURRENT_ORDER_GETS)
 
         logger.info(
-            f"UnicommerceServiceProduction v3 initialized | "
+            f"UnicommerceService v3 initialized | "
             f"Tenant: {self.tenant} | "
             f"Primary: Export Job API | "
-            f"Fallback: Two-Phase (batch={self.DETAIL_BATCH_SIZE}) | "
+            f"Fallback batch size={self.DETAIL_BATCH_SIZE}) | "
             f"Cache TTL: {self.CACHE_TTL_SECONDS}s"
         )
 
-    # =========================================================================
-    # AUTH HELPERS
-    # =========================================================================
 
     async def _get_headers(self) -> Dict[str, str]:
-        """Get authenticated headers from centralized token manager."""
+        """Build auth headers."""
         return await self.token_manager.get_headers()
 
-    # =========================================================================
-    # CACHE HELPERS
-    # =========================================================================
 
     def _get_cache_key(self, period: str) -> str:
         return f"sales_data_{period}"
@@ -187,9 +122,6 @@ class UnicommerceServiceProduction:
     def _set_cache(self, key: str, data: Any):
         self._cache[key] = (datetime.now(), data)
 
-    # =========================================================================
-    # EXPORT JOB API (PRIMARY - FAST PATH)
-    # =========================================================================
 
     async def _create_export_job(
         self, from_date: datetime, to_date: datetime
@@ -241,7 +173,7 @@ class UnicommerceServiceProduction:
                     except Exception:
                         error_body = response.text[:500]
                     logger.error(
-                        f"EXPORT: Job creation HTTP {response.status_code}: {error_body}"
+                        f"Export: Job creation HTTP {response.status_code}: {error_body}"
                     )
                     return None
 
@@ -249,25 +181,22 @@ class UnicommerceServiceProduction:
 
                 if data.get("successful"):
                     job_code = data.get("jobCode")
-                    logger.info(f"EXPORT: Job created successfully → {job_code}")
+                    logger.info(f"Export: Job created successfully {job_code}")
                     return job_code
                 else:
                     errors = data.get("errors", [])
                     msg = data.get("message", "Unknown error")
-                    logger.error(f"EXPORT: Job creation failed: {msg} | errors={errors}")
+                    logger.error(f"Export: Job creation failed: {msg} | errors={errors}")
                     return None
 
         except Exception as e:
-            logger.error(f"EXPORT: Job creation exception: {e}", exc_info=True)
+            logger.error(f"Export: Job creation exception: {e}", exc_info=True)
             return None
 
     async def _poll_export_status(
         self, job_code: str, max_wait: int = None
     ) -> Optional[str]:
-        """
-        Poll export job status until SUCCESSFUL.
-        Returns the file download URL on success, None on failure/timeout.
-        """
+        """Poll export job until complete; return download URL or None."""
         if max_wait is None:
             max_wait = self.EXPORT_MAX_POLL_SECONDS
 
@@ -304,22 +233,22 @@ class UnicommerceServiceProduction:
 
                         if status == "COMPLETE":
                             logger.info(
-                                f"EXPORT: Job {job_code} COMPLETE in {elapsed:.1f}s → {file_path}"
+                                f"Export: Job {job_code} COMPLETE in {elapsed:.1f}s {file_path}"
                             )
                             return file_path
                         elif status in ("FAILED", "CANCELLED"):
                             logger.error(
-                                f"EXPORT: Job {job_code} {status} after {elapsed:.1f}s"
+                                f"Export: Job {job_code} {status} after {elapsed:.1f}s"
                             )
                             return None
                         else:
                             logger.debug(
-                                f"EXPORT: Job {job_code} status={status}, "
+                                f"Export: Job {job_code} status={status}, "
                                 f"elapsed={elapsed:.1f}s, next poll in {poll_interval:.1f}s"
                             )
                     else:
                         logger.warning(
-                            f"EXPORT: Status check not successful: {data.get('message', '')}"
+                            f"Export: Status check not successful: {data.get('message', '')}"
                         )
 
                     await asyncio.sleep(poll_interval)
@@ -329,26 +258,15 @@ class UnicommerceServiceProduction:
                     )
 
         except Exception as e:
-            logger.error(f"EXPORT: Polling exception: {e}", exc_info=True)
+            logger.error(f"Export: Polling exception: {e}", exc_info=True)
             return None
 
         elapsed = time_module.time() - start_time
-        logger.error(f"EXPORT: Job {job_code} timed out after {elapsed:.0f}s")
+        logger.error(f"Export: Job {job_code} timed out after {elapsed:.0f}s")
         return None
 
     async def _download_parse_export(self, download_url: str) -> List[Dict]:
-        """
-        Download the export CSV and parse into order dicts.
-
-        The CSV has one row per sale order item UNIT. Multiple rows with the
-        same Sale Order Code are grouped into a single order dict with an
-        items array, matching the structure returned by saleorder/get API.
-
-        CSV columns (Title Case):
-        Sale Order Code, Channel Name, Sale Order Status, Created, Updated,
-        Shipping Method, Sale Order Item Code, Selling Price, MRP, Discount,
-        Total Price, COD (1/0), Item SKU Code, Channel Product Id, Item Details
-        """
+        """Download export CSV and group rows by order code into order dicts."""
         try:
             download_timeout = httpx.Timeout(120.0, connect=15.0)
 
@@ -364,14 +282,14 @@ class UnicommerceServiceProduction:
                 csv_text = response.text
 
             if not csv_text or not csv_text.strip():
-                logger.warning("EXPORT: Downloaded CSV is empty")
+                logger.warning("Export: Downloaded CSV is empty")
                 return []
 
             reader = csv.DictReader(io.StringIO(csv_text))
             fieldnames = reader.fieldnames or []
-            logger.info(f"EXPORT: CSV columns ({len(fieldnames)}): {fieldnames}")
+            logger.info(f"Export: CSV columns ({len(fieldnames)}): {fieldnames}")
 
-            # Group rows by order code → nested order structure
+            # Group rows by order code nested order structure
             orders_map: Dict[str, Dict] = {}
             row_count = 0
 
@@ -389,7 +307,7 @@ class UnicommerceServiceProduction:
                     continue
 
                 if order_code not in orders_map:
-                    # Channel name: normalize spaces → underscores for consistency
+                    # Channel name: normalize spaces underscores for consistency
                     channel_raw = (
                         row.get("Channel Name")
                         or row.get("channel")
@@ -498,30 +416,22 @@ class UnicommerceServiceProduction:
             total_items = sum(len(o["saleOrderItems"]) for o in orders)
 
             logger.info(
-                f"EXPORT: Parsed {row_count} CSV rows → "
+                f"Export: Parsed {row_count} CSV rows "
                 f"{len(orders)} orders, {total_items} items"
             )
             return orders
 
         except Exception as e:
-            logger.error(f"EXPORT: Download/parse failed: {e}", exc_info=True)
+            logger.error(f"Export: Download/parse failed: {e}", exc_info=True)
             return []
 
     async def fetch_orders_via_export(
         self, from_date: datetime, to_date: datetime
     ) -> Dict[str, Any]:
-        """
-        Fetch ALL orders using Export Job API (FAST - ~3 API calls total).
-
-        Returns the same dict format as fetch_all_orders_with_revenue()
-        for full backward compatibility. Falls back to two-phase on failure.
-        """
+        """Fetch orders via export job, falling back to two-phase on failure."""
         start_time = time_module.time()
-
-        logger.info("=" * 60)
-        logger.info("EXPORT JOB: FAST FETCH")
-        logger.info(f"  Range: {from_date.isoformat()} → {to_date.isoformat()}")
-        logger.info("=" * 60)
+        logger.info("Starting export job fetch")
+        logger.info(f"  Range: {from_date.isoformat()} {to_date.isoformat()}")
 
         try:
             # Step 1: Create export job
@@ -530,13 +440,13 @@ class UnicommerceServiceProduction:
 
             if not job_code:
                 logger.warning(
-                    "EXPORT: Job creation failed → falling back to two-phase"
+                    "Export: Job creation failed falling back to two-phase"
                 )
                 return await self.fetch_all_orders_with_revenue_two_phase(
                     from_date, to_date
                 )
 
-            logger.info(f"  Step 1 done in {create_time:.1f}s → job={job_code}")
+            logger.info(f"  Step 1 done in {create_time:.1f}s job={job_code}")
 
             # Step 2: Poll until complete
             download_url = await self._poll_export_status(job_code)
@@ -544,13 +454,13 @@ class UnicommerceServiceProduction:
 
             if not download_url:
                 logger.warning(
-                    "EXPORT: Job failed/timed out → falling back to two-phase"
+                    "Export: Job failed/timed out falling back to two-phase"
                 )
                 return await self.fetch_all_orders_with_revenue_two_phase(
                     from_date, to_date
                 )
 
-            logger.info(f"  Step 2 done in {poll_time:.1f}s → file ready")
+            logger.info(f"  Step 2 done in {poll_time:.1f}s file ready")
 
             # Step 3: Download and parse CSV
             orders = await self._download_parse_export(download_url)
@@ -560,14 +470,14 @@ class UnicommerceServiceProduction:
             if not orders and total_time < 10:
                 # If export returned empty too quickly, might be a config issue
                 logger.warning(
-                    "EXPORT: No orders returned (possibly empty range or column mismatch)"
+                    "Export: No orders returned (possibly empty range or column mismatch)"
                 )
 
             logger.info(
-                f"  Step 3 done in {download_time:.1f}s → {len(orders)} orders"
+                f"  Step 3 done in {download_time:.1f}s {len(orders)} orders"
             )
             logger.info(
-                f"✅ EXPORT COMPLETE: {len(orders)} orders in {total_time:.1f}s total"
+                f"Export done: {len(orders)} orders in {total_time:.1f}s total"
             )
 
             return {
@@ -587,16 +497,14 @@ class UnicommerceServiceProduction:
         except Exception as e:
             total_time = time_module.time() - start_time
             logger.error(
-                f"EXPORT: Failed after {total_time:.1f}s: {e}", exc_info=True
+                f"Export: Failed after {total_time:.1f}s: {e}", exc_info=True
             )
             logger.info("Falling back to two-phase approach...")
             return await self.fetch_all_orders_with_revenue_two_phase(
                 from_date, to_date
             )
 
-    # =========================================================================
-    # TIME RANGE HELPERS (IST timezone aware)
-    # =========================================================================
+    # Date range helpers
 
     def get_today_range(self) -> Tuple[datetime, datetime]:
         """Get today's date range in UTC (IST 00:00:00 to current time - 1 min)"""
@@ -628,11 +536,7 @@ class UnicommerceServiceProduction:
     def _chunk_date_range(
         self, from_date: datetime, to_date: datetime
     ) -> List[Tuple[datetime, datetime]]:
-        """
-        Split a date range into smaller chunks for parallel/sequential fetching.
-        Ranges <= DATE_CHUNK_DAYS are returned as-is.
-        Larger ranges are split into DATE_CHUNK_DAYS windows.
-        """
+        """Split a date range into DATE_CHUNK_DAYS windows."""
         total_days = (to_date - from_date).total_seconds() / 86400
         if total_days <= self.DATE_CHUNK_DAYS:
             return [(from_date, to_date)]
@@ -648,10 +552,6 @@ class UnicommerceServiceProduction:
             current_start = current_end
         return chunks
 
-    # =========================================================================
-    # PHASE 1: IDENTIFIER COLLECTION
-    # =========================================================================
-
     async def _fetch_single_page(
         self,
         client: httpx.AsyncClient,
@@ -661,13 +561,7 @@ class UnicommerceServiceProduction:
         display_start: int,
         display_length: int
     ) -> Tuple[bool, List[Dict], int, Optional[str]]:
-        """
-        Fetch a single page from saleOrder/search.
-        Returns: (success, orders, totalRecords, error)
-
-        NOTE: Unicommerce API does NOT support pagination parameters.
-        Returns all orders in the date range (max ~200-300 per day).
-        """
+        """Fetch a single page from saleOrder/search."""
         url = f"{self.base_url}/oms/saleOrder/search"
         payload = {
             "fromDate": from_date.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -704,14 +598,7 @@ class UnicommerceServiceProduction:
         from_date: datetime,
         to_date: datetime
     ) -> Tuple[List[str], int, List[str]]:
-        """
-        Fetch ALL order codes for a single date chunk.
-
-        NOTE: Unicommerce API does NOT support pagination - it returns ALL orders
-        for the requested date range in a single response (typically 200-300 orders/day max).
-
-        Returns: (order_codes, totalRecords, errors)
-        """
+        """Fetch all order codes for a single date chunk."""
         all_codes: List[str] = []
         errors: List[str] = []
 
@@ -726,8 +613,8 @@ class UnicommerceServiceProduction:
             # On 401, invalidate the cached token, force a refresh, and retry once
             if not success and error and "401" in error:
                 logger.warning(
-                    "PHASE 1: Got 401 – refreshing token and retrying chunk "
-                    f"{from_date.isoformat()} → {to_date.isoformat()}"
+                    "Collecting order codes: Got 401 – refreshing token and retrying chunk "
+                    f"{from_date.isoformat()} {to_date.isoformat()}"
                 )
                 self.token_manager.invalidate_token()
                 await self.token_manager.get_valid_token()
@@ -754,30 +641,12 @@ class UnicommerceServiceProduction:
         to_date: datetime,
         max_orders: int = 100000
     ) -> Dict[str, Any]:
-        """
-        PHASE 1: Collect ALL order identifiers with date-window chunking.
-
-        For large date ranges (>DATE_CHUNK_DAYS), splits into smaller windows
-        and fetches each chunk independently. Deduplicates codes.
-
-        Returns:
-            {
-                "successful": bool,
-                "order_codes": List[str],    # DEDUPLICATED
-                "totalRecords": int,
-                "fetched_count": int,
-                "pages_fetched": int,
-                "fetch_time_seconds": float,
-                "errors": List[str] | None,
-                "chunks_used": int,
-                "duplicates_removed": int,
-            }
-        """
+        """Collect all order codes with date-window chunking and deduplication."""
         start_time = datetime.now()
         chunks = self._chunk_date_range(from_date, to_date)
 
         logger.info(
-            f"PHASE 1: Fetching order codes | "
+            f"Collecting order codes: Fetching order codes | "
             f"Range: {from_date.isoformat()} to {to_date.isoformat()} | "
             f"Chunks: {len(chunks)}"
         )
@@ -802,7 +671,7 @@ class UnicommerceServiceProduction:
             if len(all_codes) >= max_orders:
                 break
 
-        # DEDUPLICATION (critical for data safety)
+        # Dedup
         codes_before_dedup = len(all_codes)
         seen: Set[str] = set()
         unique_codes: List[str] = []
@@ -814,7 +683,7 @@ class UnicommerceServiceProduction:
 
         if duplicates_removed > 0:
             logger.warning(
-                f"PHASE 1 DEDUP: Removed {duplicates_removed} duplicate codes "
+                f"Dedup: Removed {duplicates_removed} duplicate codes "
                 f"({codes_before_dedup} -> {len(unique_codes)})"
             )
 
@@ -822,10 +691,10 @@ class UnicommerceServiceProduction:
 
         if all_errors:
             logger.warning(
-                f"PHASE 1: {len(all_errors)} errors: {all_errors[:5]}")
+                f"Collecting order codes: {len(all_errors)} errors: {all_errors[:5]}")
 
         logger.info(
-            f"PHASE 1 COMPLETE: {len(unique_codes)} unique codes in {elapsed:.2f}s | "
+            f"Order codes collected: {len(unique_codes)} unique codes in {elapsed:.2f}s | "
             f"Total records API reported: {total_records} | "
             f"Chunks used: {len(chunks)} | "
             f"Duplicates removed: {duplicates_removed}"
@@ -842,9 +711,7 @@ class UnicommerceServiceProduction:
             "duplicates_removed": duplicates_removed,
         }
 
-    # =========================================================================
-    # PHASE 2: DETAIL RESOLUTION
-    # =========================================================================
+    # Detail resolution
 
     async def _fetch_order_detail(
         self,
@@ -852,14 +719,7 @@ class UnicommerceServiceProduction:
         headers: Dict[str, str],
         order_code: str
     ) -> Tuple[bool, Optional[Dict], Optional[str]]:
-        """
-        Fetch detail for a single order with retry + exponential backoff.
-
-        Uses saleorder/get with paymentDetailRequired=true.
-        Optimized to extract only essential fields from response.
-
-        Returns: (success, order_dto_optimized, error_message)
-        """
+        """Fetch detail for a single order with retry and backoff."""
         url = f"{self.base_url}/oms/saleorder/get"
         payload = {
             "code": order_code,
@@ -917,7 +777,7 @@ class UnicommerceServiceProduction:
                     if status == 401:
                         # Token expired mid-flight – refresh and update shared headers
                         logger.warning(
-                            f"PHASE 2: Got 401 for {order_code} "
+                            f"Fetching order details: Got 401 for {order_code} "
                             f"(attempt {attempt+1}) – refreshing token..."
                         )
                         self.token_manager.invalidate_token()
@@ -946,10 +806,7 @@ class UnicommerceServiceProduction:
         return False, None, "Exhausted all retries"
 
     def _extract_order_essentials(self, order_dto: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Extract only required fields from full order response.
-        Reduces memory usage by 70-80% by discarding unnecessary data.
-        """
+        """Extract essential fields from a full order response."""
         items = order_dto.get("saleOrderItems", [])
 
         # Extract essential item fields only
@@ -957,7 +814,7 @@ class UnicommerceServiceProduction:
         total_quantity = 0
 
         for item in items:
-            quantity = item.get("quantity", 1) or 1  # Handle null/0 quantity
+            quantity = item.get("quantity", 1) or 1
             total_quantity += quantity
 
             # Use sellingPrice if available; fall back to maxRetailPrice
@@ -995,7 +852,7 @@ class UnicommerceServiceProduction:
             "created": order_dto.get("created") or order_dto.get("displayOrderDateTime"),
             "currencyCode": order_dto.get("currencyCode", "INR"),
             "saleOrderItems": essential_items,
-            "totalQuantity": total_quantity,  # NEW: Add total quantity
+            "totalQuantity": total_quantity,
             "cod": order_dto.get("cod", False),
             "shippingMethod": shipping_method,
             "collectableAmount": collectable_amount,
@@ -1007,21 +864,7 @@ class UnicommerceServiceProduction:
         batch_size: Optional[int] = None
     ) -> Dict[str, Any]:
         """
-        PHASE 2: Fetch order details for a batch of codes.
-
-        Fetches in batches with concurrency control.
-        Retries failed orders in a second pass with smaller batches.
-        Deduplicates results.
-
-        Returns:
-            {
-                "orders": List[Dict],        # Full order DTOs from API
-                "failed_codes": List[str],   # Codes that failed even after retry
-                "fetch_time_seconds": float,
-                "initial_success": int,
-                "retry_recovered": int,
-                "duplicates_removed": int,
-            }
+        Fetch order details in batches with concurrency control, retry, and dedup.
         """
         if not order_codes:
             return {
@@ -1039,11 +882,10 @@ class UnicommerceServiceProduction:
         failed_codes: List[str] = []
 
         logger.info(
-            f"PHASE 2: Fetching details for {len(order_codes)} orders | "
+            f"Fetching order details: Fetching details for {len(order_codes)} orders | "
             f"Batch size: {effective_batch_size}"
         )
 
-        # ===== INITIAL PASS =====
         async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
             headers = await self._get_headers()
 
@@ -1075,11 +917,10 @@ class UnicommerceServiceProduction:
 
         initial_success = len(all_orders)
 
-        # ===== RETRY PASS =====
         retry_recovered = 0
         if failed_codes:
             logger.info(
-                f"PHASE 2 RETRY: {len(failed_codes)} orders failed, "
+                f"Detail retry: {len(failed_codes)} orders failed, "
                 f"retrying with smaller batches..."
             )
 
@@ -1118,7 +959,6 @@ class UnicommerceServiceProduction:
                     if batch_start + self.RETRY_BATCH_SIZE < len(failed_codes):
                         await asyncio.sleep(self.RETRY_BATCH_DELAY)
 
-        # ===== DEDUPLICATION =====
         seen_codes: Set[str] = set()
         unique_orders: List[Dict] = []
         for order in all_orders:
@@ -1130,12 +970,11 @@ class UnicommerceServiceProduction:
 
         if duplicates_removed > 0:
             logger.warning(
-                f"PHASE 2 DEDUP: Removed {duplicates_removed} duplicate orders"
+                f"Detail dedup: Removed {duplicates_removed} duplicate orders"
             )
 
         elapsed = (datetime.now() - start_time).total_seconds()
 
-        # ===== COUNT CONSISTENCY VALIDATION =====
         total_requested = len(order_codes)
         total_resolved = len(unique_orders)
         total_failed = len(failed_codes)
@@ -1148,12 +987,12 @@ class UnicommerceServiceProduction:
             )
         elif total_failed > 0:
             logger.warning(
-                f"PHASE 2: {total_failed}/{total_requested} orders failed "
+                f"Fetching order details: {total_failed}/{total_requested} orders failed "
                 f"({total_failed/total_requested*100:.1f}% failure rate)"
             )
 
         logger.info(
-            f"PHASE 2 COMPLETE: {total_resolved}/{total_requested} resolved | "
+            f"Order details fetched: {total_resolved}/{total_requested} resolved | "
             f"Initial: {initial_success} | "
             f"Retry recovered: {retry_recovered} | "
             f"Failed: {total_failed} | "
@@ -1170,9 +1009,7 @@ class UnicommerceServiceProduction:
             "duplicates_removed": duplicates_removed,
         }
 
-    # =========================================================================
-    # TWO-PHASE ORCHESTRATOR (FALLBACK - used when export fails)
-    # =========================================================================
+    # Two-phase orchestrator (fallback when export fails)
 
     async def fetch_all_orders_with_revenue_two_phase(
         self,
@@ -1181,20 +1018,14 @@ class UnicommerceServiceProduction:
         max_orders: int = 100000
     ) -> Dict[str, Any]:
         """
-        TWO-PHASE ORDER FETCHING WITH REVENUE DATA (FALLBACK)
-
-        Used only when Export Job API fails. Orchestrates:
-        Phase 1 (identifier collection) and Phase 2 (detail resolution).
+        Fallback two-phase fetch: collect order codes, then fetch details.
         """
         total_start = datetime.now()
-
-        logger.info("=" * 60)
-        logger.info("STARTING TWO-PHASE ORDER FETCH")
+        logger.info("Starting order fetch")
         logger.info(
             f"  Date range: {from_date.isoformat()} to {to_date.isoformat()}")
-        logger.info("=" * 60)
 
-        # PHASE 1: Get all order codes (with date chunking + dedup)
+        # Step 1: Get all order codes (with date chunking + dedup)
         phase1_result = await self.fetch_all_order_codes(from_date, to_date, max_orders)
 
         if not phase1_result.get("successful", False):
@@ -1208,7 +1039,7 @@ class UnicommerceServiceProduction:
         order_codes = phase1_result.get("order_codes", [])
         total_records = phase1_result.get("totalRecords", 0)
 
-        logger.info(f"PHASE 1 RESULT: {len(order_codes)} unique order codes")
+        logger.info(f"Step 1 result: {len(order_codes)} unique order codes")
 
         if not order_codes:
             return {
@@ -1225,13 +1056,12 @@ class UnicommerceServiceProduction:
                 "retry_recovered": 0,
             }
 
-        # PHASE 2: Fetch details for each order
+        # Step 2: Fetch details for each order
         phase2_result = await self.fetch_order_details_batch(order_codes)
 
         orders_with_details = phase2_result.get("orders", [])
         total_elapsed = (datetime.now() - total_start).total_seconds()
 
-        # ===== CROSS-PHASE VALIDATION =====
         phase1_count = len(order_codes)
         phase2_count = len(orders_with_details)
         failed_count = len(phase2_result.get("failed_codes", []))
@@ -1250,16 +1080,13 @@ class UnicommerceServiceProduction:
                 f"could not be resolved in Phase 2. "
                 f"Failed codes: {phase2_result.get('failed_codes', [])[:10]}..."
             )
-
-        logger.info("=" * 60)
-        logger.info("TWO-PHASE FETCH COMPLETE")
+        logger.info("Fetch complete")
         logger.info(f"  Phase 1 codes: {phase1_count}")
         logger.info(f"  Phase 2 resolved: {phase2_count}")
         logger.info(f"  Failed: {failed_count}")
         logger.info(
             f"  Retry recovered: {phase2_result.get('retry_recovered', 0)}")
         logger.info(f"  Total time: {total_elapsed:.2f}s")
-        logger.info("=" * 60)
 
         return {
             "successful": True,
@@ -1275,9 +1102,6 @@ class UnicommerceServiceProduction:
             "retry_recovered": phase2_result.get("retry_recovered", 0),
         }
 
-    # =========================================================================
-    # MAIN FETCH METHOD - EXPORT FIRST, TWO-PHASE FALLBACK
-    # =========================================================================
 
     async def fetch_all_orders_with_revenue(
         self,
@@ -1297,21 +1121,11 @@ class UnicommerceServiceProduction:
         """
         return await self.fetch_orders_via_export(from_date, to_date)
 
-    # =========================================================================
-    # REVENUE CALCULATION - USES sellingPrice ONLY
-    # =========================================================================
+    # Revenue helpers
 
     @staticmethod
     def _extract_date_key(created_raw) -> Optional[str]:
-        """
-        Extract a YYYY-MM-DD date key from a created timestamp.
-
-        Handles:
-        - Epoch milliseconds (int/float or numeric string like "1771107580000")
-        - ISO / standard date strings ("2026-02-14 07:58:00", "2026-02-14T07:58:00")
-        - Already-formatted date ("2026-02-14")
-        Returns None if unparseable.
-        """
+        """Extract a YYYY-MM-DD date key from epoch ms, ISO string, or date string."""
         if created_raw is None or created_raw == "":
             return None
 
@@ -1319,7 +1133,7 @@ class UnicommerceServiceProduction:
         if not val:
             return None
 
-        # Check if it's a purely numeric value → epoch ms or epoch seconds
+        # Check if it's a purely numeric value epoch ms or epoch seconds
         try:
             numeric = float(val)
             # Epoch milliseconds (>= 1e12) vs seconds (< 1e12)
@@ -1347,12 +1161,7 @@ class UnicommerceServiceProduction:
 
     def calculate_order_revenue(self, order: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Calculate revenue for a single order using ONLY sellingPrice.
-
-        CRITICAL: Revenue = SUM of (sellingPrice * quantity) for each item.
-        NOT totalPrice. NOT extrapolated values. NOT cached aggregates.
-
-        Exclusions: CANCELLED, RETURNED, REFUNDED, FAILED, etc.
+        Calculate revenue for a single order from sellingPrice, excluding cancelled/returned.
         """
         def safe_float(value, default=0.0) -> float:
             if value is None:
@@ -1412,21 +1221,13 @@ class UnicommerceServiceProduction:
             "include_in_revenue": include_in_revenue,
             "excluded_reason": excluded_reason,
             "item_count": item_count,
-            "quantity": total_quantity,  # NEW: Include total quantity
+            "quantity": total_quantity,
         }
 
-    # =========================================================================
-    # AGGREGATION WITH RECONCILIATION
-    # =========================================================================
-
+    # Aggregation with reconciliation
     def aggregate_orders(self, orders: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Aggregate ALL orders into summary statistics.
-
-        NO SAMPLING. NO EXTRAPOLATION. 100% ACCURATE.
-
-        Revenue = SUM of sellingPrice for all valid orders.
-        Includes revenue reconciliation: channel_total must == overall_total.
+        Aggregate orders into summary statistics with channel reconciliation.
         """
         total_orders = len(orders)
         valid_orders = 0
@@ -1436,7 +1237,7 @@ class UnicommerceServiceProduction:
         total_discount = 0.0
         total_tax = 0.0
         total_refund = 0.0
-        total_items = 0  # NEW: Track total quantity of items
+        total_items = 0
 
         channel_stats: Dict[str, Dict[str, Any]] = {}
         status_stats: Dict[str, int] = {}
@@ -1480,7 +1281,6 @@ class UnicommerceServiceProduction:
             else:
                 excluded_orders += 1
 
-        # ===== REVENUE RECONCILIATION =====
         channel_total = sum(ch["revenue"] for ch in channel_stats.values())
         reconciliation_passed = abs(channel_total - total_revenue) < 0.01
 
@@ -1513,7 +1313,7 @@ class UnicommerceServiceProduction:
             "total_orders": total_orders,
             "valid_orders": valid_orders,
             "excluded_orders": excluded_orders,
-            "total_items": total_items,  # NEW: Add total items count
+            "total_items": total_items,
             "total_revenue": round(total_revenue, 2),
             "total_discount": round(total_discount, 2),
             "total_tax": round(total_tax, 2),
@@ -1529,9 +1329,7 @@ class UnicommerceServiceProduction:
             "reconciliation_passed": reconciliation_passed,
         }
 
-    # =========================================================================
-    # PAGINATED API FOR FRONTEND (12 orders per page) - USES TWO-PHASE
-    # =========================================================================
+    # Paginated API for frontend (12 orders per page)
 
     async def get_orders_paginated(
         self,
@@ -1541,26 +1339,21 @@ class UnicommerceServiceProduction:
         page_size: int = 12
     ) -> Dict[str, Any]:
         """
-        Get orders with CLIENT-SIDE pagination (Unicommerce doesn't support server-side pagination).
-
-        Strategy:
-        1. Fetch ALL orders for the date range (cached for 15 minutes)
-        2. Slice results in memory for pagination
-        3. Much faster: subsequent pages are instant, no API calls
+        Return a page of orders using cached full-fetch and in-memory slicing.
         """
 
         # Build a cache key for this date range + details
         cache_key = f"orders_detailed_{from_date.date()}_{to_date.date()}"
 
-        # Check cache first - FAST PATH
+        # Check cache
         cached_orders = self._get_from_cache(cache_key)
 
         if cached_orders is None:
             # Fetch ALL orders with details (one-time cost, then cached)
             logger.info(
-                f"📥 Cache miss - fetching all orders for {from_date.date()} to {to_date.date()}")
+                f"Fetching all orders for {from_date.date()} to {to_date.date()}")
             logger.info(
-                "⏱️  First load: 30s - 5min (depends on order volume)")
+                "Initial fetch may take a while")
 
             fetch_result = await self.fetch_all_orders_with_revenue(
                 from_date, to_date, max_orders=100000
@@ -1588,8 +1381,7 @@ class UnicommerceServiceProduction:
                     size = ""
                     if item_name:
                         # Try to extract size from end of name (e.g., "- 3-4 YEARS", "- XL", "- 10")
-                        import re
-                        # Pattern 1: X-Y YEARS/MONTHS (e.g., "3-4 YEARS", "6-9 MONTHS")
+                            # Pattern 1: X-Y YEARS/MONTHS (e.g., "3-4 YEARS", "6-9 MONTHS")
                         match = re.search(
                             r'-?\s*(\d+-\d+\s+(?:YEARS?|MONTHS?))\s*$', item_name, re.IGNORECASE)
                         if not match:
@@ -1606,24 +1398,23 @@ class UnicommerceServiceProduction:
                     items.append({
                         "itemSku": item.get("itemSku", ""),
                         "itemName": item_name,
-                        # Alias for compatibility
                         "sku": item.get("itemSku", ""),
                         "sellingPrice": item.get("sellingPrice", 0),
-                        "selling_price": item.get("sellingPrice", 0),  # Alias
+                        "selling_price": item.get("sellingPrice", 0),
                         "quantity": item.get("quantity", 1),
                         # Fallback to SKU
                         "size": size if size else item.get("itemSku", "").split("-")[-1],
                     })
                 processed_all.append({
                     "code": calc["order_code"],
-                    "displayOrderCode": calc["order_code"],  # Alias
+                    "displayOrderCode": calc["order_code"],
                     "status": calc["status"],
                     "channel": calc["channel"],
                     "selling_price": calc["selling_price"],
-                    "total_selling_price": calc["selling_price"],  # Alias
+                    "total_selling_price": calc["selling_price"],
                     "net_revenue": calc["net_revenue"],
                     "created": calc["created"],
-                    "displayOrderDateTime": calc["created"],  # Alias
+                    "displayOrderDateTime": calc["created"],
                     "item_count": calc["item_count"],
                     "quantity": calc["quantity"],
                     "include_in_revenue": calc["include_in_revenue"],
@@ -1636,10 +1427,10 @@ class UnicommerceServiceProduction:
             self._set_cache(cache_key, processed_all)
             cached_orders = processed_all
             logger.info(
-                f"✅ Cached {len(cached_orders)} orders for instant future pagination")
+                f"Cached {len(cached_orders)} orders")
         else:
             logger.info(
-                f"⚡ CACHED: Using {len(cached_orders)} cached orders (instant load < 2s)")
+                f"Cache hit, using {len(cached_orders)} cached orders (instant load < 2s)")
 
         # Client-side pagination
         total_orders = len(cached_orders)
@@ -1673,10 +1464,7 @@ class UnicommerceServiceProduction:
             "cache_used": cached_orders is not None,
         }
 
-    # =========================================================================
-    # MAIN SALES DATA METHOD - USES TWO-PHASE APPROACH
-    # =========================================================================
-
+    # Main sales data method - uses two-phase approach
     async def get_sales_data(
         self,
         from_date: datetime,
@@ -1684,26 +1472,23 @@ class UnicommerceServiceProduction:
         period_name: str = "custom"
     ) -> Dict[str, Any]:
         """
-        Get complete sales data for a date range using TWO-PHASE API approach.
+        Get complete sales data for a date range.
 
-        Revenue = SUM of item.sellingPrice from Phase 2 responses ONLY.
+        Revenue = SUM of item.sellingPrice from detail responses.
         Fetches ALL orders (no limits) for accurate business data.
         Uses 15-min cache to avoid repeated fetches.
         """
-        # Check cache first for standard periods - FAST PATH
+        # Check cache
         if period_name != "custom":
             cache_key = self._get_cache_key(period_name)
             cached_data = self._get_from_cache(cache_key)
             if cached_data is not None:
                 logger.info(
-                    f"✅ CACHED: Returning {period_name} data instantly (no API calls)")
+                    f"Cache hit, returning {period_name} data instantly (no API calls)")
                 return cached_data
-
-        logger.info("=" * 70)
-        logger.info(f"GETTING {period_name.upper()} SALES DATA")
+        logger.info(f"Getting {period_name.upper()} SALES DATA")
         logger.info(f"  Date range: {from_date} to {to_date}")
-        logger.info("  Method: Export Job API (fast) → two-phase fallback")
-        logger.info("=" * 70)
+        logger.info("  Method: Export Job API (fast) two-phase fallback")
 
         if not self.access_code:
             return {
@@ -1733,9 +1518,7 @@ class UnicommerceServiceProduction:
 
             # Aggregate using sellingPrice ONLY
             aggregation = self.aggregate_orders(orders)
-
-            logger.info("=" * 70)
-            logger.info("REVENUE SUMMARY")
+            logger.info("Revenue summary")
             logger.info(
                 f"  Valid orders: {aggregation['valid_orders']} / {total_records} total")
             logger.info(
@@ -1744,7 +1527,6 @@ class UnicommerceServiceProduction:
                 f"  AVG: INR {aggregation['avg_order_value']:,.2f}")
             logger.info(
                 f"  Reconciliation: {'PASSED' if aggregation.get('reconciliation_passed') else 'FAILED'}")
-            logger.info("=" * 70)
 
             # Sample orders for display (first 10)
             sample_orders = []
@@ -1758,7 +1540,7 @@ class UnicommerceServiceProduction:
                     "net_revenue": calc["net_revenue"],
                     "created": calc["created"],
                     "item_count": calc["item_count"],
-                    "quantity": calc["quantity"],  # NEW: Add quantity
+                    "quantity": calc["quantity"],
                     "include_in_revenue": calc["include_in_revenue"],
                 })
 
@@ -1800,10 +1582,7 @@ class UnicommerceServiceProduction:
                 "period": period_name,
             }
 
-    # =========================================================================
-    # TIME-BASED CONVENIENCE METHODS
-    # =========================================================================
-
+    # Time-based convenience methods
     async def get_today_sales(self) -> Dict[str, Any]:
         """Get today's sales (00:00:00 to current time - 1 minute)"""
         from_date, to_date = self.get_today_range()
@@ -1825,9 +1604,6 @@ class UnicommerceServiceProduction:
         """Get sales for custom date range"""
         return await self.get_sales_data(from_date, to_date, "custom")
 
-    # =========================================================================
-    # PAGINATED CONVENIENCE METHODS
-    # =========================================================================
 
     async def get_today_orders_paginated(
         self, page: int = 1, page_size: int = 12
@@ -1847,17 +1623,10 @@ class UnicommerceServiceProduction:
         from_date, to_date = self.get_last_n_days_range(7)
         return await self.get_orders_paginated(from_date, to_date, page, page_size)
 
-    # =========================================================================
-    # VALIDATION & RECONCILIATION
-    # =========================================================================
-
+    # Validation & reconciliation
     async def validate_revenue_consistency(self) -> Dict[str, Any]:
         """
-        Run sanity checks on revenue data.
-
-        Validates:
-        1. Channel totals = overall total
-        2. Reconciliation passed for each period
+        Run sanity checks on revenue data across periods.
         """
         logger.info("Running revenue validation checks...")
 
@@ -1908,10 +1677,7 @@ class UnicommerceServiceProduction:
             "message": "All validations passed" if not issues else f"{len(issues)} issues found",
         }
 
-    # =========================================================================
-    # BACKWARD COMPATIBILITY
-    # =========================================================================
-
+    # Backward compatibility
     async def search_sale_orders(
         self,
         from_date: datetime = None,
@@ -1947,7 +1713,7 @@ class UnicommerceServiceProduction:
                 }
 
     async def get_order_details(self, order_code: str) -> Dict[str, Any]:
-        """Get detailed information for a specific order WITH payment details."""
+        """Get full order details including payment info."""
         url = f"{self.base_url}/oms/saleorder/get"
 
         async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
@@ -1983,7 +1749,7 @@ class UnicommerceServiceProduction:
                 logger.error(f"Error fetching order {order_code}: {e}")
                 return {"successful": False, "error": str(e)}
 
-    # Aliases for backward compatibility
+    # Backward-compatible aliases
     async def get_last_24_hours_sales(self) -> Dict[str, Any]:
         return await self.get_today_sales()
 
@@ -2000,16 +1766,13 @@ class UnicommerceServiceProduction:
         return await self.get_custom_range_sales(from_date, to_date)
 
 
-# =========================================================================
-# SINGLETON FACTORY
-# =========================================================================
-
-_service_instance: Optional[UnicommerceServiceProduction] = None
+# Singleton factory
+_service_instance: Optional[UnicommerceService] = None
 
 
-def get_unicommerce_service() -> UnicommerceServiceProduction:
+def get_unicommerce_service() -> UnicommerceService:
     """Get or create the Unicommerce service singleton"""
     global _service_instance
     if _service_instance is None:
-        _service_instance = UnicommerceServiceProduction()
+        _service_instance = UnicommerceService()
     return _service_instance

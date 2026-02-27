@@ -29,12 +29,6 @@ interface OrderNotification {
  *
  * When the server pushes today_sales data, the React Query cache
  * for 'unicommerce-today' is automatically updated — no polling needed.
- *
- * Fixes applied:
- *  - isMountedRef prevents reconnect timers firing after component unmount
- *    (also silences React StrictMode double-effect "closed before established" artifacts)
- *  - Guards against both OPEN and CONNECTING states to avoid duplicate connections
- *  - reconnectAttemptsRef resets on clean unmount so next mount starts fresh
  */
 export function useWebSocket() {
     const wsRef = useRef<WebSocket | null>(null)

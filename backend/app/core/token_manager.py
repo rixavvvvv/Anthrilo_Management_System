@@ -1,20 +1,4 @@
-"""
-Centralized OAuth Token Lifecycle Manager
-==========================================
-Enterprise-grade, self-healing authentication system.
-
-CRITICAL DESIGN:
-- Single shared token across ALL concurrent requests
-- Proactive refresh 60 seconds before expiry (not per-request)
-- asyncio.Lock ensures only ONE refresh happens at a time
-- 3-level authentication fallback strategy
-- File-based persistence for token survival across restarts
-
-Auth Strategy:
-  LEVEL 1 -> Valid cached access token (instant)
-  LEVEL 2 -> Refresh token exchange (if access expired)
-  LEVEL 3 -> Full re-authentication (username/password or access_code fallback)
-"""
+"""OAuth token manager for Unicommerce API authentication."""
 
 import httpx
 import json
@@ -96,10 +80,7 @@ class TokenManager:
                 self._save_tokens()
                 logger.info("Loaded tokens from environment variables")
 
-    # =========================================================================
-    # PERSISTENCE
-    # =========================================================================
-
+    # Persistence
     def _load_tokens(self):
         """Load tokens from persistent JSON storage"""
         try:
@@ -144,16 +125,14 @@ class TokenManager:
         except Exception as e:
             logger.warning(f"Failed to save tokens to file: {e}")
 
-    # =========================================================================
     # LEVEL 3: Full Re-Authentication
-    # =========================================================================
 
     async def _authenticate(self) -> bool:
         """
         LEVEL 3: Re-authenticate with username/password or access code.
         Called only when refresh token is also expired/invalid.
         """
-        logger.info("LEVEL 3: Performing full re-authentication...")
+        logger.info("Level 3: Performing full re-authentication...")
 
         # Try username/password authentication first
         if self.username and self.password:
@@ -223,9 +202,7 @@ class TokenManager:
         self._auth_stats["failures"] += 1
         return False
 
-    # =========================================================================
     # LEVEL 2: Token Refresh
-    # =========================================================================
 
     async def _refresh_access_token(self) -> bool:
         """
@@ -236,7 +213,7 @@ class TokenManager:
             logger.debug("No refresh token available, skipping to re-auth")
             return False
 
-        logger.info("LEVEL 2: Refreshing access token...")
+        logger.info("Level 2: Refreshing access token...")
         refresh_url = f"https://{self.tenant}.unicommerce.com/oauth/token"
 
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -281,9 +258,7 @@ class TokenManager:
                 logger.warning(f"Token refresh error: {e}")
                 return False
 
-    # =========================================================================
     # LEVEL 1: Get Valid Token (Main Entry Point)
-    # =========================================================================
 
     async def get_valid_token(self) -> Optional[str]:
         """
@@ -334,9 +309,7 @@ class TokenManager:
             self._auth_stats["failures"] += 1
             return None
 
-    # =========================================================================
     # Headers & Status
-    # =========================================================================
 
     def invalidate_token(self):
         """
@@ -395,10 +368,7 @@ class TokenManager:
         }
 
 
-# =========================================================================
-# SINGLETON
-# =========================================================================
-
+# Singleton
 _token_manager: Optional[TokenManager] = None
 
 

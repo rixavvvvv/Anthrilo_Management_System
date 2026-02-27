@@ -42,15 +42,15 @@ async def create_production_plan(plan: ProductionPlanCreate, db: Session = Depen
     garment = db.query(Garment).filter(Garment.id == plan.garment_id).first()
     if not garment:
         raise HTTPException(status_code=404, detail="Garment not found")
-    
+
     db_plan = ProductionPlan(**plan.model_dump())
     db.add(db_plan)
     db.commit()
     db.refresh(db_plan)
-    
+
     # Invalidate cache
     CacheService.invalidate_production_cache()
-    
+
     # Broadcast update
     await broadcast_production_update({
         "action": "plan_created",
@@ -60,7 +60,7 @@ async def create_production_plan(plan: ProductionPlanCreate, db: Session = Depen
         "status": db_plan.status,
         "timestamp": datetime.now().isoformat()
     })
-    
+
     return db_plan
 
 
@@ -73,21 +73,21 @@ def list_production_plans(
 ):
     """List all production plans with pagination and Redis caching."""
     skip = (page - 1) * page_size
-    
+
     # Check cache
     cache_key = f"production:plans:list:{page}:{page_size}:{plan_status}"
     cached = CacheService.get(cache_key)
     if cached:
         return PaginatedResponse[ProductionPlanSchema](**cached)
-    
+
     # Build query
     query = db.query(ProductionPlan)
     if plan_status:
         query = query.filter(ProductionPlan.status == plan_status)
-    
+
     total = query.count()
     plans = query.order_by(ProductionPlan.target_date.desc()).offset(skip).limit(page_size).all()
-    
+
     items = [ProductionPlanSchema.from_orm(p) for p in plans]
     result = {
         "items": [item.model_dump(mode='json') for item in items],
@@ -96,10 +96,10 @@ def list_production_plans(
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size
     }
-    
+
     # Cache result
     CacheService.set(cache_key, result, CacheService.TTL_MEDIUM)
-    
+
     return PaginatedResponse[ProductionPlanSchema](**result)
 
 
@@ -111,14 +111,14 @@ def get_production_plan(plan_id: int, db: Session = Depends(get_db)):
     cached = CacheService.get(cache_key)
     if cached:
         return cached
-    
+
     plan = db.query(ProductionPlan).filter(ProductionPlan.id == plan_id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Production plan not found")
-    
+
     result = ProductionPlanSchema.from_orm(plan)
-    
+
     # Cache result (serialize before caching)
     CacheService.set(cache_key, result.model_dump(mode='json'), CacheService.TTL_MEDIUM)
-    
+
     return result

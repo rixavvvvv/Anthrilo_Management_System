@@ -1,14 +1,4 @@
-"""
-Unicommerce Inventory API Endpoints
-=====================================
-Covers:
-- Get Inventory Snapshot
-- Adjust Inventory (Single)
-- Adjust Inventory (Multiple / Bulk)
-- Adjust Batchwise Inventory (Multiple)
-- Mark Inventory Found
-- Get Nearby Store Inventory
-"""
+"""Unicommerce inventory endpoints."""
 
 from fastapi import APIRouter, Body
 import logging
@@ -20,10 +10,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# INVENTORY SNAPSHOT
-# =============================================================================
-
+# Inventory snapshot
 @router.post("/snapshot")
 async def get_inventory_snapshot(payload: Dict[str, Any] = Body(...)):
     """
@@ -46,10 +33,7 @@ async def get_inventory_snapshot(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# ADJUST INVENTORY (SINGLE)
-# =============================================================================
-
+# Adjust inventory (single)
 @router.post("/adjust")
 async def adjust_inventory_single(payload: Dict[str, Any] = Body(...)):
     """
@@ -72,9 +56,7 @@ async def adjust_inventory_single(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# ADJUST INVENTORY (MULTIPLE / BULK)
-# =============================================================================
+# Adjust inventory (bulk)
 
 @router.post("/adjust/bulk")
 async def adjust_inventory_bulk(payload: Dict[str, Any] = Body(...)):
@@ -99,10 +81,7 @@ async def adjust_inventory_bulk(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# ADJUST BATCHWISE INVENTORY (MULTIPLE)
-# =============================================================================
-
+# Adjust batchwise inventory (multiple)
 @router.post("/adjust/bulk/batchwise")
 async def adjust_batchwise_inventory_bulk(payload: Dict[str, Any] = Body(...)):
     """
@@ -126,10 +105,7 @@ async def adjust_batchwise_inventory_bulk(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# MARK INVENTORY FOUND
-# =============================================================================
-
+# Mark inventory found
 @router.post("/mark-found")
 async def mark_inventory_found(payload: Dict[str, Any] = Body(...)):
     """
@@ -147,10 +123,7 @@ async def mark_inventory_found(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# NEARBY STORE INVENTORY
-# =============================================================================
-
+# Nearby store inventory
 @router.post("/nearby-store")
 async def get_nearby_store_inventory(payload: Dict[str, Any] = Body(...)):
     """

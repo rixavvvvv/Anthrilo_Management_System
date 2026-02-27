@@ -1,31 +1,4 @@
-"""
-Authentication & User Management endpoints
-============================================
-Auth:
-  POST /login         — username/password → JWT (with role in payload)
-  POST /refresh       — rotate refresh token
-  POST /register      — create first account (or admin-only)
-  GET  /me            — current user profile
-  PUT  /me            — update own profile (full_name)
-  PUT  /me/password   — change own password
-  GET  /me/preferences — get preferences
-  PUT  /me/preferences — update preferences
-
-Sessions:
-  GET  /sessions      — list active sessions for current user
-  DELETE /sessions/{id} — revoke a specific session
-  POST /sessions/logout-others — revoke all other sessions
-
-Admin (role=admin only):
-  GET    /users            — list all users
-  POST   /users            — create user
-  PUT    /users/{id}       — update user (role, active, etc.)
-  DELETE /users/{id}       — delete user
-
-HeilKnights-only (user id=1):
-  GET /history/logins      — all login history
-  GET /history/activity    — all activity logs
-"""
+"""Auth endpoints: login, register, token refresh, user management."""
 
 import hashlib
 import logging
@@ -56,9 +29,7 @@ router = APIRouter()
 security = HTTPBearer(auto_error=False)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# HELPERS
-# ═══════════════════════════════════════════════════════════════════════════
+# Helpers
 
 def _hash_token(token: str) -> str:
     """SHA-256 hash of a token for safe session storage."""
@@ -93,9 +64,7 @@ def _parse_device(ua: str) -> str:
     return f"{browser} on {os_name}"
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# DEPENDENCIES
-# ═══════════════════════════════════════════════════════════════════════════
+# Dependencies
 
 async def get_current_user(
     creds: HTTPAuthorizationCredentials = Depends(security),
@@ -173,13 +142,11 @@ def _create_session(db: Session, user_id: int, refresh_token: str, ip: str, ua: 
     return sess
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# AUTH ENDPOINTS
-# ═══════════════════════════════════════════════════════════════════════════
+# Auth endpoints
 
 @router.post("/login", response_model=Token)
 def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
-    """Login → JWT tokens. Records login history, activity, and active session."""
+    """Login JWT tokens. Records login history, activity, and active session."""
     ip = request.client.host if request.client else ""
     ua = (request.headers.get("user-agent") or "")[:512]
 
@@ -242,7 +209,7 @@ class RefreshTokenRequest(BaseModel):
 
 @router.post("/refresh", response_model=Token)
 def refresh_tokens(body: RefreshTokenRequest, request: Request, db: Session = Depends(get_db)):
-    """Rotate refresh token → new access + refresh pair. Updates session."""
+    """Rotate refresh token new access + refresh pair. Updates session."""
     payload = decode_token(body.refresh_token)
     if not payload or payload.get("type") != "refresh":
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token",
@@ -268,8 +235,6 @@ def refresh_tokens(body: RefreshTokenRequest, request: Request, db: Session = De
     db.commit()
     return tokens
 
-
-# ─── Profile ─────────────────────────────────────────────────────────────
 
 @router.get("/me", response_model=UserSchema)
 async def get_me(current_user: User = Depends(get_current_user)):
@@ -311,8 +276,6 @@ def change_password(
     return {"message": "Password updated"}
 
 
-# ─── Preferences ──────────────────────────────────────────────────────────
-
 @router.get("/me/preferences")
 def get_preferences(current_user: User = Depends(get_current_user)):
     """Get user preferences."""
@@ -351,8 +314,6 @@ def update_preferences(
         "email_notifications": current_user.email_notifications,
     }
 
-
-# ─── Sessions ─────────────────────────────────────────────────────────────
 
 @router.get("/sessions", response_model=List[SessionItem])
 def list_sessions(
@@ -421,9 +382,7 @@ def logout_other_sessions(
     return {"message": f"Logged out {count} other sessions"}
 
 
-# ═══════════════════════════════════════════════════════════════════════════
 # ADMIN: USER MANAGEMENT  (require_admin)
-# ═══════════════════════════════════════════════════════════════════════════
 
 @router.get("/users", response_model=UserList)
 def list_users(
@@ -485,19 +444,19 @@ def update_user(
     changes = []
     if body.email is not None and body.email != user.email:
         user.email = body.email
-        changes.append(f"email→{body.email}")
+        changes.append(f"email{body.email}")
     if body.full_name is not None:
         user.full_name = body.full_name
-        changes.append(f"name→{body.full_name}")
+        changes.append(f"name{body.full_name}")
     if body.role is not None:
         if body.role not in VALID_ROLES:
             raise HTTPException(status_code=400, detail=f"Invalid role: {body.role}")
         user.role = body.role
         user.is_superuser = body.role == "admin"
-        changes.append(f"role→{body.role}")
+        changes.append(f"role{body.role}")
     if body.is_active is not None:
         user.is_active = body.is_active
-        changes.append(f"active→{body.is_active}")
+        changes.append(f"active{body.is_active}")
 
     db.commit()
     db.refresh(user)
@@ -530,9 +489,7 @@ def delete_user(
     return {"message": f"User {username} deleted"}
 
 
-# ═══════════════════════════════════════════════════════════════════════════
 # OWNER (id=1): LOGIN HISTORY & ACTIVITY LOGS
-# ═══════════════════════════════════════════════════════════════════════════
 
 @router.get("/history/logins", response_model=List[LoginHistoryItem])
 def get_login_history(

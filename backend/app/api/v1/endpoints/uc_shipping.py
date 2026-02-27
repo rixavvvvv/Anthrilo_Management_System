@@ -1,20 +1,4 @@
-"""
-Unicommerce Shipping, Dispatch & Delivery API Endpoints
-=========================================================
-Covers:
-- Create / Search / Update / Split / Modify Shipping Package
-- Get Shipping Packages / Get Shipping Package Details
-- Allocate Shipping Provider
-- Create Invoice and Allocate Shipping Provider
-- Mark Dispatched / Force Dispatch
-- Shipment Create and Mark Dispatched
-- Update Tracking Status
-- Mark Item Delivered
-- Create / Add Package / Close Shipping Manifest
-- Create and Complete Manifest
-- Get Shipping Manifest
-- Get Shipping Label PDF
-"""
+"""Unicommerce shipping endpoints."""
 
 from fastapi import APIRouter, Body, Query
 from fastapi.responses import Response
@@ -27,10 +11,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# SHIPPING PACKAGES
-# =============================================================================
-
+# Shipping packages
 @router.post("/package/create")
 async def create_shipping_package(payload: Dict[str, Any] = Body(...)):
     """
@@ -151,10 +132,7 @@ async def get_shipping_package_details(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# SHIPPING PROVIDER
-# =============================================================================
-
+# Shipping provider
 @router.post("/package/allocate-provider")
 async def allocate_shipping_provider(payload: Dict[str, Any] = Body(...)):
     """
@@ -193,10 +171,7 @@ async def create_invoice_and_allocate_provider(payload: Dict[str, Any] = Body(..
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# DISPATCH & DELIVERY
-# =============================================================================
-
+# Dispatch & delivery
 @router.post("/package/dispatch")
 async def dispatch_shipping_package(payload: Dict[str, Any] = Body(...)):
     """
@@ -284,10 +259,7 @@ async def mark_item_delivered(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# SHIPPING MANIFESTS
-# =============================================================================
-
+# Shipping manifests
 @router.post("/manifest/create")
 async def create_shipping_manifest(payload: Dict[str, Any] = Body(...)):
     """
@@ -366,10 +338,7 @@ async def get_shipping_manifest(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# SHIPPING LABEL PDF
-# =============================================================================
-
+# Shipping label pdf
 @router.get("/label/pdf")
 async def get_shipping_label_pdf(
     shipping_package_code: str = Query(..., description="Shipping package code"),

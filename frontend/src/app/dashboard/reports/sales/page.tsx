@@ -4,17 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { unicommerceApi } from '@/lib/api';
 import { useState, useMemo } from 'react';
 
-/**
- * Sales Reports Page - PRODUCTION VERSION
- * 
- * Features:
- * - Revenue calculated using sellingPrice ONLY
- * - Page-wise pagination (12 orders per page)
- * - Time filters: Today, Yesterday, Last 7 Days, Custom
- * - Revenue by channel
- * - Validation logging
- */
-
 type TimeFilter = 'today' | 'yesterday' | 'last_7_days' | 'custom';
 
 // Format currency

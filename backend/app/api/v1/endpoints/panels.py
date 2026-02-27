@@ -55,7 +55,7 @@ def list_panels(
         query = query.filter(Panel.is_active == is_active)
     if panel_type:
         query = query.filter(Panel.panel_type == panel_type)
-    
+
     panels = query.offset(skip).limit(limit).all()
     return panels
 

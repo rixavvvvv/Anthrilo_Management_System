@@ -1,17 +1,4 @@
-"""
-Unicommerce Returns & Reverse Pickup API Endpoints
-====================================================
-Covers:
-- Mark Sale Order Returned
-- Mark Sale Order Returned with Inventory Type
-- Get Return
-- Search Return
-- Create Reverse Pick-up
-- Update Reverse Pick-up
-- Approve Reverse Pick-up
-- Cancel Reverse Pick-up
-- Allocate Courier for Reverse Pick-up
-"""
+"""Unicommerce returns endpoints."""
 
 from fastapi import APIRouter, Body
 import logging
@@ -23,10 +10,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# RETURNS
-# =============================================================================
-
+# Returns
 @router.post("/mark-returned")
 async def mark_sale_order_returned(payload: Dict[str, Any] = Body(...)):
     """
@@ -91,10 +75,7 @@ async def search_returns(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# REVERSE PICKUP
-# =============================================================================
-
+# Reverse pickup
 @router.post("/reverse-pickup/create")
 async def create_reverse_pickup(payload: Dict[str, Any] = Body(...)):
     """

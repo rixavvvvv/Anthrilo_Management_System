@@ -1,17 +1,4 @@
-"""
-Unicommerce Gatepass API Endpoints
-====================================
-Covers:
-- Scan Item
-- Create Gatepass
-- Complete Gatepass
-- Update Gatepass
-- Remove Item in Gatepass
-- Add Non-traceable Item in Gatepass
-- Discard Gatepass
-- Search Gatepass
-- Get Gatepass
-"""
+"""Unicommerce gatepass endpoints."""
 
 from fastapi import APIRouter, Body
 import logging

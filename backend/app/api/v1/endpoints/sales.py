@@ -82,7 +82,7 @@ async def create_sale(sale: SaleCreate, db: Session = Depends(get_db)):
     # Invalidate cache for the sale date
     invalidate_daily_sales_cache(sale.transaction_date)
     CacheService.invalidate_sales_cache()
-    
+
     # Broadcast update
     await broadcast_sales_update({
         "action": "sale_created",
@@ -108,13 +108,13 @@ def list_sales(
 ):
     """List all sales with pagination and Redis caching."""
     skip = (page - 1) * page_size
-    
+
     # Check cache
     cache_key = f"sales:list:{page}:{page_size}:{start_date}:{end_date}:{panel_id}"
     cached = CacheService.get(cache_key)
     if cached:
         return cached
-    
+
     # Build query
     query = db.query(Sale).join(Garment)  # Join garment to get SKU
     if start_date:
@@ -126,7 +126,7 @@ def list_sales(
 
     total = query.count()
     sales = query.order_by(Sale.transaction_date.desc()).offset(skip).limit(page_size).all()
-    
+
     items = [SaleSchema.from_orm(sale) for sale in sales]
     result = {
         "items": [item.model_dump(mode='json') for item in items],
@@ -135,10 +135,10 @@ def list_sales(
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size
     }
-    
+
     # Cache result
     CacheService.set(cache_key, result, CacheService.TTL_SHORT)
-    
+
     return PaginatedResponse[SaleSchema](**result)
 
 
@@ -150,13 +150,13 @@ def get_daily_sales(transaction_date: date, db: Session = Depends(get_db)):
     cached = CacheService.get(cache_key)
     if cached:
         return cached
-    
+
     sales = db.query(Sale).join(Garment).filter(
         Sale.transaction_date == transaction_date).all()
-    
+
     result = [SaleSchema.from_orm(sale) for sale in sales]
-    
+
     # Cache result (serialize before caching)
     CacheService.set(cache_key, [item.model_dump(mode='json') for item in result], CacheService.TTL_MEDIUM)
-    
+
     return result

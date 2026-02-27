@@ -12,3 +12,5 @@ htmlcov/
 *.log
 .git
 .gitignore
+tests/
+alembic/

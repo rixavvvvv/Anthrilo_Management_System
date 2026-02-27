@@ -42,15 +42,15 @@ def create_paid_ad(ad: PaidAdCreate, db: Session = Depends(get_db)):
     panel = db.query(Panel).filter(Panel.id == ad.panel_id).first()
     if not panel:
         raise HTTPException(status_code=404, detail="Panel not found")
-    
+
     db_ad = PaidAd(**ad.model_dump())
     db.add(db_ad)
     db.commit()
     db.refresh(db_ad)
-    
+
     # Invalidate cache
     CacheService.invalidate_ads_cache()
-    
+
     return db_ad
 
 
@@ -65,13 +65,13 @@ def list_paid_ads(
 ):
     """List all paid ads with pagination and Redis caching."""
     skip = (page - 1) * page_size
-    
+
     # Check cache
     cache_key = f"ads:list:{page}:{page_size}:{start_date}:{end_date}:{panel_id}"
     cached = CacheService.get(cache_key)
     if cached:
         return PaginatedResponse[PaidAdSchema](**cached)
-    
+
     # Build query
     query = db.query(PaidAd)
     if start_date:
@@ -80,10 +80,10 @@ def list_paid_ads(
         query = query.filter(PaidAd.ad_date <= end_date)
     if panel_id:
         query = query.filter(PaidAd.panel_id == panel_id)
-    
+
     total = query.count()
     ads = query.order_by(PaidAd.ad_date.desc()).offset(skip).limit(page_size).all()
-    
+
     items = [PaidAdSchema.from_orm(ad) for ad in ads]
     result = {
         "items": [item.model_dump(mode='json') for item in items],
@@ -92,10 +92,10 @@ def list_paid_ads(
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size
     }
-    
+
     # Cache result
     CacheService.set(cache_key, result, CacheService.TTL_MEDIUM)
-    
+
     return PaginatedResponse[PaidAdSchema](**result)
 
 
@@ -112,18 +112,18 @@ def calculate_roi(
     cached = CacheService.get(cache_key)
     if cached:
         return cached
-    
+
     ads = db.query(PaidAd).filter(
         PaidAd.panel_id == panel_id,
         PaidAd.ad_date >= start_date,
         PaidAd.ad_date <= end_date
     ).all()
-    
+
     total_spend = sum(float(ad.daily_spend) for ad in ads)
     total_revenue = sum(float(ad.revenue_generated or 0) for ad in ads)
-    
+
     roi = ((total_revenue - total_spend) / total_spend * 100) if total_spend > 0 else 0
-    
+
     result = {
         "panel_id": panel_id,
         "start_date": start_date,
@@ -132,8 +132,8 @@ def calculate_roi(
         "total_revenue": total_revenue,
         "roi_percentage": round(roi, 2)
     }
-    
+
     # Cache for 1 hour
     CacheService.set(cache_key, result, CacheService.TTL_VERY_LONG)
-    
+
     return result

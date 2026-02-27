@@ -1,13 +1,4 @@
-"""
-Unicommerce Miscellaneous API Endpoints
-==========================================
-Covers:
-- Picklist (Staging to Invoicing)
-- Picklist (Direct)
-- Enable Custom Reason Dropdown
-- Update Shipment Seal ID (Multiple)
-- Update Shipment Seal ID (Single)
-"""
+"""Unicommerce miscellaneous endpoints."""
 
 from fastapi import APIRouter, Body
 import logging
@@ -19,10 +10,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# PICKLIST
-# =============================================================================
-
+# Picklist
 @router.post("/picklist/staging/create")
 async def create_picklist_staging(payload: Dict[str, Any] = Body(...)):
     """
@@ -61,10 +49,7 @@ async def create_picklist_direct(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# CUSTOM UI
-# =============================================================================
-
+# Custom ui
 @router.post("/custom-dropdown/create-or-update")
 async def create_or_update_custom_dropdown(payload: Dict[str, Any] = Body(...)):
     """
@@ -82,10 +67,7 @@ async def create_or_update_custom_dropdown(payload: Dict[str, Any] = Body(...)):
         return {"successful": False, "error": str(e)}
 
 
-# =============================================================================
-# SHIPMENT SEAL ID
-# =============================================================================
-
+# Shipment seal id
 @router.post("/shipment-seal/update-multiple")
 async def update_shipment_seal_id_multiple(payload: Dict[str, Any] = Body(...)):
     """

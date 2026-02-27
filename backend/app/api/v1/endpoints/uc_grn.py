@@ -1,13 +1,4 @@
-"""
-Unicommerce GRN (Goods Receipt Note) API Endpoints
-====================================================
-Covers:
-- Create GRN
-- Add Item in GRN
-- Add Item SKU in GRN
-- Get GRN
-- Search GRNs
-"""
+"""Unicommerce GRN (goods receipt) endpoints."""
 
 from fastapi import APIRouter, Body
 import logging

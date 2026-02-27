@@ -1,7 +1,4 @@
-"""
-Centralized WebSocket Manager for real-time updates across the application.
-Supports multiple event types: sales, inventory, orders, production.
-"""
+"""WebSocket connection manager for real-time event broadcasting."""
 from typing import Dict, Set
 from fastapi import WebSocket
 import logging
