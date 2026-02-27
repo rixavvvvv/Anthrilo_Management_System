@@ -69,6 +69,13 @@ export default function GarmentsPage() {
       href: '/dashboard/garments/sku-velocity',
       color: 'from-rose-500 to-pink-500',
     },
+    {
+      title: 'Fabric',
+      description: 'Fabric category items from Unicommerce',
+      icon: '🧵',
+      href: '/dashboard/garments/fabric',
+      color: 'from-cyan-500 to-blue-500',
+    },
   ];
 
   return (

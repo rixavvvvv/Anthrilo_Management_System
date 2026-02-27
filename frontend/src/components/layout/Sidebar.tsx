@@ -66,6 +66,7 @@ const navigation: NavItem[] = [
       { name: 'Orders', href: '/dashboard/garments/production', icon: ShoppingCart },
       { name: 'Best SKUs', href: '/dashboard/garments/best-skus', icon: Zap },
       { name: 'SKU Velocity', href: '/dashboard/garments/sku-velocity', icon: Gauge },
+      { name: 'Fabric', href: '/dashboard/garments/fabric', icon: Boxes },
     ],
   },
   {
@@ -199,8 +200,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                           key={child.href}
                           href={child.href}
                           className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] transition-colors duration-150 ${isActive(child.href)
-                              ? 'text-primary-600 dark:text-primary-400 bg-primary-50/80 dark:bg-primary-950/40 font-medium'
-                              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                            ? 'text-primary-600 dark:text-primary-400 bg-primary-50/80 dark:bg-primary-950/40 font-medium'
+                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                             }`}
                         >
                           {child.icon && <child.icon className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.8} />}

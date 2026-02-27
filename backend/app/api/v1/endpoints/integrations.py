@@ -1394,6 +1394,73 @@ async def get_best_skus_monthly(
         return {"success": False, "error": str(e)}
 
 
+# ── Fabric Sales ──────────────────────────────────────────────────────
+
+@router.get("/unicommerce/fabric-sales")
+async def get_fabric_sales(
+    month: int = Query(None, description="Month (1-12), defaults to current"),
+    year: int = Query(None, description="Year, defaults to current"),
+    from_date: str = Query(None, description="Custom start date (YYYY-MM-DD)"),
+    to_date: str = Query(None, description="Custom end date (YYYY-MM-DD)"),
+    force_refresh: bool = Query(False, description="Bypass cache and re-fetch"),
+):
+    """
+    Get sales data for items in the FABRIC category.
+    These are excluded from normal sales endpoints and shown separately.
+    Supports monthly (month+year) or custom date range (from_date+to_date).
+    """
+    try:
+        service = get_unicommerce_service()
+        now = datetime.now(IST)
+
+        # Determine date range: custom takes priority over month/year
+        if from_date and to_date:
+            from_dt = datetime.strptime(from_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            to_dt = datetime.strptime(to_date, "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59, tzinfo=timezone.utc
+            )
+            period_name = f"custom_{from_date}_{to_date}"
+            cache_key = f"uc:fabric_sales:custom:{from_date}_{to_date}"
+        else:
+            m = month or now.month
+            y = year or now.year
+            from_dt = datetime(y, m, 1, 0, 0, 0, tzinfo=timezone.utc)
+            if m == 12:
+                to_dt = datetime(y + 1, 1, 1, 0, 0, 0, tzinfo=timezone.utc) - timedelta(seconds=1)
+            else:
+                to_dt = datetime(y, m + 1, 1, 0, 0, 0, tzinfo=timezone.utc) - timedelta(seconds=1)
+            period_name = f"{y}-{m:02d}"
+            cache_key = f"uc:fabric_sales:{y}:{m}"
+
+        if to_dt > now.replace(tzinfo=timezone.utc):
+            to_dt = now.replace(tzinfo=timezone.utc)
+
+        if not force_refresh:
+            cached = CacheService.get(cache_key)
+            if cached:
+                logger.info(f"FABRIC SALES {period_name}: Redis cache hit")
+                cached["_cached"] = True
+                return cached
+        else:
+            CacheService.delete(cache_key)
+
+        result = await service.get_fabric_sales_data(from_dt, to_dt, period_name)
+
+        if result.get("success"):
+            is_current = from_date is None and (
+                (month or now.month) == now.month and (year or now.year) == now.year
+            )
+            ttl = CacheService.TTL_VERY_LONG if is_current else 86400
+            CacheService.set(cache_key, result, ttl)
+            logger.info(f"FABRIC SALES {period_name}: Cached (TTL={ttl}s)")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error in fabric-sales: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
 # SKU velocity (monthly)
 
 @router.get("/unicommerce/sku-velocity")
