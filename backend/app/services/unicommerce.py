@@ -1356,6 +1356,262 @@ class UnicommerceService:
             logger.error(f"Fabric sales data error: {e}", exc_info=True)
             return {"success": False, "error": str(e), "orders": [], "summary": {}}
 
+    # ── Bundle SKU data (Item Master export) ──────────────────────────
+
+    async def _create_item_master_export_job(self) -> Optional[str]:
+        """
+        Create a Unicommerce export job for Item Master (all items).
+        Item Master does not support date filters — we fetch all and filter
+        by Type=BUNDLE during CSV parsing.
+        Returns the jobCode on success, None on failure.
+        """
+        url = f"{self.base_url}/export/job/create"
+
+        payload = {
+            "exportJobTypeName": "Item Master",
+            "exportColums": ["All"],
+            "exportFilters": [],
+            "frequency": "ONETIME",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
+                headers = await self._get_headers()
+                headers["Facility"] = "anthrilo"
+
+                response = await client.post(url, json=payload, headers=headers)
+
+                if response.status_code == 401:
+                    self.token_manager.invalidate_token()
+                    await self.token_manager.get_valid_token()
+                    headers = await self._get_headers()
+                    headers["Facility"] = "anthrilo"
+                    response = await client.post(url, json=payload, headers=headers)
+
+                if response.status_code >= 400:
+                    try:
+                        error_body = response.json()
+                    except Exception:
+                        error_body = response.text[:500]
+                    logger.error(
+                        f"Item Master Export: Job creation HTTP {response.status_code}: {error_body}"
+                    )
+                    return None
+
+                data = response.json()
+
+                if data.get("successful"):
+                    job_code = data.get("jobCode")
+                    logger.info(f"Item Master Export: Job created successfully {job_code}")
+                    return job_code
+                else:
+                    errors = data.get("errors", [])
+                    msg = data.get("message", "Unknown error")
+                    logger.error(f"Item Master Export: Job creation failed: {msg} | errors={errors}")
+                    return None
+
+        except Exception as e:
+            logger.error(f"Item Master Export: Job creation exception: {e}", exc_info=True)
+            return None
+
+    async def _download_parse_bundle_export(
+        self, download_url: str,
+    ) -> List[Dict]:
+        """
+        Download Item Master export CSV, keep only Type=BUNDLE rows,
+        and aggregate multiple component rows per SKU into a single record
+        with a 'components' array.
+
+        UC CSV has one row per (bundle SKU × component), so a bundle with
+        3 components produces 3 CSV rows sharing the same Product Code.
+        """
+        try:
+            download_timeout = httpx.Timeout(120.0, connect=15.0)
+            async with httpx.AsyncClient(timeout=download_timeout) as client:
+                response = await client.get(download_url)
+                if response.status_code in (401, 403):
+                    headers = await self._get_headers()
+                    response = await client.get(download_url, headers=headers)
+                response.raise_for_status()
+                csv_text = response.text
+
+            if not csv_text or not csv_text.strip():
+                logger.warning("Bundle Export: Downloaded CSV is empty")
+                return []
+
+            reader = csv.DictReader(io.StringIO(csv_text))
+            fieldnames = reader.fieldnames or []
+            logger.info(f"Bundle Export: CSV columns ({len(fieldnames)}): {fieldnames[:10]}...")
+
+            # Aggregate: dict keyed by SKU code → single bundle record
+            bundle_map: Dict[str, Dict] = {}
+            skipped_type = 0
+            total_rows = 0
+
+            for row in reader:
+                total_rows += 1
+                row_type = (row.get("Type") or row.get("type") or "").strip().upper()
+                if row_type != "BUNDLE":
+                    skipped_type += 1
+                    continue
+
+                sku_code = (row.get("Product Code") or row.get("SKU Code") or "").strip()
+                if not sku_code:
+                    continue
+
+                # Component info from this row
+                comp_sku = (row.get("Component Product Code") or "").strip()
+                comp_qty = (row.get("Component Quantity") or "").strip()
+                comp_price = (row.get("Component Price") or "").strip()
+
+                if sku_code in bundle_map:
+                    # SKU already seen — just append this component
+                    if comp_sku:
+                        bundle_map[sku_code]["components"].append({
+                            "sku": comp_sku,
+                            "quantity": comp_qty,
+                            "price": comp_price,
+                        })
+                    continue
+
+                # First row for this SKU — extract all fields
+                item_name = (row.get("Name") or row.get("Item Name") or "").strip()
+                category = (row.get("Category Name") or row.get("Category") or "").strip()
+                category_code = (row.get("Category Code") or "").strip()
+                updated_raw = (row.get("Updated") or "").strip()
+
+                try:
+                    cost_price = float(row.get("Cost Price") or 0)
+                except (ValueError, TypeError):
+                    cost_price = 0.0
+                try:
+                    mrp = float(row.get("MRP") or 0)
+                except (ValueError, TypeError):
+                    mrp = 0.0
+                try:
+                    base_price = float(row.get("Base Price") or 0)
+                except (ValueError, TypeError):
+                    base_price = 0.0
+
+                color = (row.get("Color") or "").strip()
+                size = (row.get("Size") or "").strip()
+                brand = (row.get("Brand") or "").strip()
+                enabled_str = (row.get("Enabled") or "").strip()
+                hsn_code = (row.get("HSN CODE") or "").strip()
+                weight = (row.get("Weight (gms)") or "").strip()
+                image_url = (row.get("Image Url") or "").strip()
+
+                components = []
+                if comp_sku:
+                    components.append({
+                        "sku": comp_sku,
+                        "quantity": comp_qty,
+                        "price": comp_price,
+                    })
+
+                bundle_map[sku_code] = {
+                    "skuCode": sku_code,
+                    "itemName": item_name or sku_code,
+                    "category": category,
+                    "categoryCode": category_code,
+                    "costPrice": cost_price,
+                    "mrp": mrp,
+                    "basePrice": base_price,
+                    "color": color,
+                    "size": size,
+                    "brand": brand,
+                    "enabled": enabled_str.lower() in ("true", "1", "yes", "y"),
+                    "hsnCode": hsn_code,
+                    "weight": weight,
+                    "imageUrl": image_url,
+                    "updated": updated_raw,
+                    "components": components,
+                }
+
+            bundles = list(bundle_map.values())
+            # Add componentCount for convenience
+            for b in bundles:
+                b["componentCount"] = len(b["components"])
+
+            logger.info(
+                f"Bundle Export: {total_rows} CSV rows → {len(bundles)} unique bundles "
+                f"(skipped {skipped_type} non-bundle rows)"
+            )
+            return bundles
+
+        except Exception as e:
+            logger.error(f"Bundle Export: Download/parse failed: {e}", exc_info=True)
+            return []
+
+    async def get_bundle_sku_data(self) -> Dict[str, Any]:
+        """
+        Get all BUNDLE type items from the Item Master export.
+        This is catalogue data — no date filtering (UC doesn't support
+        date filters for Item Master, and the 'Updated' column only
+        reflects when the item record was last modified in UC).
+        Components are aggregated into each bundle record.
+        """
+        cache_key = "uc:bundle_skus:all"
+
+        cached = self._get_from_cache(cache_key)
+        if cached is not None:
+            logger.info("Bundle SKU data: cache hit")
+            return cached
+
+        logger.info("Fetching BUNDLE SKU data via Item Master export")
+
+        try:
+            job_code = await self._create_item_master_export_job()
+            if not job_code:
+                return {"success": False, "error": "Item Master export job creation failed", "bundles": [], "summary": {}}
+
+            download_url = await self._poll_export_status(job_code)
+            if not download_url:
+                return {"success": False, "error": "Item Master export job timed out", "bundles": [], "summary": {}}
+
+            bundles = await self._download_parse_bundle_export(download_url)
+
+            total_bundles = len(bundles)
+            enabled_count = sum(1 for b in bundles if b.get("enabled"))
+            disabled_count = total_bundles - enabled_count
+            mrp_values = [b["mrp"] for b in bundles if b["mrp"] > 0]
+            cost_values = [b["costPrice"] for b in bundles if b["costPrice"] > 0]
+            avg_mrp = round(sum(mrp_values) / len(mrp_values), 2) if mrp_values else 0
+            avg_cost = round(sum(cost_values) / len(cost_values), 2) if cost_values else 0
+
+            # Category breakdown
+            category_map: Dict[str, int] = {}
+            for b in bundles:
+                cat = b.get("category") or "Unknown"
+                category_map[cat] = category_map.get(cat, 0) + 1
+
+            # Sort categories by count descending
+            sorted_categories = dict(
+                sorted(category_map.items(), key=lambda x: x[1], reverse=True)
+            )
+
+            result = {
+                "success": True,
+                "bundles": bundles,
+                "summary": {
+                    "total_bundles": total_bundles,
+                    "enabled": enabled_count,
+                    "disabled": disabled_count,
+                    "avg_mrp": avg_mrp,
+                    "avg_cost": avg_cost,
+                    "total_categories": len(category_map),
+                    "categories": sorted_categories,
+                },
+            }
+
+            # Cache — this is static catalogue data
+            self._set_cache(cache_key, result)
+            return result
+
+        except Exception as e:
+            logger.error(f"Bundle SKU data error: {e}", exc_info=True)
+            return {"success": False, "error": str(e), "bundles": [], "summary": {}}
+
 
 # Singleton factory
 _service_instance: Optional[UnicommerceService] = None

@@ -66,6 +66,16 @@ const REPORTS: ReportDef[] = [
     popular: true,
   },
   {
+    id: 'bundle-catalog',
+    title: 'Bundle SKU Catalog',
+    description: 'Bundle/combo SKU catalog with component details',
+    href: '/dashboard/reports/sales/bundle-sku/bundles',
+    icon: Package,
+    category: 'Inventory',
+    frequency: 'Daily',
+    badge: 'New',
+  },
+  {
     id: 'panel-performance',
     title: 'Panel Performance',
     description: 'Panel revenue share & sorting',
@@ -263,10 +273,10 @@ function writeLS<T>(key: string, val: T) {
 
 /* ── Frequency Badge ─────────────────────────── */
 const FREQ_STYLES: Record<Frequency, string> = {
-  'Daily':       'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400',
-  'Weekly':      'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
-  'Monthly':     'bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400',
-  'Real-time':   'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+  'Daily': 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400',
+  'Weekly': 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
+  'Monthly': 'bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400',
+  'Real-time': 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
   'AI Forecast': 'bg-gradient-to-r from-violet-500 to-indigo-500 text-white',
 };
 
@@ -358,11 +368,10 @@ const ReportCard = memo(({
             aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
           >
             <Star
-              className={`w-4 h-4 transition-colors ${
-                isFav
+              className={`w-4 h-4 transition-colors ${isFav
                   ? 'fill-amber-400 text-amber-400'
                   : 'text-slate-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-500'
-              }`}
+                }`}
               strokeWidth={1.8}
             />
           </button>

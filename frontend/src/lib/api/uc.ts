@@ -49,6 +49,9 @@ export const ucSales = {
 
     getFabricSales: (params: { month?: number; year?: number; from_date?: string; to_date?: string; force_refresh?: boolean }) =>
         apiClient.get('/integrations/unicommerce/fabric-sales', { params }),
+
+    getBundleSkus: (params?: { force_refresh?: boolean }) =>
+        apiClient.get('/integrations/unicommerce/bundle-skus', { params }),
 };
 
 // Catalog-related APIs
