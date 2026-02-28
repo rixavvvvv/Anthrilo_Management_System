@@ -6,6 +6,7 @@ from app.api.v1.api import api_router
 from app.core.redis import redis_client
 import logging
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(

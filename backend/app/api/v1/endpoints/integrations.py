@@ -1394,6 +1394,45 @@ async def get_best_skus_monthly(
         return {"success": False, "error": str(e)}
 
 
+# ── Bundle SKU Catalog (Item Master Export) ───────────────────────────
+
+@router.get("/unicommerce/bundle-skus")
+async def get_bundle_skus(
+    force_refresh: bool = Query(False, description="Bypass cache and re-fetch"),
+):
+    """
+    Get all BUNDLE type SKUs from Unicommerce Item Master export.
+    Returns deduplicated bundle records with aggregated component arrays.
+    This is catalogue data — cached for 4 hours.  No date filtering
+    because UC's 'Updated' column only reflects item-record edits, not
+    business events. Use the frontend category / search filters instead.
+    """
+    try:
+        service = get_unicommerce_service()
+
+        cache_key = "uc:bundle_skus:all"
+        if not force_refresh:
+            cached = CacheService.get(cache_key)
+            if cached:
+                logger.info("BUNDLE SKUs: Redis cache hit")
+                cached["_cached"] = True
+                return cached
+        else:
+            CacheService.delete(cache_key)
+
+        result = await service.get_bundle_sku_data()
+
+        if result.get("success"):
+            CacheService.set(cache_key, result, 14400)  # 4 hours
+            logger.info(f"BUNDLE SKUs: Cached ({result['summary']['total_bundles']} bundles)")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error in bundle-skus: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
 # ── Fabric Sales ──────────────────────────────────────────────────────
 
 @router.get("/unicommerce/fabric-sales")

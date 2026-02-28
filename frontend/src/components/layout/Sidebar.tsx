@@ -24,6 +24,7 @@ import {
   DollarSign,
   Percent,
   Target,
+  Layers,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -66,6 +67,7 @@ const navigation: NavItem[] = [
       { name: 'Orders', href: '/dashboard/garments/production', icon: ShoppingCart },
       { name: 'Best SKUs', href: '/dashboard/garments/best-skus', icon: Zap },
       { name: 'SKU Velocity', href: '/dashboard/garments/sku-velocity', icon: Gauge },
+      { name: 'Bundle SKUs', href: '/dashboard/garments/bundle-skus', icon: Layers },
       { name: 'Fabric', href: '/dashboard/garments/fabric', icon: Boxes },
     ],
   },
