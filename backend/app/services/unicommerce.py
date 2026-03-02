@@ -1829,26 +1829,13 @@ class UnicommerceService:
             # Aggregate daily / channel totals
             if date_key and order_bundle_matches > 0:
                 if date_key not in daily_agg:
-                    daily_agg[date_key] = {"units": 0, "revenue": 0.0, "orders": 0}
+                    daily_agg[date_key] = {"units": 0, "orders": 0}
                 daily_agg[date_key]["units"] += order_bundle_matches
                 daily_agg[date_key]["orders"] += 1
-                # Sum up revenue from bundles matched this order
-                rev_this = sum(
-                    sku_price.get(csku, 0) * needed
-                    for bsku2, comp_req2 in sorted_candidates
-                    if bsku2 in bundle_sales_agg
-                    for csku, needed in comp_req2.items()
-                ) if order_bundle_matches > 0 else 0
-                # Simpler: use the total bundle revenue accum
-                daily_agg[date_key]["revenue"] += sum(
-                    bundle_sales_agg[bsk]["revenue"]
-                    for bsk in seen_bundles_this_order
-                    if bundle_sales_agg[bsk]["revenue"] > 0
-                ) if order_bundle_matches > 0 else 0
 
             if order_bundle_matches > 0:
                 if channel not in channel_agg:
-                    channel_agg[channel] = {"units": 0, "revenue": 0.0, "orders": 0}
+                    channel_agg[channel] = {"units": 0, "orders": 0}
                 channel_agg[channel]["units"] += order_bundle_matches
                 channel_agg[channel]["orders"] += 1
 
@@ -1877,7 +1864,7 @@ class UnicommerceService:
 
         # Daily trend sorted by date
         daily_trend = [
-            {"date": d, "units": v["units"], "revenue": round(v["revenue"], 2), "orders": v["orders"]}
+            {"date": d, "units": v["units"], "revenue": 0.0, "orders": v["orders"]}
             for d, v in sorted(daily_agg.items())
         ]
 
