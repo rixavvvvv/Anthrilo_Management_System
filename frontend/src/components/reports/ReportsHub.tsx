@@ -76,6 +76,17 @@ const REPORTS: ReportDef[] = [
     badge: 'New',
   },
   {
+    id: 'bundle-sales-analysis',
+    title: 'Bundle Sales Analysis',
+    description: 'Revenue, trends & performance by bundle — reverse-mapped from component sales',
+    href: '/dashboard/reports/sales/bundle-sku/analysis',
+    icon: TrendingUp,
+    category: 'Sales',
+    frequency: 'Daily',
+    badge: 'New',
+    popular: true,
+  },
+  {
     id: 'panel-performance',
     title: 'Panel Performance',
     description: 'Panel revenue share & sorting',

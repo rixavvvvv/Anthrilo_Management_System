@@ -1612,6 +1612,350 @@ class UnicommerceService:
             logger.error(f"Bundle SKU data error: {e}", exc_info=True)
             return {"success": False, "error": str(e), "bundles": [], "summary": {}}
 
+    # ── Bundle Sales Analysis ─────────────────────────────────────────
+
+    async def get_bundle_sales_analysis(
+        self, from_date: datetime, to_date: datetime
+    ) -> Dict[str, Any]:
+        """
+        Analyse bundle-level sales by reverse-mapping component SKUs in
+        sale orders back to their parent bundles.
+
+        UC explodes bundles into component line items at order creation,
+        so no order ever contains the bundle SKU directly.  We rebuild
+        bundle sales from the component→bundle mapping.
+
+        Algorithm
+        ---------
+        1.  Load bundle catalogue (cached) to build a reverse index:
+                component_sku → [(bundle_sku, required_qty, bundle_obj), …]
+        2.  Fetch sale orders for the period via CSV export.
+        3.  For each order, group items by SKU and tally quantities.
+        4.  For every candidate bundle whose **all** components appear
+            in the order with sufficient quantity, record a bundle sale.
+            Greedy: consume the components that form the match so they
+            aren't double-counted.
+        5.  Aggregate into daily trends, category breakdown, channel
+            performance, and a top-bundles ranking.
+        """
+        start = time_module.time()
+        logger.info(
+            f"Bundle Sales Analysis: {from_date.isoformat()} → {to_date.isoformat()}"
+        )
+
+        # ---- 1. Load catalogue & build reverse index ----
+        catalog = await self.get_bundle_sku_data()
+        bundles_list = catalog.get("bundles", [])
+        if not bundles_list:
+            return {
+                "success": False,
+                "error": "Bundle catalogue is empty",
+                "bundle_sales": [], "daily_trend": [],
+                "category_breakdown": {}, "channel_breakdown": {},
+                "summary": {},
+            }
+
+        # reverse_idx:  component_sku → list of (bundle_obj, {comp_sku: qty_needed})
+        reverse_idx: Dict[str, List[tuple]] = {}
+        # Pre-parse component requirements per bundle
+        bundle_comp_map: Dict[str, Dict[str, int]] = {}  # bundle_sku → {comp_sku: qty}
+
+        for b in bundles_list:
+            if not b.get("enabled"):
+                continue
+            bsku = b["skuCode"]
+            comp_req: Dict[str, int] = {}
+            for c in b.get("components", []):
+                try:
+                    qty = int(float(c.get("quantity", 1)))
+                except (ValueError, TypeError):
+                    qty = 1
+                comp_req[c["sku"]] = qty
+            if not comp_req:
+                continue
+            bundle_comp_map[bsku] = comp_req
+            for csku in comp_req:
+                reverse_idx.setdefault(csku, []).append((b, comp_req))
+
+        logger.info(
+            f"Bundle Sales: reverse index built — "
+            f"{len(bundle_comp_map)} bundles, {len(reverse_idx)} component SKUs"
+        )
+
+        # ---- 2. Fetch sale orders ----
+        export_result = await self.fetch_orders_via_export(from_date, to_date)
+        orders = export_result.get("orders", [])
+        if not orders:
+            elapsed = round(time_module.time() - start, 1)
+            logger.info(f"Bundle Sales: 0 orders in range ({elapsed}s)")
+            return {
+                "success": True,
+                "bundle_sales": [], "daily_trend": [],
+                "category_breakdown": {}, "channel_breakdown": {},
+                "summary": {
+                    "total_orders": 0, "orders_with_bundles": 0,
+                    "total_bundle_units": 0, "total_bundle_revenue": 0,
+                    "unique_bundles_sold": 0, "analysis_time": elapsed,
+                },
+            }
+
+        # ---- 3 & 4. Match orders → bundles ----
+        # Accumulators
+        bundle_sales_agg: Dict[str, Dict[str, Any]] = {}  # bsku → agg
+        daily_agg: Dict[str, Dict[str, float]] = {}       # date → {units, revenue}
+        channel_agg: Dict[str, Dict[str, float]] = {}     # channel → {units, revenue}
+        orders_with_bundles = 0
+
+        for order in orders:
+            status = (order.get("status") or "").upper()
+            if status in self.EXCLUDED_STATUSES:
+                continue
+
+            items = order.get("saleOrderItems", [])
+            if not items:
+                continue
+
+            channel = order.get("channel", "UNKNOWN")
+            date_key = self._extract_date_key(order.get("created"))
+
+            # Build SKU → available quantity map for this order
+            sku_pool: Dict[str, float] = {}
+            sku_price: Dict[str, float] = {}  # track selling price per SKU
+            for it in items:
+                sku = it.get("itemSku", "")
+                if not sku:
+                    continue
+                qty = float(it.get("quantity", 1))
+                sku_pool[sku] = sku_pool.get(sku, 0) + qty
+                sp = float(it.get("sellingPrice", 0) or 0)
+                if sp > 0:
+                    sku_price[sku] = sp
+
+            # Find all candidate bundles from the SKUs in this order
+            candidate_bundles: Dict[str, Dict[str, int]] = {}
+            for sku in sku_pool:
+                if sku in reverse_idx:
+                    for (b_obj, comp_req) in reverse_idx[sku]:
+                        bsku = b_obj["skuCode"]
+                        if bsku not in candidate_bundles:
+                            candidate_bundles[bsku] = comp_req
+
+            if not candidate_bundles:
+                continue
+
+            # Sort candidates: prefer bundles with MORE components first
+            # (a 4-pack should match before a 2-pack when both fit)
+            sorted_candidates = sorted(
+                candidate_bundles.items(),
+                key=lambda x: len(x[1]),
+                reverse=True,
+            )
+
+            order_bundle_matches = 0
+
+            # Work on a mutable copy of the pool
+            pool = dict(sku_pool)
+
+            for bsku, comp_req in sorted_candidates:
+                # Greedy: how many times can this bundle be fulfilled?
+                while True:
+                    # Check all components are available
+                    can_match = True
+                    for csku, needed in comp_req.items():
+                        if pool.get(csku, 0) < needed:
+                            can_match = False
+                            break
+                    if not can_match:
+                        break
+
+                    # Consume components
+                    for csku, needed in comp_req.items():
+                        pool[csku] -= needed
+
+                    # Calculate revenue for this bundle unit from component prices
+                    unit_revenue = sum(
+                        sku_price.get(csku, 0) * needed
+                        for csku, needed in comp_req.items()
+                    )
+
+                    # Record match
+                    order_bundle_matches += 1
+
+                    if bsku not in bundle_sales_agg:
+                        # Find the bundle obj for metadata
+                        b_meta = None
+                        for (bobj, _) in reverse_idx.get(list(comp_req.keys())[0], []):
+                            if bobj["skuCode"] == bsku:
+                                b_meta = bobj
+                                break
+                        bundle_sales_agg[bsku] = {
+                            "skuCode": bsku,
+                            "itemName": b_meta["itemName"] if b_meta else bsku,
+                            "category": b_meta.get("category", "") if b_meta else "",
+                            "mrp": b_meta.get("mrp", 0) if b_meta else 0,
+                            "componentCount": b_meta.get("componentCount", 0) if b_meta else 0,
+                            "units_sold": 0,
+                            "revenue": 0.0,
+                            "order_count": 0,
+                            "channels": {},
+                            "daily": {},
+                        }
+
+                    agg = bundle_sales_agg[bsku]
+                    agg["units_sold"] += 1
+                    agg["revenue"] += unit_revenue
+
+                    # Channel
+                    ch = agg["channels"]
+                    ch[channel] = ch.get(channel, 0) + 1
+
+                    # Daily
+                    if date_key:
+                        dl = agg["daily"]
+                        dl[date_key] = dl.get(date_key, 0) + 1
+
+            if order_bundle_matches > 0:
+                orders_with_bundles += 1
+                # Also increment order_count per bundle
+                seen_bundles_this_order: Set[str] = set()
+                for bsku, _ in sorted_candidates:
+                    if bsku in bundle_sales_agg and bsku not in seen_bundles_this_order:
+                        if bundle_sales_agg[bsku]["units_sold"] > 0:
+                            seen_bundles_this_order.add(bsku)
+
+                for bsku in seen_bundles_this_order:
+                    bundle_sales_agg[bsku]["order_count"] += 1
+
+            # Aggregate daily / channel totals
+            if date_key and order_bundle_matches > 0:
+                if date_key not in daily_agg:
+                    daily_agg[date_key] = {"units": 0, "revenue": 0.0, "orders": 0}
+                daily_agg[date_key]["units"] += order_bundle_matches
+                daily_agg[date_key]["orders"] += 1
+                # Sum up revenue from bundles matched this order
+                rev_this = sum(
+                    sku_price.get(csku, 0) * needed
+                    for bsku2, comp_req2 in sorted_candidates
+                    if bsku2 in bundle_sales_agg
+                    for csku, needed in comp_req2.items()
+                ) if order_bundle_matches > 0 else 0
+                # Simpler: use the total bundle revenue accum
+                daily_agg[date_key]["revenue"] += sum(
+                    bundle_sales_agg[bsk]["revenue"]
+                    for bsk in seen_bundles_this_order
+                    if bundle_sales_agg[bsk]["revenue"] > 0
+                ) if order_bundle_matches > 0 else 0
+
+            if order_bundle_matches > 0:
+                if channel not in channel_agg:
+                    channel_agg[channel] = {"units": 0, "revenue": 0.0, "orders": 0}
+                channel_agg[channel]["units"] += order_bundle_matches
+                channel_agg[channel]["orders"] += 1
+
+        # ---- 5. Build final response ----
+        # Sort bundles by units sold desc
+        top_bundles = sorted(
+            bundle_sales_agg.values(),
+            key=lambda x: x["units_sold"],
+            reverse=True,
+        )
+
+        # Category breakdown
+        category_breakdown: Dict[str, Dict[str, Any]] = {}
+        for b in top_bundles:
+            cat = b.get("category") or "Unknown"
+            if cat not in category_breakdown:
+                category_breakdown[cat] = {"units": 0, "revenue": 0.0, "bundle_count": 0}
+            category_breakdown[cat]["units"] += b["units_sold"]
+            category_breakdown[cat]["revenue"] += b["revenue"]
+            category_breakdown[cat]["bundle_count"] += 1
+
+        # Sort category by revenue desc
+        category_breakdown = dict(
+            sorted(category_breakdown.items(), key=lambda x: x[1]["revenue"], reverse=True)
+        )
+
+        # Daily trend sorted by date
+        daily_trend = [
+            {"date": d, "units": v["units"], "revenue": round(v["revenue"], 2), "orders": v["orders"]}
+            for d, v in sorted(daily_agg.items())
+        ]
+
+        # Fix daily revenue — recompute from bundle-level daily data
+        daily_rev_recompute: Dict[str, float] = {}
+        for b in top_bundles:
+            for d, cnt in b.get("daily", {}).items():
+                unit_rev = b["revenue"] / b["units_sold"] if b["units_sold"] > 0 else 0
+                daily_rev_recompute[d] = daily_rev_recompute.get(d, 0) + (unit_rev * cnt)
+        for dt_entry in daily_trend:
+            dt_entry["revenue"] = round(daily_rev_recompute.get(dt_entry["date"], dt_entry["revenue"]), 2)
+
+        # Channel breakdown
+        channel_result = {}
+        for ch, v in channel_agg.items():
+            # Recalculate channel revenue from bundle-level channel data
+            ch_rev = sum(
+                b["revenue"] / b["units_sold"] * b["channels"].get(ch, 0)
+                for b in top_bundles
+                if b["units_sold"] > 0 and ch in b.get("channels", {})
+            )
+            channel_result[ch] = {
+                "units": v["units"],
+                "revenue": round(ch_rev, 2),
+                "orders": v["orders"],
+            }
+        channel_result = dict(
+            sorted(channel_result.items(), key=lambda x: x[1]["revenue"], reverse=True)
+        )
+
+        total_bundle_units = sum(b["units_sold"] for b in top_bundles)
+        total_bundle_revenue = round(sum(b["revenue"] for b in top_bundles), 2)
+        elapsed = round(time_module.time() - start, 1)
+
+        # Clean bundle objects for response (remove internal daily/channels detail)
+        bundle_sales_list = []
+        for b in top_bundles:
+            bundle_sales_list.append({
+                "skuCode": b["skuCode"],
+                "itemName": b["itemName"],
+                "category": b["category"],
+                "mrp": b["mrp"],
+                "componentCount": b["componentCount"],
+                "units_sold": b["units_sold"],
+                "revenue": round(b["revenue"], 2),
+                "order_count": b["order_count"],
+                "avg_selling_price": round(b["revenue"] / b["units_sold"], 2) if b["units_sold"] > 0 else 0,
+                "channels": b.get("channels", {}),
+            })
+
+        logger.info(
+            f"Bundle Sales Analysis done in {elapsed}s — "
+            f"{len(orders)} orders, {orders_with_bundles} with bundles, "
+            f"{total_bundle_units} bundle units, ₹{total_bundle_revenue} revenue"
+        )
+
+        return {
+            "success": True,
+            "bundle_sales": bundle_sales_list,
+            "daily_trend": daily_trend,
+            "category_breakdown": category_breakdown,
+            "channel_breakdown": channel_result,
+            "summary": {
+                "total_orders": len(orders),
+                "orders_with_bundles": orders_with_bundles,
+                "total_bundle_units": total_bundle_units,
+                "total_bundle_revenue": total_bundle_revenue,
+                "unique_bundles_sold": len(bundle_sales_list),
+                "bundle_attach_rate": round(
+                    orders_with_bundles / len(orders) * 100, 1
+                ) if orders else 0,
+                "avg_revenue_per_bundle": round(
+                    total_bundle_revenue / total_bundle_units, 2
+                ) if total_bundle_units > 0 else 0,
+                "analysis_time": elapsed,
+            },
+        }
+
 
 # Singleton factory
 _service_instance: Optional[UnicommerceService] = None
