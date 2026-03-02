@@ -280,41 +280,56 @@ async def get_sales_report(
 
 @router.get("/unicommerce/daily-sales-report")
 async def get_daily_sales_report(
-    date: str = Query(..., description="Date for report (YYYY-MM-DD)")
+    date: str = Query(None, description="Single date for report (YYYY-MM-DD)"),
+    from_date: str = Query(None, description="Range start date (YYYY-MM-DD)"),
+    to_date: str = Query(None, description="Range end date (YYYY-MM-DD)"),
 ):
     """
-    Get Daily Sales Report with channel-wise breakdown.
+    Get Sales Report with channel-wise breakdown.
 
-    Returns:
-    - Channel Name (unique)
-    - Quantity of Items (total items per channel)
-    - Selling Price (sum of sellingPrice per channel)
+    Supports two modes:
+    - Single date: pass `date` param
+    - Date range: pass `from_date` and `to_date` params
 
-    Uses existing saleorder/get data if available, otherwise fetches fresh data.
+    Returns channel breakdown with quantity, selling price, and orders.
     """
     try:
         service = get_unicommerce_service()
 
-        # Parse the date
-        report_date = datetime.strptime(date, "%Y-%m-%d").date()
-        today = datetime.now(timezone.utc).date()
-        yesterday = today - timedelta(days=1)
+        # Determine mode: range vs single date
+        is_range = from_date and to_date
+        if not is_range and not date:
+            return {"success": False, "error": "Provide either 'date' or both 'from_date' and 'to_date'."}
 
-        # Check if we can reuse existing cached data
-        result = None
-        if report_date == today:
-            result = await service.get_today_sales()
-        elif report_date == yesterday:
-            result = await service.get_yesterday_sales()
-        else:
-            # Fetch custom date range (full day)
-            from_dt = datetime.strptime(date, "%Y-%m-%d").replace(
+        if is_range:
+            from_dt = datetime.strptime(from_date, "%Y-%m-%d").replace(
                 hour=0, minute=0, second=0, tzinfo=timezone.utc
             )
-            to_dt = datetime.strptime(date, "%Y-%m-%d").replace(
+            to_dt = datetime.strptime(to_date, "%Y-%m-%d").replace(
                 hour=23, minute=59, second=59, tzinfo=timezone.utc
             )
             result = await service.get_custom_range_sales(from_dt, to_dt)
+            date_label = f"{from_date} to {to_date}"
+        else:
+            # Single date mode (existing logic)
+            report_date = datetime.strptime(date, "%Y-%m-%d").date()
+            today = datetime.now(timezone.utc).date()
+            yesterday = today - timedelta(days=1)
+
+            result = None
+            if report_date == today:
+                result = await service.get_today_sales()
+            elif report_date == yesterday:
+                result = await service.get_yesterday_sales()
+            else:
+                from_dt = datetime.strptime(date, "%Y-%m-%d").replace(
+                    hour=0, minute=0, second=0, tzinfo=timezone.utc
+                )
+                to_dt = datetime.strptime(date, "%Y-%m-%d").replace(
+                    hour=23, minute=59, second=59, tzinfo=timezone.utc
+                )
+                result = await service.get_custom_range_sales(from_dt, to_dt)
+            date_label = date
 
         if not result.get("success"):
             return result
@@ -324,16 +339,13 @@ async def get_daily_sales_report(
             "summary", {}).get("channel_breakdown", {})
 
         # Transform to report format
-        # Group by channel with quantity and selling price
         report_data = []
         for channel_name, channel_data in channel_breakdown.items():
             report_data.append({
                 "channel_name": channel_name,
-                # Total items in channel
                 "quantity": channel_data.get("items", 0),
-                # Sum of sellingPrice
                 "selling_price": channel_data.get("revenue", 0),
-                "orders": channel_data.get("orders", 0),  # Number of orders
+                "orders": channel_data.get("orders", 0),
             })
 
         # Sort by revenue (highest first)
@@ -343,23 +355,25 @@ async def get_daily_sales_report(
         total_quantity = sum(item["quantity"] for item in report_data)
         total_revenue = sum(item["selling_price"] for item in report_data)
         total_orders = result.get("summary", {}).get(
-            "valid_orders", 0)  # Only valid orders
+            "valid_orders", 0)
         total_all_orders = result.get("summary", {}).get(
-            "total_orders", 0)  # All orders
+            "total_orders", 0)
         excluded_items = result.get("summary", {}).get(
             "total_items", 0) - total_quantity
 
         return {
             "success": True,
-            "date": date,
+            "date": date_label,
+            "from_date": from_date if is_range else date,
+            "to_date": to_date if is_range else date,
             "report": report_data,
             "totals": {
                 "total_channels": len(report_data),
-                "total_quantity": total_quantity,  # Items from revenue-generating orders only
+                "total_quantity": total_quantity,
                 "total_revenue": round(total_revenue, 2),
-                "total_orders": total_orders,  # Valid orders only
-                "excluded_items": excluded_items,  # Items from cancelled/returned orders
-                "all_orders": total_all_orders,  # Including excluded orders
+                "total_orders": total_orders,
+                "excluded_items": excluded_items,
+                "all_orders": total_all_orders,
             },
             "currency": "INR",
             "data_source": "saleorder/get API",

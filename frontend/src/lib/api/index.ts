@@ -81,9 +81,9 @@ export const unicommerceApi = {
   getSalesReport: (params?: { from_date?: string; to_date?: string; period?: string }) =>
     apiClient.get('/integrations/unicommerce/sales-report', { params }),
 
-  // Daily Sales Report - Channel-wise breakdown
-  getDailySalesReport: (date: string) =>
-    apiClient.get('/integrations/unicommerce/daily-sales-report', { params: { date } }),
+  // Daily Sales Report - Channel-wise breakdown (single date or range)
+  getDailySalesReport: (params: { date?: string; from_date?: string; to_date?: string }) =>
+    apiClient.get('/integrations/unicommerce/daily-sales-report', { params }),
 
   // Daily Return Report - Channel + SKU breakdown (Two-Phase API)
   getDailyReturnReport: (date: string, returnType: string = 'ALL') =>
