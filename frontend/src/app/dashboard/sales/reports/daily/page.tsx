@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { format, parse } from 'date-fns';
+import { format, parse, startOfMonth, endOfMonth, lastDayOfMonth } from 'date-fns';
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -31,22 +31,26 @@ const channelLabel = (c: string) =>
     .replace(/ New$/, '').replace(/ Api$/, '').replace(/ 26$/, '');
 
 const CHANNEL_META: Record<string, { color: string; icon: string }> = {
-  MYNTRA:            { color: '#EC4899', icon: 'M' },
-  FIRSTCRY_NEW:      { color: '#F97316', icon: 'FC' },
-  AMAZON_FLEX:       { color: '#F59E0B', icon: 'AZ' },
-  AMAZON_IN_API:     { color: '#EAB308', icon: 'AZ' },
-  SHOPIFY:           { color: '#22C55E', icon: 'SH' },
+  MYNTRA: { color: '#EC4899', icon: 'M' },
+  FIRSTCRY_NEW: { color: '#F97316', icon: 'FC' },
+  AMAZON_FLEX: { color: '#F59E0B', icon: 'AZ' },
+  AMAZON_IN_API: { color: '#EAB308', icon: 'AZ' },
+  SHOPIFY: { color: '#22C55E', icon: 'SH' },
   NYKAA_FASHION_NEW: { color: '#A855F7', icon: 'NK' },
-  AJIO_OMNI:         { color: '#3B82F6', icon: 'AJ' },
-  MEESHO_26:         { color: '#14B8A6', icon: 'ME' },
-  FLIPKART:          { color: '#6366F1', icon: 'FK' },
-  TATACLIQ:          { color: '#8B5CF6', icon: 'TC' },
-  SNAPDEAL_NEW:      { color: '#EF4444', icon: 'SD' },
+  AJIO_OMNI: { color: '#3B82F6', icon: 'AJ' },
+  MEESHO_26: { color: '#14B8A6', icon: 'ME' },
+  FLIPKART: { color: '#6366F1', icon: 'FK' },
+  TATACLIQ: { color: '#8B5CF6', icon: 'TC' },
+  SNAPDEAL_NEW: { color: '#EF4444', icon: 'SD' },
 };
 const fallbackMeta = { color: '#64748B', icon: '?' };
 const getMeta = (ch: string) => CHANNEL_META[ch] || fallbackMeta;
 
 const PIE_COLORS = ['#EC4899', '#F97316', '#22C55E', '#3B82F6', '#A855F7', '#14B8A6', '#F59E0B', '#6366F1', '#EF4444', '#8B5CF6', '#64748B'];
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+type ReportMode = 'daily' | 'monthly' | 'custom';
 
 /* ── animated counter ────────────────────────────────────────────────── */
 function AnimatedNumber({ value, prefix = '', duration = 800 }: { value: number; prefix?: string; duration?: number }) {
@@ -77,13 +81,38 @@ type SortDir = 'asc' | 'desc';
 
 /* ══════════════════════════════════════════════════════════════════════ */
 export default function DailySalesReportPage() {
+  /* ── mode state ────────────────────────────────────────────────────── */
+  const [mode, setMode] = useState<ReportMode>('daily');
+
+  /* ── daily mode state ──────────────────────────────────────────────── */
   const [reportDate, setReportDate] = useState<string>(() => {
     const d = new Date(); d.setDate(d.getDate() - 1);
     return d.toISOString().split('T')[0];
   });
-  const [showReport, setShowReport] = useState(true);
   const [calOpen, setCalOpen] = useState(false);
   const calRef = useRef<HTMLDivElement>(null);
+
+  /* ── monthly mode state ────────────────────────────────────────────── */
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth()); // 0-11
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+
+  /* ── custom mode state ─────────────────────────────────────────────── */
+  const [customFrom, setCustomFrom] = useState<string>(() => {
+    const d = new Date(); d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  });
+  const [customTo, setCustomTo] = useState<string>(() => {
+    const d = new Date(); d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [calFromOpen, setCalFromOpen] = useState(false);
+  const [calToOpen, setCalToOpen] = useState(false);
+  const calFromRef = useRef<HTMLDivElement>(null);
+  const calToRef = useRef<HTMLDivElement>(null);
+
+  /* ── shared state ──────────────────────────────────────────────────── */
+  const [showReport, setShowReport] = useState(true);
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('selling_price');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -92,14 +121,34 @@ export default function DailySalesReportPage() {
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (calRef.current && !calRef.current.contains(e.target as Node)) setCalOpen(false);
+      if (calFromRef.current && !calFromRef.current.contains(e.target as Node)) setCalFromOpen(false);
+      if (calToRef.current && !calToRef.current.contains(e.target as Node)) setCalToOpen(false);
     };
-    if (calOpen) document.addEventListener('mousedown', handler);
+    if (calOpen || calFromOpen || calToOpen) document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [calOpen]);
+  }, [calOpen, calFromOpen, calToOpen]);
+
+  /* ── build query params based on mode ──────────────────────────────── */
+  const queryParams = useMemo(() => {
+    if (mode === 'daily') {
+      return { date: reportDate };
+    } else if (mode === 'monthly') {
+      const first = new Date(selectedYear, selectedMonth, 1);
+      const last = lastDayOfMonth(first);
+      return {
+        from_date: format(first, 'yyyy-MM-dd'),
+        to_date: format(last, 'yyyy-MM-dd'),
+      };
+    } else {
+      return { from_date: customFrom, to_date: customTo };
+    }
+  }, [mode, reportDate, selectedMonth, selectedYear, customFrom, customTo]);
+
+  const queryKey = useMemo(() => ['sales-report', mode, ...Object.values(queryParams)], [mode, queryParams]);
 
   const { data: raw, isLoading, refetch } = useQuery({
-    queryKey: ['daily-sales-report', reportDate],
-    queryFn: async () => (await ucSales.getDailySalesReport(reportDate)).data,
+    queryKey,
+    queryFn: async () => (await ucSales.getDailySalesReport(queryParams)).data,
     enabled: showReport,
     staleTime: 5 * 60_000,
   });
@@ -121,9 +170,12 @@ export default function DailySalesReportPage() {
     const csv = [hdr.join(','), ...rows.map((r: any) => r.join(','))].join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement('a');
-    a.href = url; a.download = `daily-sales-report-${reportDate}.csv`;
+    const filename = mode === 'daily' ? `sales-report-${reportDate}.csv`
+      : mode === 'monthly' ? `sales-report-${MONTHS[selectedMonth]}-${selectedYear}.csv`
+        : `sales-report-${customFrom}-to-${customTo}.csv`;
+    a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-  }, [raw, reportDate]);
+  }, [raw, mode, reportDate, selectedMonth, selectedYear, customFrom, customTo]);
 
   /* ── derived data ──────────────────────────────────────────────────── */
   const totals = raw?.totals;
@@ -186,71 +238,252 @@ export default function DailySalesReportPage() {
   const SortIcon = ({ k }: { k: SortKey }) =>
     sortKey === k ? (sortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 opacity-30" />;
 
-  const dateLabel = format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'EEEE, dd MMMM yyyy');
+  /* ── date labels ───────────────────────────────────────────────────── */
+  const dateLabel = mode === 'daily'
+    ? format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'EEEE, dd MMMM yyyy')
+    : mode === 'monthly'
+      ? `${MONTHS[selectedMonth]} ${selectedYear}`
+      : `${format(parse(customFrom, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')} – ${format(parse(customTo, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}`;
+
+  const pageTitle = mode === 'daily' ? 'Daily Sales Report'
+    : mode === 'monthly' ? 'Monthly Sales Report'
+      : 'Custom Range Sales Report';
+
+  const pageSubtitle = mode === 'daily' ? 'Channel-wise sales breakdown · Revenue-generating orders only'
+    : mode === 'monthly' ? `Channel-wise sales for ${MONTHS[selectedMonth]} ${selectedYear}`
+      : 'Channel-wise sales for custom date range';
+
+  /* ── year options for monthly mode ─────────────────────────────────── */
+  const currentYear = now.getFullYear();
+  const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
   /* ══════════════════════════════════════════════════════════════════ */
   return (
     <div className="space-y-8">
       {/* ─── Header ──────────────────────────────────────────────────── */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Daily Sales Report</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Channel-wise sales breakdown · Revenue-generating orders only</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{pageTitle}</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{pageSubtitle}</p>
       </div>
 
-      {/* ─── Filters ─────────────────────────────────────────────────── */}
-      <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[180px] max-w-[260px]" ref={calRef}>
-            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Report date</label>
-            <div className="relative">
-              <button type="button" onClick={() => setCalOpen((o) => !o)}
-                className="w-full flex items-center gap-2 pl-3 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-left">
-                <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                <span>{format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}</span>
-              </button>
+      {/* ─── Mode Selector ───────────────────────────────────────────── */}
+      <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5 space-y-5">
+        {/* Tabs */}
+        <div className="flex gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-900 w-fit">
+          {([
+            { key: 'daily' as ReportMode, label: 'Daily', icon: Calendar },
+            { key: 'monthly' as ReportMode, label: 'Monthly', icon: Layers },
+            { key: 'custom' as ReportMode, label: 'Custom Range', icon: BarChart3 },
+          ]).map((tab) => (
+            <button key={tab.key} onClick={() => { setMode(tab.key); setShowReport(false); }}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${mode === tab.key
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}>
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-              <AnimatePresence>
-                {calOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 6, scale: 0.97 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 6, scale: 0.97 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute left-0 top-full mt-2 z-50 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl p-3">
-                    <DayPicker
-                      mode="single"
-                      selected={parse(reportDate, 'yyyy-MM-dd', new Date())}
-                      onSelect={(day) => { if (day) { setReportDate(format(day, 'yyyy-MM-dd')); setShowReport(false); setCalOpen(false); } }}
-                      disabled={{ after: new Date() }}
-                      defaultMonth={parse(reportDate, 'yyyy-MM-dd', new Date())}
-                      classNames={{
-                        root: 'rdp-custom',
-                        month_caption: 'text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center py-1',
-                        weekday: 'text-[11px] font-medium text-slate-400 dark:text-slate-500 w-9 text-center',
-                        day_button: 'h-9 w-9 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center',
-                        today: 'font-bold text-blue-600 dark:text-blue-400',
-                        selected: '!bg-blue-600 !text-white rounded-lg font-semibold',
-                        disabled: 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40',
-                        chevron: 'fill-slate-500 dark:fill-slate-400 w-4 h-4',
-                      }}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
+        {/* ── Daily mode controls ──────────────────────────────────── */}
+        {mode === 'daily' && (
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[180px] max-w-[260px]" ref={calRef}>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Report date</label>
+              <div className="relative">
+                <button type="button" onClick={() => setCalOpen((o) => !o)}
+                  className="w-full flex items-center gap-2 pl-3 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-left">
+                  <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  <span>{format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}</span>
+                </button>
+                <AnimatePresence>
+                  {calOpen && (
+                    <motion.div initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 6, scale: 0.97 }} transition={{ duration: 0.15 }}
+                      className="absolute left-0 top-full mt-2 z-50 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl p-3">
+                      <DayPicker mode="single"
+                        selected={parse(reportDate, 'yyyy-MM-dd', new Date())}
+                        onSelect={(day) => { if (day) { setReportDate(format(day, 'yyyy-MM-dd')); setShowReport(false); setCalOpen(false); } }}
+                        disabled={{ after: new Date() }}
+                        defaultMonth={parse(reportDate, 'yyyy-MM-dd', new Date())}
+                        classNames={{
+                          root: 'rdp-custom',
+                          month_caption: 'text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center py-1',
+                          weekday: 'text-[11px] font-medium text-slate-400 dark:text-slate-500 w-9 text-center',
+                          day_button: 'h-9 w-9 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center',
+                          today: 'font-bold text-blue-600 dark:text-blue-400',
+                          selected: '!bg-blue-600 !text-white rounded-lg font-semibold',
+                          disabled: 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40',
+                          chevron: 'fill-slate-500 dark:fill-slate-400 w-4 h-4',
+                        }}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+            <button onClick={handleGenerate} disabled={isLoading}
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
+              {isLoading ? 'Generating…' : 'Generate Report'}
+            </button>
+            {showReport && raw?.success && (
+              <button onClick={handleCSV}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition shadow-sm">
+                <Download className="w-4 h-4" /> Download CSV
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ── Monthly mode controls ────────────────────────────────── */}
+        {mode === 'monthly' && (
+          <div className="space-y-4">
+            {/* Year selector */}
+            <div className="flex items-center gap-3">
+              <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Year</label>
+              <div className="flex gap-1.5">
+                {yearOptions.map((yr) => (
+                  <button key={yr} onClick={() => { setSelectedYear(yr); setShowReport(false); }}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${selectedYear === yr
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}>
+                    {yr}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Month grid */}
+            <div>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Select Month</label>
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                {MONTHS.map((m, i) => {
+                  const isDisabled = selectedYear === currentYear && i > now.getMonth();
+                  return (
+                    <button key={m} onClick={() => { if (!isDisabled) { setSelectedMonth(i); setShowReport(false); } }}
+                      disabled={isDisabled}
+                      className={`px-3 py-2.5 rounded-xl text-sm font-medium transition ${selectedMonth === i && !isDisabled
+                          ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-300 dark:ring-blue-700'
+                          : isDisabled
+                            ? 'bg-slate-50 dark:bg-slate-900/50 text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                            : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400'
+                        }`}>
+                      {m.slice(0, 3)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Generate + CSV */}
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <button onClick={handleGenerate} disabled={isLoading}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
+                {isLoading ? 'Generating…' : `Generate ${MONTHS[selectedMonth]} Report`}
+              </button>
+              {showReport && raw?.success && (
+                <button onClick={handleCSV}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition shadow-sm">
+                  <Download className="w-4 h-4" /> Download CSV
+                </button>
+              )}
             </div>
           </div>
-          <button onClick={handleGenerate} disabled={isLoading}
-            className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
-            {isLoading ? 'Generating…' : 'Generate Report'}
-          </button>
-          {showReport && raw?.success && (
-            <button onClick={handleCSV}
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition shadow-sm">
-              <Download className="w-4 h-4" /> Download CSV
+        )}
+
+        {/* ── Custom range controls ────────────────────────────────── */}
+        {mode === 'custom' && (
+          <div className="flex flex-wrap items-end gap-3">
+            {/* From date */}
+            <div className="flex-1 min-w-[180px] max-w-[220px]" ref={calFromRef}>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">From date</label>
+              <div className="relative">
+                <button type="button" onClick={() => { setCalFromOpen((o) => !o); setCalToOpen(false); }}
+                  className="w-full flex items-center gap-2 pl-3 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-left">
+                  <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  <span>{format(parse(customFrom, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}</span>
+                </button>
+                <AnimatePresence>
+                  {calFromOpen && (
+                    <motion.div initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 6, scale: 0.97 }} transition={{ duration: 0.15 }}
+                      className="absolute left-0 top-full mt-2 z-50 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl p-3">
+                      <DayPicker mode="single"
+                        selected={parse(customFrom, 'yyyy-MM-dd', new Date())}
+                        onSelect={(day) => { if (day) { setCustomFrom(format(day, 'yyyy-MM-dd')); setShowReport(false); setCalFromOpen(false); } }}
+                        disabled={{ after: new Date() }}
+                        defaultMonth={parse(customFrom, 'yyyy-MM-dd', new Date())}
+                        classNames={{
+                          root: 'rdp-custom',
+                          month_caption: 'text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center py-1',
+                          weekday: 'text-[11px] font-medium text-slate-400 dark:text-slate-500 w-9 text-center',
+                          day_button: 'h-9 w-9 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center',
+                          today: 'font-bold text-blue-600 dark:text-blue-400',
+                          selected: '!bg-blue-600 !text-white rounded-lg font-semibold',
+                          disabled: 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40',
+                          chevron: 'fill-slate-500 dark:fill-slate-400 w-4 h-4',
+                        }}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* To date */}
+            <div className="flex-1 min-w-[180px] max-w-[220px]" ref={calToRef}>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">To date</label>
+              <div className="relative">
+                <button type="button" onClick={() => { setCalToOpen((o) => !o); setCalFromOpen(false); }}
+                  className="w-full flex items-center gap-2 pl-3 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-left">
+                  <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  <span>{format(parse(customTo, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}</span>
+                </button>
+                <AnimatePresence>
+                  {calToOpen && (
+                    <motion.div initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 6, scale: 0.97 }} transition={{ duration: 0.15 }}
+                      className="absolute left-0 top-full mt-2 z-50 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl p-3">
+                      <DayPicker mode="single"
+                        selected={parse(customTo, 'yyyy-MM-dd', new Date())}
+                        onSelect={(day) => { if (day) { setCustomTo(format(day, 'yyyy-MM-dd')); setShowReport(false); setCalToOpen(false); } }}
+                        disabled={{ after: new Date() }}
+                        defaultMonth={parse(customTo, 'yyyy-MM-dd', new Date())}
+                        classNames={{
+                          root: 'rdp-custom',
+                          month_caption: 'text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center py-1',
+                          weekday: 'text-[11px] font-medium text-slate-400 dark:text-slate-500 w-9 text-center',
+                          day_button: 'h-9 w-9 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center',
+                          today: 'font-bold text-blue-600 dark:text-blue-400',
+                          selected: '!bg-blue-600 !text-white rounded-lg font-semibold',
+                          disabled: 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40',
+                          chevron: 'fill-slate-500 dark:fill-slate-400 w-4 h-4',
+                        }}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* Generate + CSV */}
+            <button onClick={handleGenerate} disabled={isLoading}
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
+              {isLoading ? 'Generating…' : 'Generate Report'}
             </button>
-          )}
-        </div>
+            {showReport && raw?.success && (
+              <button onClick={handleCSV}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition shadow-sm">
+                <Download className="w-4 h-4" /> Download CSV
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ─── Loading ─────────────────────────────────────────────────── */}
