@@ -68,6 +68,7 @@ const navigation: NavItem[] = [
       { name: 'Best SKUs', href: '/dashboard/garments/best-skus', icon: Zap },
       { name: 'SKU Velocity', href: '/dashboard/garments/sku-velocity', icon: Gauge },
       { name: 'Bundle SKUs', href: '/dashboard/garments/bundle-skus', icon: Layers },
+      { name: 'Bundle Sales', href: '/dashboard/garments/bundle-sales', icon: TrendingUp },
       { name: 'Fabric', href: '/dashboard/garments/fabric', icon: Boxes },
     ],
   },

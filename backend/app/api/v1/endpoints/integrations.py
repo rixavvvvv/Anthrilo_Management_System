@@ -1433,6 +1433,82 @@ async def get_bundle_skus(
         return {"success": False, "error": str(e)}
 
 
+# ── Bundle Sales Analysis Dashboard ──────────────────────────────────
+
+@router.get("/unicommerce/bundle-sales-analysis")
+async def get_bundle_sales_analysis(
+    period: str = Query("last_30_days", description="today|yesterday|last_7_days|last_30_days|custom"),
+    from_date: str = Query(None, description="YYYY-MM-DD (required for custom)"),
+    to_date: str = Query(None, description="YYYY-MM-DD (required for custom)"),
+    force_refresh: bool = Query(False, description="Bypass cache"),
+):
+    """
+    Bundle Sales Analysis: reverse-maps component SKUs in sale orders
+    back to their parent bundles.  Returns daily trends, category & channel
+    breakdown, and per-bundle sales metrics.
+    """
+    try:
+        service = get_unicommerce_service()
+        now = datetime.now(IST)
+
+        if period == "today":
+            dt_from, dt_to = service.get_today_range()
+            cache_suffix = f"today:{now.strftime('%Y-%m-%d')}"
+            ttl = 300  # 5 min
+        elif period == "yesterday":
+            dt_from, dt_to = service.get_yesterday_range()
+            cache_suffix = f"yesterday:{(now - timedelta(days=1)).strftime('%Y-%m-%d')}"
+            ttl = 3600
+        elif period == "last_7_days":
+            dt_from, dt_to = service.get_last_n_days_range(7)
+            cache_suffix = f"7d:{now.strftime('%Y-%m-%d')}"
+            ttl = 1800
+        elif period == "last_30_days":
+            dt_from, dt_to = service.get_last_n_days_range(30)
+            cache_suffix = f"30d:{now.strftime('%Y-%m-%d')}"
+            ttl = 3600
+        elif period == "custom" and from_date and to_date:
+            dt_from = datetime.strptime(from_date, "%Y-%m-%d").replace(
+                hour=0, minute=0, second=0, tzinfo=IST
+            ).astimezone(timezone.utc)
+            dt_to = datetime.strptime(to_date, "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59, tzinfo=IST
+            ).astimezone(timezone.utc)
+            cache_suffix = f"custom:{from_date}_{to_date}"
+            ttl = 3600
+        else:
+            return {"success": False, "error": "Invalid period. Use today|yesterday|last_7_days|last_30_days|custom"}
+
+        cache_key = f"uc:bundle_analysis:{cache_suffix}"
+
+        if not force_refresh:
+            cached = CacheService.get(cache_key)
+            if cached:
+                logger.info(f"Bundle Analysis: cache hit ({cache_suffix})")
+                cached["_cached"] = True
+                cached["period"] = period
+                return cached
+        else:
+            CacheService.delete(cache_key)
+
+        result = await service.get_bundle_sales_analysis(dt_from, dt_to)
+        result["period"] = period
+
+        if result.get("success"):
+            CacheService.set(cache_key, result, ttl)
+            s = result.get("summary", {})
+            logger.info(
+                f"Bundle Analysis: cached ({s.get('total_bundle_units', 0)} units, "
+                f"₹{s.get('total_bundle_revenue', 0)} revenue in {s.get('analysis_time', 0)}s)"
+            )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error in bundle-sales-analysis: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
 # ── Fabric Sales ──────────────────────────────────────────────────────
 
 @router.get("/unicommerce/fabric-sales")

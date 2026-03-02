@@ -52,6 +52,13 @@ export const ucSales = {
 
     getBundleSkus: (params?: { force_refresh?: boolean }) =>
         apiClient.get('/integrations/unicommerce/bundle-skus', { params }),
+
+    getBundleSalesAnalysis: (params?: {
+        period?: string;
+        from_date?: string;
+        to_date?: string;
+        force_refresh?: boolean;
+    }) => apiClient.get('/integrations/unicommerce/bundle-sales-analysis', { params }),
 };
 
 // Catalog-related APIs
