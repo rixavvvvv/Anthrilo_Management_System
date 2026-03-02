@@ -240,11 +240,10 @@ export default function BundleSalesAnalysisPage() {
           <button
             key={p.key}
             onClick={() => handlePeriod(p.key)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              period === p.key
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${period === p.key
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-900/40'
                 : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600'
-            }`}
+              }`}
           >
             {p.label}
           </button>
@@ -263,11 +262,10 @@ export default function BundleSalesAnalysisPage() {
         <button
           onClick={() => refetch()}
           disabled={isFetching}
-          className={`ml-auto px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-            isFetching
+          className={`ml-auto px-4 py-2 rounded-xl text-sm font-medium transition-colors ${isFetching
               ? 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
               : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
-          }`}
+            }`}
         >
           {isFetching ? 'Analysing…' : '🔄 Refresh'}
         </button>
@@ -516,9 +514,8 @@ export default function BundleSalesAnalysisPage() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-slate-500">Bundle attach rate</span>
-                  <span className={`text-sm font-bold ${
-                    (summary.bundle_attach_rate || 0) > 50 ? 'text-emerald-600' : 'text-amber-600'
-                  }`}>
+                  <span className={`text-sm font-bold ${(summary.bundle_attach_rate || 0) > 50 ? 'text-emerald-600' : 'text-amber-600'
+                    }`}>
                     {summary.bundle_attach_rate || 0}%
                   </span>
                 </div>

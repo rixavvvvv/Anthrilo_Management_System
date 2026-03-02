@@ -380,8 +380,8 @@ const ReportCard = memo(({
           >
             <Star
               className={`w-4 h-4 transition-colors ${isFav
-                  ? 'fill-amber-400 text-amber-400'
-                  : 'text-slate-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-500'
+                ? 'fill-amber-400 text-amber-400'
+                : 'text-slate-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-500'
                 }`}
               strokeWidth={1.8}
             />
