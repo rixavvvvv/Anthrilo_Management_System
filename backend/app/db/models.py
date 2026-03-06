@@ -269,3 +269,47 @@ class PaidAd(Base):
 
     # Relationships
     panel = relationship("Panel", back_populates="paid_ads")
+
+
+class AdsData(Base):
+    __tablename__ = "ads_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(Date, nullable=False, index=True)
+    channel = Column(String(50), nullable=False, index=True)
+    brand = Column(String(100), nullable=False, index=True)
+    campaign_name = Column(String(255))
+
+    impressions = Column(Integer, nullable=False, default=0)
+    clicks = Column(Integer, nullable=False, default=0)
+    cpc = Column(Numeric(10, 2))
+
+    spend = Column(Numeric(12, 2), nullable=False, default=0)
+    spend_with_tax = Column(Numeric(12, 2))
+
+    ads_sale = Column(Numeric(12, 2), nullable=False, default=0)
+    total_sale = Column(Numeric(12, 2), nullable=False, default=0)
+    units_sold = Column(Integer, nullable=False, default=0)
+
+    # Computed at write time
+    acos = Column(Numeric(8, 2))
+    tacos = Column(Numeric(8, 2))
+    roas = Column(Numeric(8, 2))
+    roi = Column(Numeric(8, 2))
+
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    extra_metrics = relationship("AdsExtraMetric", back_populates="ads_data", cascade="all, delete-orphan")
+
+
+class AdsExtraMetric(Base):
+    __tablename__ = "ads_extra_metrics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ads_data_id = Column(Integer, ForeignKey("ads_data.id", ondelete="CASCADE"), nullable=False, index=True)
+    metric_name = Column(String(100), nullable=False)
+    metric_value = Column(Numeric(14, 4), nullable=False)
+
+    ads_data = relationship("AdsData", back_populates="extra_metrics")

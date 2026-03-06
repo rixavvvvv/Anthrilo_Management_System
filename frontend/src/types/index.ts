@@ -118,7 +118,7 @@ export interface Discount {
   updated_at: string;
 }
 
-// Paid Ad Types
+// Paid Ad Types (legacy)
 export interface PaidAd {
   id: number;
   ad_date: string;
@@ -132,4 +132,95 @@ export interface PaidAd {
   revenue_generated?: number;
   notes?: string;
   created_at: string;
+}
+
+// Ads Module Types
+export interface AdsExtraMetric {
+  id?: number;
+  metric_name: string;
+  metric_value: number;
+}
+
+export interface AdsData {
+  id: number;
+  date: string;
+  channel: string;
+  brand: string;
+  campaign_name?: string;
+  impressions: number;
+  clicks: number;
+  cpc?: number;
+  spend: number;
+  spend_with_tax?: number;
+  ads_sale: number;
+  total_sale: number;
+  units_sold: number;
+  acos?: number;
+  tacos?: number;
+  roas?: number;
+  roi?: number;
+  extra_metrics: AdsExtraMetric[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdsDataCreate {
+  date: string;
+  channel: string;
+  brand: string;
+  campaign_name?: string;
+  impressions: number;
+  clicks: number;
+  cpc?: number;
+  spend: number;
+  spend_with_tax?: number;
+  ads_sale: number;
+  total_sale: number;
+  units_sold: number;
+  extra_metrics: { metric_name: string; metric_value: number }[];
+}
+
+export interface AdsPaginatedResponse {
+  items: AdsData[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface AdsMtdSummary {
+  period: string;
+  total_spend: number;
+  total_spend_with_tax: number;
+  total_ads_sale: number;
+  total_total_sale: number;
+  total_units: number;
+  total_impressions: number;
+  total_clicks: number;
+  entry_count: number;
+  acos?: number;
+  tacos?: number;
+  roas?: number;
+  roi?: number;
+  ctr?: number;
+}
+
+export interface AdsChannelSummary {
+  channel: string;
+  spend: number;
+  ads_sale: number;
+  total_sale: number;
+  units: number;
+  impressions: number;
+  clicks: number;
+  entries: number;
+  acos?: number;
+  roas?: number;
+}
+
+export interface AdsImportResult {
+  imported: number;
+  errors: { row: number; error: string }[];
+  total_errors: number;
+  column_mapping: Record<string, string>;
 }
