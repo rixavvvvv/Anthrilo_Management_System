@@ -800,6 +800,7 @@ async def get_sales_by_sku(
                         "name": item.get("itemName", ""),
                         "total_quantity": 0,
                         "total_revenue": 0.0,
+                        "total_mrp": 0.0,
                         "total_discount": 0.0,
                         "order_count": 0,
                         "channels": {},
@@ -808,12 +809,18 @@ async def get_sales_by_sku(
 
                 qty = item.get("quantity", 1) or 1
                 selling = float(item.get("sellingPrice", 0) or 0)
-                discount = float(item.get("discount", 0) or 0)
+                mrp = float(item.get("maxRetailPrice", 0) or 0)
+
+                # sellingPrice is post-discount effective price.
+                # Real discount = MRP - sellingPrice. Fall back to
+                # sellingPrice as MRP when MRP is missing/zero.
+                if mrp <= 0:
+                    mrp = selling
 
                 if include:
                     sku_map[sku]["total_quantity"] += qty
                     sku_map[sku]["total_revenue"] += selling
-                    sku_map[sku]["total_discount"] += discount
+                    sku_map[sku]["total_mrp"] += mrp
                     sku_map[sku]["order_count"] += 1
 
                     if channel not in sku_map[sku]["channels"]:
@@ -822,21 +829,35 @@ async def get_sales_by_sku(
                     sku_map[sku]["channels"][channel]["quantity"] += qty
                     sku_map[sku]["channels"][channel]["revenue"] += selling
 
-        # Compute avg selling price and round
+        # Compute discount from MRP, avg selling price, and round
         for s in sku_map.values():
+            s["total_discount"] = round(s["total_mrp"] - s["total_revenue"], 2)
+            if s["total_discount"] < 0:
+                s["total_discount"] = 0.0
+            s["discount_pct"] = round(
+                (s["total_discount"] / s["total_mrp"] * 100)
+                if s["total_mrp"] > 0 else 0.0, 1
+            )
             if s["total_quantity"] > 0:
                 s["avg_selling_price"] = round(
                     s["total_revenue"] / s["total_quantity"], 2)
+                s["avg_mrp"] = round(
+                    s["total_mrp"] / s["total_quantity"], 2)
+            else:
+                s["avg_mrp"] = 0.0
             s["total_revenue"] = round(s["total_revenue"], 2)
-            s["total_discount"] = round(s["total_discount"], 2)
+            s["total_mrp"] = round(s["total_mrp"], 2)
             for ch in s["channels"].values():
                 ch["revenue"] = round(ch["revenue"], 2)
 
         skus = sorted(sku_map.values(),
                       key=lambda x: x["total_revenue"], reverse=True)
         total_revenue = round(sum(s["total_revenue"] for s in skus), 2)
+        total_mrp = round(sum(s["total_mrp"] for s in skus), 2)
         total_quantity = sum(s["total_quantity"] for s in skus)
-        total_discount = round(sum(s["total_discount"] for s in skus), 2)
+        total_discount = round(total_mrp - total_revenue, 2)
+        if total_discount < 0:
+            total_discount = 0.0
 
         return {
             "success": True,
@@ -848,11 +869,12 @@ async def get_sales_by_sku(
                 "total_skus": len(skus),
                 "total_quantity": total_quantity,
                 "total_revenue": total_revenue,
+                "total_mrp": total_mrp,
                 "total_discount": total_discount,
                 "total_orders": len(raw_orders),
                 "avg_discount_pct": round(
-                    (total_discount / (total_revenue + total_discount) * 100)
-                    if (total_revenue + total_discount) > 0 else 0, 2
+                    (total_discount / total_mrp * 100)
+                    if total_mrp > 0 else 0, 1
                 ),
             },
         }
