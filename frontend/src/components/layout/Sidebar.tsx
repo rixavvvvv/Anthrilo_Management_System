@@ -25,6 +25,7 @@ import {
   Percent,
   Target,
   Layers,
+  Megaphone,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -88,6 +89,7 @@ const navigation: NavItem[] = [
     children: [
       { name: 'Overview', href: '/dashboard/financial', icon: BarChart3 },
       { name: 'Discounts', href: '/dashboard/financial/discounts', icon: Percent },
+      { name: 'Ads', href: '/dashboard/financial/ads', icon: Megaphone },
       { name: 'ROI Analysis', href: '/dashboard/financial/roi', icon: Target },
     ],
   },

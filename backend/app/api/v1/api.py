@@ -37,7 +37,7 @@ api_router.include_router(
 api_router.include_router(
     discounts.router, prefix="/discounts", tags=["Discount Management"])
 api_router.include_router(ads.router, prefix="/ads",
-                          tags=["Paid Ads Management"])
+                          tags=["Ads Management"])
 
 # Reports (All Modules)
 api_router.include_router(

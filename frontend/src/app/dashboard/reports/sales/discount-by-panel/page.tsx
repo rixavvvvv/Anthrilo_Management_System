@@ -4,21 +4,31 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
-import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
+import { PageHeader, LoadingSpinner, ErrorPanel } from '@/components/ui/Common';
+import { motion } from 'framer-motion';
+import {
+  Percent, Tag, TrendingDown, Store, Download,
+} from 'lucide-react';
+
+const fmt = (v: number) =>
+  v >= 100000 ? `₹${(v / 100000).toFixed(1)}L` : `₹${v.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+
+const PERIODS = [
+  { key: 'today', label: 'Today' },
+  { key: 'yesterday', label: 'Yesterday' },
+  { key: 'last_7_days', label: '7 Days' },
+  { key: 'last_30_days', label: '30 Days' },
+];
 
 export default function DiscountByChannelPage() {
   const [period, setPeriod] = useState('last_7_days');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['uc-discount-by-channel', period],
-    queryFn: async () => {
-      const response = await ucSales.getSalesBySku({ period });
-      return response.data;
-    },
+    queryFn: async () => (await ucSales.getSalesBySku({ period })).data,
     staleTime: 120_000,
   });
 
-  // Aggregate discount data by channel from SKU-level data
   const channelDiscounts = useMemo(() => {
     const skus = data?.skus || [];
     const channelMap: Record<string, { channel: string; orders: number; revenue: number; mrp: number; quantity: number }> = {};
@@ -26,31 +36,26 @@ export default function DiscountByChannelPage() {
     for (const sku of skus) {
       const channels = sku.channels || {};
       for (const [channel, chData] of Object.entries(channels) as [string, any][]) {
-        if (!channelMap[channel]) {
-          channelMap[channel] = { channel, orders: 0, revenue: 0, mrp: 0, quantity: 0 };
-        }
+        if (!channelMap[channel]) channelMap[channel] = { channel, orders: 0, revenue: 0, mrp: 0, quantity: 0 };
         channelMap[channel].revenue += chData.revenue || 0;
         channelMap[channel].quantity += chData.quantity || 0;
       }
-      // Distribute MRP proportionally across channels based on revenue share
       const totalRev = sku.total_revenue || 0;
       const totalMrp = sku.total_mrp || totalRev;
       if (totalRev > 0 && totalMrp > 0) {
         for (const [channel, chData] of Object.entries(channels) as [string, any][]) {
-          const proportion = (chData.revenue || 0) / totalRev;
-          channelMap[channel].mrp += totalMrp * proportion;
+          channelMap[channel].mrp += totalMrp * ((chData.revenue || 0) / totalRev);
         }
       }
-      // Count orders by channel
       for (const ch of Object.keys(channels)) {
         if (channelMap[ch]) channelMap[ch].orders += 1;
       }
     }
 
-    const total_revenue = Object.values(channelMap).reduce((sum, c) => sum + c.revenue, 0);
+    const totalRevenue = Object.values(channelMap).reduce((s, c) => s + c.revenue, 0);
 
     return Object.values(channelMap)
-      .map((ch) => {
+      .map(ch => {
         const discount = Math.max(ch.mrp - ch.revenue, 0);
         return {
           ...ch,
@@ -58,100 +63,175 @@ export default function DiscountByChannelPage() {
           mrp: Math.round(ch.mrp * 100) / 100,
           discount: Math.round(discount * 100) / 100,
           discount_pct: ch.mrp > 0 ? Math.round((discount / ch.mrp) * 10000) / 100 : 0,
-          revenue_share: total_revenue > 0 ? Math.round((ch.revenue / total_revenue) * 10000) / 100 : 0,
+          revenue_share: totalRevenue > 0 ? Math.round((ch.revenue / totalRevenue) * 10000) / 100 : 0,
         };
       })
       .sort((a, b) => b.revenue - a.revenue);
   }, [data]);
 
   const summary = data?.summary || {};
-  const overallDiscountPct = summary.avg_discount_pct?.toFixed(1) ?? '0.0';
+
+  const handleExport = () => {
+    if (!channelDiscounts.length) return;
+    const headers = ['Channel', 'MRP', 'Discount', 'Disc %', 'Net Revenue', 'Revenue Share %', 'Items'];
+    const rows = channelDiscounts.map(c => [c.channel, c.mrp, c.discount, c.discount_pct, c.revenue, c.revenue_share, c.quantity].join(','));
+    const blob = new Blob([headers.join(',') + '\n' + rows.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `discount-by-channel-${period}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const columns: Column<any>[] = [
     {
-      key: 'channel', header: 'Channel', width: '20%',
-      render: (value) => (
-        <span className="px-3 py-1 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium">{value}</span>
+      key: 'channel', header: 'Channel', width: '22%',
+      render: (v) => (
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
+            <Store className="w-3.5 h-3.5 text-white" />
+          </div>
+          <span className="font-medium text-sm text-slate-800 dark:text-slate-200">{v}</span>
+        </div>
       ),
     },
     {
-      key: 'mrp', header: 'MRP Total', width: '14%',
-      render: (value) => <span className="text-gray-500 dark:text-gray-400">₹{(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>,
+      key: 'mrp', header: 'MRP Total', width: '13%',
+      render: (v) => <span className="text-slate-500 dark:text-slate-400">{fmt(v || 0)}</span>,
     },
     {
-      key: 'discount', header: 'Discount', width: '14%',
-      render: (value) => <span className="text-orange-600 dark:text-orange-400 font-semibold">₹{(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>,
+      key: 'discount', header: 'Discount', width: '13%',
+      render: (v) => <span className="text-orange-600 dark:text-orange-400 font-semibold">{fmt(v || 0)}</span>,
     },
     {
       key: 'discount_pct', header: 'Disc %', width: '10%',
-      render: (value) => {
-        const v = value || 0;
-        const c = v > 30 ? 'text-rose-600 dark:text-rose-400' : v > 15 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400';
-        return <span className={`font-bold ${c}`}>{v.toFixed(1)}%</span>;
+      render: (v) => {
+        const pct = v || 0;
+        const c = pct > 30 ? 'text-rose-600 dark:text-rose-400 bg-rose-500/10' : pct > 15 ? 'text-amber-600 dark:text-amber-400 bg-amber-500/10' : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10';
+        return <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${c}`}>{pct.toFixed(1)}%</span>;
       },
     },
     {
-      key: 'revenue', header: 'Net Revenue', width: '14%',
-      render: (value) => <span className="text-emerald-600 dark:text-emerald-400 font-bold">₹{(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>,
+      key: 'revenue', header: 'Net Revenue', width: '13%',
+      render: (v) => <span className="text-emerald-600 dark:text-emerald-400 font-bold">{fmt(v || 0)}</span>,
     },
     {
-      key: 'revenue_share', header: 'Revenue Share', width: '14%',
-      render: (value) => (
-        <div className="flex items-center gap-2">
-          <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div className="h-full bg-primary-500 rounded-full" style={{ width: `${Math.min(value || 0, 100)}%` }} />
+      key: 'revenue_share', header: 'Revenue Share', width: '18%',
+      render: (v) => (
+        <div className="flex items-center gap-2.5">
+          <div className="flex-1 h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }} animate={{ width: `${Math.min(v || 0, 100)}%` }}
+              transition={{ duration: 0.6, ease: 'easeOut' }}
+              className="h-full bg-gradient-to-r from-primary-500 to-primary-600 rounded-full"
+            />
           </div>
-          <span className="font-medium text-sm">{(value || 0).toFixed(1)}%</span>
+          <span className="font-semibold text-xs text-slate-600 dark:text-slate-300 w-10 text-right">{(v || 0).toFixed(1)}%</span>
         </div>
       ),
     },
     {
       key: 'quantity', header: 'Items', width: '8%',
-      render: (value) => <span className="font-medium">{(value || 0).toLocaleString()}</span>,
+      render: (v) => <span className="font-semibold text-slate-900 dark:text-white">{(v || 0).toLocaleString()}</span>,
     },
   ];
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Discount by Channel" description="Channel-wise discount analysis from Anthrilo" />
+    <div className="space-y-5">
+      <PageHeader title="Discount by Channel" description="Channel-wise discount performance comparison" />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <StatCard title="Avg Discount %" value={`${overallDiscountPct}%`} icon="💸" color="blue" />
-        <StatCard title="Net Revenue" value={`₹${((summary.total_revenue || 0) / 1000).toFixed(1)}K`} icon="🏷️" color="green" />
-        <StatCard title="Total Discount" value={`₹${((summary.total_discount || 0) / 1000).toFixed(1)}K`} icon="💰" color="red" />
-        <StatCard title="Channels" value={channelDiscounts.length.toString()} icon="🏪" color="purple" />
-      </div>
-
-      <div className="card">
-        <div className="flex gap-2">
-          {[
-            { key: 'today', label: 'Today' },
-            { key: 'yesterday', label: 'Yesterday' },
-            { key: 'last_7_days', label: '7 Days' },
-            { key: 'last_30_days', label: '30 Days' },
-          ].map((p) => (
+      {/* Controls */}
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+        <div className="flex gap-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+          {PERIODS.map(p => (
             <button key={p.key} onClick={() => setPeriod(p.key)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${period === p.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                period === p.key
+                  ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+              }`}>
               {p.label}
             </button>
           ))}
         </div>
+        <div className="flex-1" />
+        <button onClick={handleExport} disabled={!channelDiscounts.length}
+          className="btn btn-secondary flex items-center gap-2 text-xs disabled:opacity-40">
+          <Download className="w-3.5 h-3.5" /> Export CSV
+        </button>
       </div>
 
-      {error && (
-        <div className="card bg-rose-50 dark:bg-rose-900/20">
-          <p className="text-rose-600 dark:text-rose-400">Error: {(error as any)?.message || 'Failed to load discount data'}</p>
-        </div>
+      {error && <ErrorPanel message="Failed to load channel discount data." />}
+
+      {isLoading ? <LoadingSpinner message="Aggregating channel data..." /> : (
+        <>
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { title: 'Avg Discount', value: `${(summary.avg_discount_pct ?? 0).toFixed(1)}%`, icon: Percent, accent: 'blue' },
+              { title: 'Net Revenue', value: fmt(summary.total_revenue ?? 0), icon: Tag, accent: 'emerald' },
+              { title: 'Total Discount', value: fmt(summary.total_discount ?? 0), icon: TrendingDown, accent: 'rose' },
+              { title: 'Channels', value: `${channelDiscounts.length}`, icon: Store, accent: 'violet' },
+            ].map((kpi, i) => (
+              <motion.div key={kpi.title}
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: i * 0.05 }}
+                className="rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-[var(--shadow-soft)] p-4"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{kpi.title}</span>
+                  <div className={`p-1.5 rounded-lg bg-${kpi.accent}-500/10`}>
+                    <kpi.icon className={`w-3.5 h-3.5 text-${kpi.accent}-500`} strokeWidth={2.5} />
+                  </div>
+                </div>
+                <p className="text-xl font-bold text-slate-900 dark:text-white">{kpi.value}</p>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Channel Cards Mini-Grid (top 4 channels) */}
+          {channelDiscounts.length > 0 && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {channelDiscounts.slice(0, 4).map((ch, i) => (
+                <motion.div key={ch.channel}
+                  initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.2, delay: i * 0.04 }}
+                  className="rounded-xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 p-4"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                      <Store className="w-4 h-4 text-white" />
+                    </div>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">{ch.channel}</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">Discount</span>
+                      <span className={`font-bold ${ch.discount_pct > 30 ? 'text-rose-500' : ch.discount_pct > 15 ? 'text-amber-500' : 'text-emerald-500'}`}>{ch.discount_pct.toFixed(1)}%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">Revenue</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">{fmt(ch.revenue)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">Items</span>
+                      <span className="font-medium text-slate-600 dark:text-slate-400">{ch.quantity}</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+
+          {/* DataTable */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">All Channels</h3>
+              <span className="text-xs text-slate-400">{channelDiscounts.length} channels</span>
+            </div>
+            <DataTable data={channelDiscounts} columns={columns} emptyMessage="No channel discount data for this period." />
+          </div>
+        </>
       )}
-
-      <div className="card">
-        <h2 className="mb-4 text-gray-900 dark:text-gray-100">Discount by Channel</h2>
-        {isLoading ? (
-          <LoadingSpinner message="Fetching discount data from Anthrilo..." />
-        ) : (
-          <DataTable data={channelDiscounts} columns={columns} emptyMessage="No discount data available for this period." />
-        )}
-      </div>
     </div>
   );
 }

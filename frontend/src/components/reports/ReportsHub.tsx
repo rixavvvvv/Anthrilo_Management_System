@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, ArrowRight, Star, Clock, TrendingUp,
   BarChart3, ShoppingCart, Undo2, DollarSign, Package, FileText,
-  PieChart, Receipt, Percent, Store, Zap, Target, Truck,
+  PieChart, Receipt, Percent, Store, Zap, Target, Truck, Megaphone,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -175,6 +175,17 @@ const REPORTS: ReportDef[] = [
     icon: Target,
     category: 'Financial',
     frequency: 'Daily',
+  },
+  {
+    id: 'ads-performance',
+    title: 'Ads Performance',
+    description: 'Ad spend, ROAS & channel-wise advertising metrics',
+    href: '/dashboard/financial/ads',
+    icon: Megaphone,
+    category: 'Financial',
+    frequency: 'Daily',
+    badge: 'New',
+    popular: true,
   },
 
   // ── Inventory ──────────────────────────────
