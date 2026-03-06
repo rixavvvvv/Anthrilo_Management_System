@@ -22,10 +22,13 @@ export default function DiscountAnalysisPage() {
     staleTime: 120_000,
   });
 
+  // Backend now returns discount_pct and total_discount computed from MRP.
+  // total_revenue = sum of sellingPrice (post-discount effective price).
+  // total_mrp = sum of MRP. total_discount = MRP - sellingPrice.
   const allSkus = (data?.skus || []).map((s: any) => ({
     ...s,
-    discount_pct: s.total_revenue > 0 ? ((s.total_discount / s.total_revenue) * 100) : 0,
-    net_after_discount: (s.total_revenue || 0) - (s.total_discount || 0),
+    // discount_pct already computed by backend (MRP-based)
+    discount_pct: s.discount_pct ?? 0,
   }));
   const summary = data?.summary || {};
 
@@ -38,9 +41,7 @@ export default function DiscountAnalysisPage() {
     '30%+': allSkus.filter((s: any) => s.discount_pct > 30).length,
   };
 
-  const overallDiscountPct = summary.total_revenue > 0
-    ? ((summary.total_discount / summary.total_revenue) * 100).toFixed(1)
-    : '0.0';
+  const overallDiscountPct = summary.avg_discount_pct?.toFixed(1) ?? '0.0';
 
   const filtered = useMemo(() => {
     if (!search) return allSkus;
@@ -55,15 +56,15 @@ export default function DiscountAnalysisPage() {
   const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const columns: Column<any>[] = [
-    { key: 'sku', header: 'SKU', width: '14%' },
-    { key: 'name', header: 'Product Name', width: '20%' },
+    { key: 'sku', header: 'SKU', width: '12%' },
+    { key: 'name', header: 'Product Name', width: '18%' },
     {
       key: 'total_quantity', header: 'Qty', width: '6%',
       render: (value) => <span className="font-semibold text-slate-900 dark:text-slate-100">{value}</span>,
     },
     {
-      key: 'total_revenue', header: 'Gross Revenue', width: '12%',
-      render: (value) => <span className="text-slate-900 dark:text-slate-100">₹{(value || 0).toFixed(2)}</span>,
+      key: 'total_mrp', header: 'MRP Total', width: '11%',
+      render: (value) => <span className="text-slate-500 dark:text-slate-400">₹{(value || 0).toFixed(2)}</span>,
     },
     {
       key: 'total_discount', header: 'Discount', width: '10%',
@@ -78,12 +79,16 @@ export default function DiscountAnalysisPage() {
       },
     },
     {
-      key: 'net_after_discount', header: 'Net Revenue', width: '12%',
+      key: 'total_revenue', header: 'Net Revenue', width: '11%',
       render: (value) => <span className="text-emerald-600 dark:text-emerald-400 font-bold">₹{(value || 0).toFixed(2)}</span>,
     },
     {
-      key: 'avg_selling_price', header: 'Avg SP', width: '10%',
+      key: 'avg_selling_price', header: 'Avg SP', width: '9%',
       render: (value) => <span className="text-slate-900 dark:text-slate-100">₹{(value || 0).toFixed(2)}</span>,
+    },
+    {
+      key: 'avg_mrp', header: 'Avg MRP', width: '9%',
+      render: (value) => <span className="text-slate-500 dark:text-slate-400">₹{(value || 0).toFixed(2)}</span>,
     },
   ];
 
@@ -92,9 +97,9 @@ export default function DiscountAnalysisPage() {
       <PageHeader title="Discount Analysis" description="Discount breakdown across products from Anthrilo" />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <StatCard title="Overall Discount %" value={`${overallDiscountPct}%`} icon="💸" color="blue" />
+        <StatCard title="Avg Discount %" value={`${overallDiscountPct}%`} icon="💸" color="blue" />
         <StatCard title="Total SKUs" value={summary.total_skus || 0} icon="📦" color="purple" />
-        <StatCard title="Total Revenue" value={`₹${((summary.total_revenue || 0) / 1000).toFixed(1)}K`} icon="🏷️" color="green" />
+        <StatCard title="Net Revenue" value={`₹${((summary.total_revenue || 0) / 1000).toFixed(1)}K`} icon="🏷️" color="green" />
         <StatCard title="Total Discount" value={`₹${((summary.total_discount || 0) / 1000).toFixed(1)}K`} icon="💰" color="red" />
       </div>
 

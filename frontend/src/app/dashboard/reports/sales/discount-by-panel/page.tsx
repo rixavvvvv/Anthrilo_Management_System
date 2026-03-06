@@ -21,52 +21,51 @@ export default function DiscountByChannelPage() {
   // Aggregate discount data by channel from SKU-level data
   const channelDiscounts = useMemo(() => {
     const skus = data?.skus || [];
-    const channelMap: Record<string, { channel: string; orders: number; revenue: number; discount: number; quantity: number }> = {};
+    const channelMap: Record<string, { channel: string; orders: number; revenue: number; mrp: number; quantity: number }> = {};
 
     for (const sku of skus) {
       const channels = sku.channels || {};
       for (const [channel, chData] of Object.entries(channels) as [string, any][]) {
         if (!channelMap[channel]) {
-          channelMap[channel] = { channel, orders: 0, revenue: 0, discount: 0, quantity: 0 };
+          channelMap[channel] = { channel, orders: 0, revenue: 0, mrp: 0, quantity: 0 };
         }
         channelMap[channel].revenue += chData.revenue || 0;
         channelMap[channel].quantity += chData.quantity || 0;
       }
-      // Distribute discount proportionally across channels
+      // Distribute MRP proportionally across channels based on revenue share
       const totalRev = sku.total_revenue || 0;
-      const totalDisc = sku.total_discount || 0;
-      if (totalRev > 0 && totalDisc > 0) {
+      const totalMrp = sku.total_mrp || totalRev;
+      if (totalRev > 0 && totalMrp > 0) {
         for (const [channel, chData] of Object.entries(channels) as [string, any][]) {
           const proportion = (chData.revenue || 0) / totalRev;
-          channelMap[channel].discount += totalDisc * proportion;
+          channelMap[channel].mrp += totalMrp * proportion;
         }
       }
       // Count orders by channel
-      channelMap[Object.keys(channels)[0] || 'UNKNOWN'] && (function () {
-        for (const ch of Object.keys(channels)) {
-          if (channelMap[ch]) channelMap[ch].orders += 1;
-        }
-      })();
+      for (const ch of Object.keys(channels)) {
+        if (channelMap[ch]) channelMap[ch].orders += 1;
+      }
     }
 
     const total_revenue = Object.values(channelMap).reduce((sum, c) => sum + c.revenue, 0);
 
     return Object.values(channelMap)
-      .map((ch) => ({
-        ...ch,
-        revenue: Math.round(ch.revenue * 100) / 100,
-        discount: Math.round(ch.discount * 100) / 100,
-        discount_pct: ch.revenue > 0 ? Math.round((ch.discount / ch.revenue) * 10000) / 100 : 0,
-        net_revenue: Math.round((ch.revenue - ch.discount) * 100) / 100,
-        revenue_share: total_revenue > 0 ? Math.round((ch.revenue / total_revenue) * 10000) / 100 : 0,
-      }))
+      .map((ch) => {
+        const discount = Math.max(ch.mrp - ch.revenue, 0);
+        return {
+          ...ch,
+          revenue: Math.round(ch.revenue * 100) / 100,
+          mrp: Math.round(ch.mrp * 100) / 100,
+          discount: Math.round(discount * 100) / 100,
+          discount_pct: ch.mrp > 0 ? Math.round((discount / ch.mrp) * 10000) / 100 : 0,
+          revenue_share: total_revenue > 0 ? Math.round((ch.revenue / total_revenue) * 10000) / 100 : 0,
+        };
+      })
       .sort((a, b) => b.revenue - a.revenue);
   }, [data]);
 
   const summary = data?.summary || {};
-  const overallDiscountPct = summary.total_revenue > 0
-    ? ((summary.total_discount || 0) / summary.total_revenue * 100).toFixed(1)
-    : '0.0';
+  const overallDiscountPct = summary.avg_discount_pct?.toFixed(1) ?? '0.0';
 
   const columns: Column<any>[] = [
     {
@@ -76,11 +75,11 @@ export default function DiscountByChannelPage() {
       ),
     },
     {
-      key: 'revenue', header: 'Gross Revenue', width: '15%',
-      render: (value) => <span className="font-semibold text-gray-900 dark:text-gray-100">₹{(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>,
+      key: 'mrp', header: 'MRP Total', width: '14%',
+      render: (value) => <span className="text-gray-500 dark:text-gray-400">₹{(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>,
     },
     {
-      key: 'discount', header: 'Total Discount', width: '14%',
+      key: 'discount', header: 'Discount', width: '14%',
       render: (value) => <span className="text-orange-600 dark:text-orange-400 font-semibold">₹{(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>,
     },
     {
@@ -92,7 +91,7 @@ export default function DiscountByChannelPage() {
       },
     },
     {
-      key: 'net_revenue', header: 'Net Revenue', width: '15%',
+      key: 'revenue', header: 'Net Revenue', width: '14%',
       render: (value) => <span className="text-emerald-600 dark:text-emerald-400 font-bold">₹{(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>,
     },
     {
@@ -117,8 +116,8 @@ export default function DiscountByChannelPage() {
       <PageHeader title="Discount by Channel" description="Channel-wise discount analysis from Anthrilo" />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <StatCard title="Overall Discount %" value={`${overallDiscountPct}%`} icon="💸" color="blue" />
-        <StatCard title="Total Revenue" value={`₹${((summary.total_revenue || 0) / 1000).toFixed(1)}K`} icon="🏷️" color="green" />
+        <StatCard title="Avg Discount %" value={`${overallDiscountPct}%`} icon="💸" color="blue" />
+        <StatCard title="Net Revenue" value={`₹${((summary.total_revenue || 0) / 1000).toFixed(1)}K`} icon="🏷️" color="green" />
         <StatCard title="Total Discount" value={`₹${((summary.total_discount || 0) / 1000).toFixed(1)}K`} icon="💰" color="red" />
         <StatCard title="Channels" value={channelDiscounts.length.toString()} icon="🏪" color="purple" />
       </div>
