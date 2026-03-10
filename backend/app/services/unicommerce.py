@@ -34,7 +34,7 @@ class UnicommerceService:
     # Item categories to exclude from sales data (faulty/non-product entries)
     EXCLUDED_CATEGORIES = {"FABRIC"}
 
-    EXPORT_MAX_POLL_SECONDS = 300
+    EXPORT_MAX_POLL_SECONDS = 1200
     EXPORT_INITIAL_POLL_INTERVAL = 2
     EXPORT_MAX_POLL_INTERVAL = 10     # Max poll interval (backoff cap)
     EXPORT_POLL_BACKOFF = 1.5         # Polling backoff multiplier
@@ -65,8 +65,8 @@ class UnicommerceService:
         self.tenant = self.token_manager.tenant
         self.base_url = f"https://{self.tenant}.unicommerce.com/services/rest/v1"
 
-        # HTTP client settings
-        self.timeout = httpx.Timeout(60.0, connect=10.0)
+        # HTTP client settings — read timeout 120s for slow UC status responses
+        self.timeout = httpx.Timeout(120.0, connect=10.0)
         self.limits = httpx.Limits(
             max_connections=150,
             max_keepalive_connections=50
@@ -150,8 +150,33 @@ class UnicommerceService:
                     headers["Facility"] = "anthrilo"
                     response = await client.post(url, json=payload, headers=headers)
 
+                # Handle 400 - may be transient; retry once with fresh token
+                if response.status_code == 400:
+                    try:
+                        error_body = response.json()
+                    except Exception:
+                        error_body = response.text[:500]
+                    logger.warning(
+                        f"Export: Job creation HTTP 400 (retrying with fresh token): {error_body}"
+                    )
+                    self.token_manager.invalidate_token()
+                    await self.token_manager.get_valid_token()
+                    headers = await self._get_headers()
+                    headers["Facility"] = "anthrilo"
+                    await asyncio.sleep(2)
+                    response = await client.post(url, json=payload, headers=headers)
+                    if response.status_code >= 400:
+                        try:
+                            error_body = response.json()
+                        except Exception:
+                            error_body = response.text[:500]
+                        logger.error(
+                            f"Export: Job creation retry also failed HTTP {response.status_code}: {error_body}"
+                        )
+                        return None
+
                 # Log error response body for debugging
-                if response.status_code >= 400:
+                elif response.status_code >= 400:
                     try:
                         error_body = response.json()
                     except Exception:
@@ -189,6 +214,8 @@ class UnicommerceService:
 
         start_time = time_module.time()
         poll_interval = self.EXPORT_INITIAL_POLL_INTERVAL
+        no_filepath_retries = 0
+        MAX_NO_FILEPATH_RETRIES = 3
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
@@ -216,10 +243,26 @@ class UnicommerceService:
                         elapsed = time_module.time() - start_time
 
                         if status == "COMPLETE":
-                            logger.info(
-                                f"Export: Job {job_code} COMPLETE in {elapsed:.1f}s {file_path}"
-                            )
-                            return file_path
+                            if file_path:
+                                logger.info(
+                                    f"Export: Job {job_code} COMPLETE in {elapsed:.1f}s {file_path}"
+                                )
+                                return file_path
+                            else:
+                                no_filepath_retries += 1
+                                if no_filepath_retries <= MAX_NO_FILEPATH_RETRIES:
+                                    logger.warning(
+                                        f"Export: Job {job_code} COMPLETE but no filePath "
+                                        f"(attempt {no_filepath_retries}/{MAX_NO_FILEPATH_RETRIES}, {elapsed:.1f}s)"
+                                    )
+                                    await asyncio.sleep(5)
+                                    continue
+                                else:
+                                    logger.error(
+                                        f"Export: Job {job_code} COMPLETE but no filePath after "
+                                        f"{MAX_NO_FILEPATH_RETRIES} retries ({elapsed:.1f}s)"
+                                    )
+                                    return None
                         elif status in ("FAILED", "CANCELLED"):
                             logger.error(
                                 f"Export: Job {job_code} {status} after {elapsed:.1f}s"
@@ -900,6 +943,37 @@ class UnicommerceService:
             "cache_used": cached_orders is not None,
         }
 
+    MAX_CHUNK_DAYS = 15  # Smaller chunks = faster UC export generation
+    MAX_CONCURRENT_CHUNKS = 3  # Process up to 3 chunks in parallel
+
+    def _split_date_range(
+        self, from_date: datetime, to_date: datetime
+    ) -> List[Tuple[datetime, datetime]]:
+        """Split a date range into chunks of MAX_CHUNK_DAYS."""
+        chunks: List[Tuple[datetime, datetime]] = []
+        cursor = from_date
+        while cursor < to_date:
+            chunk_end = min(
+                cursor + timedelta(days=self.MAX_CHUNK_DAYS - 1,
+                                   hours=23, minutes=59, seconds=59),
+                to_date,
+            )
+            # Ensure chunk_end has end-of-day time
+            chunk_end = chunk_end.replace(
+                hour=23, minute=59, second=59, microsecond=0,
+                tzinfo=to_date.tzinfo,
+            )
+            chunks.append((
+                cursor.replace(hour=0, minute=0, second=0, microsecond=0,
+                               tzinfo=from_date.tzinfo),
+                chunk_end,
+            ))
+            cursor = (chunk_end + timedelta(seconds=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0,
+                tzinfo=from_date.tzinfo,
+            )
+        return chunks
+
     # Main sales data method - uses export job API
     async def get_sales_data(
         self,
@@ -913,6 +987,7 @@ class UnicommerceService:
         Revenue = SUM of item.sellingPrice from detail responses.
         Fetches ALL orders (no limits) for accurate business data.
         Uses 15-min cache to avoid repeated fetches.
+        Auto-chunks ranges > 90 days (Unicommerce export limit).
         """
         # Check cache
         if period_name != "custom":
@@ -934,20 +1009,90 @@ class UnicommerceService:
             }
 
         try:
-            # Two-phase fetch
-            fetch_result = await self.fetch_all_orders_with_revenue(
-                from_date, to_date, max_orders=100000
-            )
+            total_days = (to_date - from_date).days
+            failed_chunks = 0
 
-            if not fetch_result.get("successful", False):
-                return {
-                    "success": False,
-                    "message": fetch_result.get("error", "Failed to fetch orders"),
-                    "period": period_name,
-                }
+            if total_days > self.MAX_CHUNK_DAYS:
+                # Auto-chunk: split into smaller batches for faster UC processing
+                chunks = self._split_date_range(from_date, to_date)
+                logger.info(
+                    f"  Range is {total_days} days -> splitting into {len(chunks)} chunks "
+                    f"(max {self.MAX_CONCURRENT_CHUNKS} concurrent)"
+                )
+                all_orders: List[Dict] = []
+                total_time = 0.0
+                failed_chunks = 0
 
-            orders = fetch_result.get("orders", [])
-            total_records = fetch_result.get("totalRecords", 0)
+                semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_CHUNKS)
+
+                async def _process_chunk(idx: int, c_from: datetime, c_to: datetime) -> Tuple[int, List[Dict], float, bool]:
+                    """Process a single chunk under the semaphore."""
+                    async with semaphore:
+                        logger.info(
+                            f"  Chunk {idx + 1}/{len(chunks)}: "
+                            f"{c_from.strftime('%Y-%m-%d')} -> {c_to.strftime('%Y-%m-%d')}"
+                        )
+                        result = await self.fetch_all_orders_with_revenue(
+                            c_from, c_to, max_orders=100000
+                        )
+                        chunk_time = result.get("total_time", 0)
+                        if not result.get("successful", False):
+                            logger.warning(
+                                f"  Chunk {idx + 1} failed: "
+                                f"{result.get('error', 'unknown')}"
+                            )
+                            return (idx, [], chunk_time, False)
+                        chunk_orders = result.get("orders", [])
+                        logger.info(
+                            f"  Chunk {idx + 1} OK: {len(chunk_orders)} orders in {chunk_time:.1f}s"
+                        )
+                        return (idx, chunk_orders, chunk_time, True)
+
+                tasks = [
+                    _process_chunk(idx, c_from, c_to)
+                    for idx, (c_from, c_to) in enumerate(chunks)
+                ]
+                results = await asyncio.gather(*tasks)
+
+                # Merge results in order
+                for idx, chunk_orders, chunk_time, ok in sorted(results, key=lambda r: r[0]):
+                    total_time += chunk_time
+                    if ok:
+                        all_orders.extend(chunk_orders)
+                    else:
+                        failed_chunks += 1
+
+                if not all_orders:
+                    return {
+                        "success": False,
+                        "message": f"All {len(chunks)} chunks failed",
+                        "period": period_name,
+                    }
+
+                if failed_chunks:
+                    logger.warning(
+                        f"  {failed_chunks}/{len(chunks)} chunks failed, "
+                        f"proceeding with {len(all_orders)} orders from successful chunks"
+                    )
+
+                orders = all_orders
+                total_records = len(orders)
+            else:
+                # Single fetch (≤ 90 days)
+                fetch_result = await self.fetch_all_orders_with_revenue(
+                    from_date, to_date, max_orders=100000
+                )
+
+                if not fetch_result.get("successful", False):
+                    return {
+                        "success": False,
+                        "message": fetch_result.get("error", "Failed to fetch orders"),
+                        "period": period_name,
+                    }
+
+                orders = fetch_result.get("orders", [])
+                total_records = fetch_result.get("totalRecords", 0)
+                total_time = fetch_result.get("total_time", 0)
 
             logger.info(
                 f"Retrieved {len(orders)} orders with full pricing data")
@@ -985,22 +1130,17 @@ class UnicommerceService:
                 "period": period_name,
                 "from_date": from_date.isoformat(),
                 "to_date": to_date.isoformat(),
-                "data_accuracy": "complete",
+                "data_accuracy": "complete" if not (total_days > self.MAX_CHUNK_DAYS and failed_chunks) else "partial",
                 "revenue_method": "sellingPrice_export_job",
                 "fetch_info": {
                     "total_available": total_records,
                     "fetched_count": len(orders),
-                    "failed_codes": len(fetch_result.get("failed_codes", [])),
-                    "phase1_time_seconds": fetch_result.get("phase1_time", 0),
-                    "phase2_time_seconds": fetch_result.get("phase2_time", 0),
-                    "total_time_seconds": fetch_result.get("total_time", 0),
-                    "retry_recovered": fetch_result.get("retry_recovered", 0),
-                    "phase1_dedup": fetch_result.get("phase1_dedup", 0),
-                    "phase2_dedup": fetch_result.get("phase2_dedup", 0),
+                    "total_time_seconds": round(total_time, 2),
                     "reconciliation_passed": aggregation.get("reconciliation_passed", True),
                 },
                 "summary": aggregation,
                 "orders": sample_orders,
+                "_orders": orders,
             }
 
             # Cache the result

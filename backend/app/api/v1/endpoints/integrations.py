@@ -285,13 +285,13 @@ async def get_daily_sales_report(
     to_date: str = Query(None, description="Range end date (YYYY-MM-DD)"),
 ):
     """
-    Get Sales Report with channel-wise breakdown.
+    Get Sales Report with channel-wise breakdown and item-level detail.
 
     Supports two modes:
     - Single date: pass `date` param
     - Date range: pass `from_date` and `to_date` params
 
-    Returns channel breakdown with quantity, selling price, and orders.
+    Returns channel breakdown, item-level detail, and comparison data.
     """
     try:
         service = get_unicommerce_service()
@@ -361,12 +361,85 @@ async def get_daily_sales_report(
         excluded_items = result.get("summary", {}).get(
             "total_items", 0) - total_quantity
 
+        # ── Extract item-level detail from raw orders ──
+        # Must match service.EXCLUDED_STATUSES for consistency with channel totals
+        EXCLUDED_STATUSES = {
+            "CANCELLED", "CANCELED", "RETURNED", "REFUNDED",
+            "FAILED", "UNFULFILLABLE", "ERROR", "PENDING_VERIFICATION"
+        }
+        items_detail = []
+        raw_orders = result.get("_orders", [])
+        for order in raw_orders:
+            status = (order.get("status") or "").upper()
+            if status in EXCLUDED_STATUSES:
+                continue
+            channel = order.get("channel", "UNKNOWN")
+            for item in order.get("saleOrderItems", []):
+                selling_price = 0.0
+                try:
+                    selling_price = float(item.get("sellingPrice", 0))
+                except (ValueError, TypeError):
+                    pass
+                items_detail.append({
+                    "item_sku_code": item.get("itemSku", ""),
+                    "item_type_name": item.get("itemName", ""),
+                    "channel_name": channel,
+                    "selling_price": round(selling_price, 2),
+                })
+        # Sort items by channel then SKU
+        items_detail.sort(key=lambda x: (x["channel_name"], x["item_sku_code"]))
+
+        # ── Fetch comparison data (previous day / period) ──
+        comparison = None
+        try:
+            if not is_range and date:
+                comp_date = (datetime.strptime(date, "%Y-%m-%d") - timedelta(days=1)).date()
+                comp_today = datetime.now(timezone.utc).date()
+                comp_yesterday = comp_today - timedelta(days=1)
+                if comp_date == comp_today:
+                    comp_result = await service.get_today_sales()
+                elif comp_date == comp_yesterday:
+                    comp_result = await service.get_yesterday_sales()
+                else:
+                    comp_from = datetime.combine(comp_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+                    comp_to = datetime.combine(comp_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+                    comp_result = await service.get_custom_range_sales(comp_from, comp_to)
+
+                if comp_result.get("success"):
+                    comp_breakdown = comp_result.get("summary", {}).get("channel_breakdown", {})
+                    comp_report = []
+                    for ch_name, ch_data in comp_breakdown.items():
+                        comp_report.append({
+                            "channel_name": ch_name,
+                            "quantity": ch_data.get("items", 0),
+                            "selling_price": ch_data.get("revenue", 0),
+                            "orders": ch_data.get("orders", 0),
+                        })
+                    comp_report.sort(key=lambda x: x["selling_price"], reverse=True)
+                    comp_total_qty = sum(i["quantity"] for i in comp_report)
+                    comp_total_rev = sum(i["selling_price"] for i in comp_report)
+                    comp_total_ord = comp_result.get("summary", {}).get("valid_orders", 0)
+                    comparison = {
+                        "date": comp_date.strftime("%Y-%m-%d"),
+                        "report": comp_report,
+                        "totals": {
+                            "total_channels": len(comp_report),
+                            "total_quantity": comp_total_qty,
+                            "total_revenue": round(comp_total_rev, 2),
+                            "total_orders": comp_total_ord,
+                        },
+                    }
+        except Exception as comp_err:
+            logger.warning(f"Could not fetch comparison data: {comp_err}")
+
         return {
             "success": True,
             "date": date_label,
             "from_date": from_date if is_range else date,
             "to_date": to_date if is_range else date,
             "report": report_data,
+            "items": items_detail,
+            "comparison": comparison,
             "totals": {
                 "total_channels": len(report_data),
                 "total_quantity": total_quantity,
