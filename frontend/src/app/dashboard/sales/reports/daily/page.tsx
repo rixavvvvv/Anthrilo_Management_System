@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { format, parse, startOfMonth, endOfMonth, lastDayOfMonth } from 'date-fns';
+import { format, parse, startOfMonth, endOfMonth, lastDayOfMonth, addDays, differenceInDays } from 'date-fns';
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -49,6 +49,65 @@ const getMeta = (ch: string) => CHANNEL_META[ch] || fallbackMeta;
 const PIE_COLORS = ['#EC4899', '#F97316', '#22C55E', '#3B82F6', '#A855F7', '#14B8A6', '#F59E0B', '#6366F1', '#EF4444', '#8B5CF6', '#64748B'];
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+const MAX_CHUNK_DAYS = 90;
+
+/** Split a date range into ≤90-day chunks for Unicommerce's export-job limit */
+function splitDateRange(fromStr: string, toStr: string): { from_date: string; to_date: string }[] {
+  const chunks: { from_date: string; to_date: string }[] = [];
+  let cursor = parse(fromStr, 'yyyy-MM-dd', new Date());
+  const end = parse(toStr, 'yyyy-MM-dd', new Date());
+  while (cursor <= end) {
+    const chunkEnd = new Date(Math.min(addDays(cursor, MAX_CHUNK_DAYS - 1).getTime(), end.getTime()));
+    chunks.push({ from_date: format(cursor, 'yyyy-MM-dd'), to_date: format(chunkEnd, 'yyyy-MM-dd') });
+    cursor = addDays(chunkEnd, 1);
+  }
+  return chunks;
+}
+
+/** Merge multiple chunked API responses into one unified result */
+function mergeChunkedResults(results: any[], fromDate: string, toDate: string) {
+  const channelMap = new Map<string, { quantity: number; selling_price: number; orders: number }>();
+  let totalExcluded = 0;
+  let allOrders = 0;
+  for (const res of results) {
+    if (!res.success) continue;
+    for (const item of (res.report || [])) {
+      const existing = channelMap.get(item.channel_name) || { quantity: 0, selling_price: 0, orders: 0 };
+      existing.quantity += item.quantity;
+      existing.selling_price += item.selling_price;
+      existing.orders += item.orders;
+      channelMap.set(item.channel_name, existing);
+    }
+    totalExcluded += res.totals?.excluded_items || 0;
+    allOrders += res.totals?.all_orders || 0;
+  }
+  const report = Array.from(channelMap.entries())
+    .map(([channel_name, data]) => ({ channel_name, ...data }))
+    .sort((a, b) => b.selling_price - a.selling_price);
+  const totalQuantity = report.reduce((s, r) => s + r.quantity, 0);
+  const totalRevenue = report.reduce((s, r) => s + r.selling_price, 0);
+  const totalOrders = report.reduce((s, r) => s + r.orders, 0);
+  return {
+    success: true,
+    date: `${fromDate} to ${toDate}`,
+    from_date: fromDate,
+    to_date: toDate,
+    report,
+    totals: {
+      total_channels: report.length,
+      total_quantity: totalQuantity,
+      total_revenue: Math.round(totalRevenue * 100) / 100,
+      total_orders: totalOrders,
+      excluded_items: totalExcluded,
+      all_orders: allOrders,
+    },
+    currency: 'INR',
+    data_source: 'Unicommerce Export Job (chunked)',
+    cached: false,
+    note: `Report shows ${totalQuantity} items from revenue-generating orders. ${totalExcluded} items excluded.`,
+  };
+}
 
 type ReportMode = 'daily' | 'monthly' | 'custom';
 
@@ -117,6 +176,9 @@ export default function DailySalesReportPage() {
   const [sortKey, setSortKey] = useState<SortKey>('selling_price');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
+  /* ── chunk progress (for large custom ranges) ──────────────────────── */
+  const [chunkProgress, setChunkProgress] = useState({ completed: 0, total: 0 });
+
   // Close calendar on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -148,7 +210,28 @@ export default function DailySalesReportPage() {
 
   const { data: raw, isLoading, refetch } = useQuery({
     queryKey,
-    queryFn: async () => (await ucSales.getDailySalesReport(queryParams)).data,
+    queryFn: async () => {
+      const from = queryParams.from_date;
+      const to = queryParams.to_date;
+      // If range > 90 days, split into parallel 90-day chunks
+      if (from && to) {
+        const days = differenceInDays(parse(to, 'yyyy-MM-dd', new Date()), parse(from, 'yyyy-MM-dd', new Date()));
+        if (days > MAX_CHUNK_DAYS) {
+          const chunks = splitDateRange(from, to);
+          setChunkProgress({ completed: 0, total: chunks.length });
+          const results = await Promise.all(
+            chunks.map(async (chunk) => {
+              const res = await ucSales.getDailySalesReport(chunk);
+              setChunkProgress((prev) => ({ ...prev, completed: prev.completed + 1 }));
+              return res.data;
+            }),
+          );
+          return mergeChunkedResults(results, from, to);
+        }
+      }
+      setChunkProgress({ completed: 0, total: 0 });
+      return (await ucSales.getDailySalesReport(queryParams)).data;
+    },
     enabled: showReport,
     staleTime: 5 * 60_000,
   });
@@ -491,8 +574,35 @@ export default function DailySalesReportPage() {
         {isLoading && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-10 flex flex-col items-center gap-3">
-            <div className="h-10 w-10 rounded-full border-[3px] border-blue-500 border-t-transparent animate-spin" />
-            <p className="text-sm text-slate-500 dark:text-slate-400">Analysing sales data for {dateLabel}…</p>
+            {chunkProgress.total > 1 ? (
+              <>
+                <div className="relative h-20 w-20">
+                  <svg className="h-20 w-20 -rotate-90" viewBox="0 0 80 80">
+                    <circle cx="40" cy="40" r="34" fill="none" strokeWidth="5"
+                      className="stroke-slate-200 dark:stroke-slate-700" />
+                    <circle cx="40" cy="40" r="34" fill="none" strokeWidth="5" strokeLinecap="round"
+                      className="stroke-blue-500"
+                      strokeDasharray={`${2 * Math.PI * 34}`}
+                      strokeDashoffset={`${2 * Math.PI * 34 * (1 - chunkProgress.completed / chunkProgress.total)}`}
+                      style={{ transition: 'stroke-dashoffset 0.4s ease' }} />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-blue-600 dark:text-blue-400">
+                    {Math.round((chunkProgress.completed / chunkProgress.total) * 100)}%
+                  </span>
+                </div>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Fetching sales data… {chunkProgress.completed} of {chunkProgress.total} chunks complete
+                </p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  Large date range split into {chunkProgress.total} parallel requests (max 90 days each)
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="h-10 w-10 rounded-full border-[3px] border-blue-500 border-t-transparent animate-spin" />
+                <p className="text-sm text-slate-500 dark:text-slate-400">Analysing sales data for {dateLabel}…</p>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
