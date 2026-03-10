@@ -7,11 +7,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Calendar, Download, BarChart3, TrendingUp, TrendingDown,
   ArrowUpDown, ArrowUp, ArrowDown, Search, Sparkles, Flame,
-  Package, ShoppingCart, Layers, Store, FileText, Loader2, ChevronLeft, ChevronRight,
+  Layers, FileText, Loader2, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { format, parse, startOfMonth, endOfMonth, lastDayOfMonth, addDays, differenceInDays } from 'date-fns';
+import { format, parse, lastDayOfMonth } from 'date-fns';
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -50,66 +50,12 @@ const PIE_COLORS = ['#EC4899', '#F97316', '#22C55E', '#3B82F6', '#A855F7', '#14B
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-const MAX_CHUNK_DAYS = 90;
-
-/** Split a date range into ≤90-day chunks for Unicommerce's export-job limit */
-function splitDateRange(fromStr: string, toStr: string): { from_date: string; to_date: string }[] {
-  const chunks: { from_date: string; to_date: string }[] = [];
-  let cursor = parse(fromStr, 'yyyy-MM-dd', new Date());
-  const end = parse(toStr, 'yyyy-MM-dd', new Date());
-  while (cursor <= end) {
-    const chunkEnd = new Date(Math.min(addDays(cursor, MAX_CHUNK_DAYS - 1).getTime(), end.getTime()));
-    chunks.push({ from_date: format(cursor, 'yyyy-MM-dd'), to_date: format(chunkEnd, 'yyyy-MM-dd') });
-    cursor = addDays(chunkEnd, 1);
-  }
-  return chunks;
-}
-
-/** Merge multiple chunked API responses into one unified result */
-function mergeChunkedResults(results: any[], fromDate: string, toDate: string) {
-  const channelMap = new Map<string, { quantity: number; selling_price: number; orders: number }>();
-  let totalExcluded = 0;
-  let allOrders = 0;
-  for (const res of results) {
-    if (!res.success) continue;
-    for (const item of (res.report || [])) {
-      const existing = channelMap.get(item.channel_name) || { quantity: 0, selling_price: 0, orders: 0 };
-      existing.quantity += item.quantity;
-      existing.selling_price += item.selling_price;
-      existing.orders += item.orders;
-      channelMap.set(item.channel_name, existing);
-    }
-    totalExcluded += res.totals?.excluded_items || 0;
-    allOrders += res.totals?.all_orders || 0;
-  }
-  const report = Array.from(channelMap.entries())
-    .map(([channel_name, data]) => ({ channel_name, ...data }))
-    .sort((a, b) => b.selling_price - a.selling_price);
-  const totalQuantity = report.reduce((s, r) => s + r.quantity, 0);
-  const totalRevenue = report.reduce((s, r) => s + r.selling_price, 0);
-  const totalOrders = report.reduce((s, r) => s + r.orders, 0);
-  return {
-    success: true,
-    date: `${fromDate} to ${toDate}`,
-    from_date: fromDate,
-    to_date: toDate,
-    report,
-    totals: {
-      total_channels: report.length,
-      total_quantity: totalQuantity,
-      total_revenue: Math.round(totalRevenue * 100) / 100,
-      total_orders: totalOrders,
-      excluded_items: totalExcluded,
-      all_orders: allOrders,
-    },
-    currency: 'INR',
-    data_source: 'Unicommerce Export Job (chunked)',
-    cached: false,
-    note: `Report shows ${totalQuantity} items from revenue-generating orders. ${totalExcluded} items excluded.`,
-  };
-}
+const ITEMS_PER_PAGE = 50;
 
 type ReportMode = 'daily' | 'monthly' | 'custom';
+type SortKey = 'channel_name' | 'quantity' | 'selling_price' | 'orders' | 'avg' | 'pct';
+type ItemSortKey = 'item_sku_code' | 'item_type_name' | 'channel_name' | 'selling_price';
+type SortDir = 'asc' | 'desc';
 
 /* ── animated counter ────────────────────────────────────────────────── */
 function AnimatedNumber({ value, prefix = '', duration = 800 }: { value: number; prefix?: string; duration?: number }) {
@@ -134,16 +80,10 @@ function AnimatedNumber({ value, prefix = '', duration = 800 }: { value: number;
   return <>{prefix}{display.toLocaleString('en-IN')}</>;
 }
 
-/* ── sort types ──────────────────────────────────────────────────────── */
-type SortKey = 'channel_name' | 'quantity' | 'selling_price' | 'orders' | 'avg' | 'pct';
-type SortDir = 'asc' | 'desc';
-
 /* ══════════════════════════════════════════════════════════════════════ */
 export default function DailySalesReportPage() {
-  /* ── mode state ────────────────────────────────────────────────────── */
   const [mode, setMode] = useState<ReportMode>('daily');
 
-  /* ── daily mode state ──────────────────────────────────────────────── */
   const [reportDate, setReportDate] = useState<string>(() => {
     const d = new Date(); d.setDate(d.getDate() - 1);
     return d.toISOString().split('T')[0];
@@ -151,12 +91,10 @@ export default function DailySalesReportPage() {
   const [calOpen, setCalOpen] = useState(false);
   const calRef = useRef<HTMLDivElement>(null);
 
-  /* ── monthly mode state ────────────────────────────────────────────── */
   const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth()); // 0-11
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
 
-  /* ── custom mode state ─────────────────────────────────────────────── */
   const [customFrom, setCustomFrom] = useState<string>(() => {
     const d = new Date(); d.setDate(d.getDate() - 7);
     return d.toISOString().split('T')[0];
@@ -170,16 +108,16 @@ export default function DailySalesReportPage() {
   const calFromRef = useRef<HTMLDivElement>(null);
   const calToRef = useRef<HTMLDivElement>(null);
 
-  /* ── shared state ──────────────────────────────────────────────────── */
   const [showReport, setShowReport] = useState(true);
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('selling_price');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [itemSearch, setItemSearch] = useState('');
+  const [itemSortKey, setItemSortKey] = useState<ItemSortKey>('channel_name');
+  const [itemSortDir, setItemSortDir] = useState<SortDir>('asc');
+  const [itemPage, setItemPage] = useState(1);
 
-  /* ── chunk progress (for large custom ranges) ──────────────────────── */
-  const [chunkProgress, setChunkProgress] = useState({ completed: 0, total: 0 });
 
-  // Close calendar on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (calRef.current && !calRef.current.contains(e.target as Node)) setCalOpen(false);
@@ -190,17 +128,13 @@ export default function DailySalesReportPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, [calOpen, calFromOpen, calToOpen]);
 
-  /* ── build query params based on mode ──────────────────────────────── */
   const queryParams = useMemo(() => {
     if (mode === 'daily') {
       return { date: reportDate };
     } else if (mode === 'monthly') {
       const first = new Date(selectedYear, selectedMonth, 1);
       const last = lastDayOfMonth(first);
-      return {
-        from_date: format(first, 'yyyy-MM-dd'),
-        to_date: format(last, 'yyyy-MM-dd'),
-      };
+      return { from_date: format(first, 'yyyy-MM-dd'), to_date: format(last, 'yyyy-MM-dd') };
     } else {
       return { from_date: customFrom, to_date: customTo };
     }
@@ -211,46 +145,119 @@ export default function DailySalesReportPage() {
   const { data: raw, isLoading, refetch } = useQuery({
     queryKey,
     queryFn: async () => {
-      const from = queryParams.from_date;
-      const to = queryParams.to_date;
-      // If range > 90 days, split into parallel 90-day chunks
-      if (from && to) {
-        const days = differenceInDays(parse(to, 'yyyy-MM-dd', new Date()), parse(from, 'yyyy-MM-dd', new Date()));
-        if (days > MAX_CHUNK_DAYS) {
-          const chunks = splitDateRange(from, to);
-          setChunkProgress({ completed: 0, total: chunks.length });
-          const results = await Promise.all(
-            chunks.map(async (chunk) => {
-              const res = await ucSales.getDailySalesReport(chunk);
-              setChunkProgress((prev) => ({ ...prev, completed: prev.completed + 1 }));
-              return res.data;
-            }),
-          );
-          return mergeChunkedResults(results, from, to);
-        }
-      }
-      setChunkProgress({ completed: 0, total: 0 });
-      return (await ucSales.getDailySalesReport(queryParams)).data;
+      const res = await ucSales.getDailySalesReport(queryParams);
+      return res.data;
     },
     enabled: showReport,
-    staleTime: 5 * 60_000,
+    staleTime: 15 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+    gcTime: 30 * 60_000,
   });
 
   const handleGenerate = useCallback(() => { setShowReport(true); refetch(); }, [refetch]);
 
-  /* ── CSV download ──────────────────────────────────────────────────── */
+  /* ── CSV download (item-level + channel summary + comparison on right side) */
   const handleCSV = useCallback(() => {
-    if (!raw?.report) return;
-    const totalRev = raw.totals?.total_revenue || 1;
-    const hdr = ['Channel', 'Items', 'Revenue (₹)', 'Orders', 'Avg/Order (₹)', 'Revenue Share %'];
-    const rows = raw.report.map((r: any) => [
-      channelLabel(r.channel_name), r.quantity, r.selling_price.toFixed(2),
-      r.orders, (r.selling_price / r.orders).toFixed(2),
-      ((r.selling_price / totalRev) * 100).toFixed(1) + '%',
-    ]);
-    if (raw.totals) rows.push(['TOTAL', raw.totals.total_quantity, raw.totals.total_revenue.toFixed(2),
-      raw.totals.total_orders, (raw.totals.total_revenue / raw.totals.total_orders).toFixed(2), '100%']);
-    const csv = [hdr.join(','), ...rows.map((r: any) => r.join(','))].join('\n');
+    if (!raw) return;
+    const items = raw.items || [];
+    const report = raw.report || [];
+    const comparison = raw.comparison;
+
+    // Build channel summary rows for current date
+    const chRows: string[][] = [];
+    chRows.push([`${raw.date || ''}`, '', '', '']);
+    chRows.push(['Channel', 'N QTY', 'Selling Price', 'AVG']);
+    for (const r of report) {
+      const avg = r.quantity > 0 ? (r.selling_price / r.quantity).toFixed(2) : '0';
+      chRows.push([r.channel_name, String(r.quantity), r.selling_price.toFixed(2), avg]);
+    }
+    if (raw.totals) {
+      const t = raw.totals;
+      const avgT = t.total_quantity > 0 ? (t.total_revenue / t.total_quantity).toFixed(2) : '0';
+      chRows.push([`TOTAL`, String(t.total_quantity), t.total_revenue.toFixed(2), avgT]);
+    }
+
+    // Build comparison rows
+    const compRows: string[][] = [];
+    if (comparison) {
+      compRows.push([`${comparison.date || ''}`, '', '', '']);
+      compRows.push(['Channel', 'N QTY', 'Selling Price', 'AVG']);
+      for (const r of (comparison.report || [])) {
+        const avg = r.quantity > 0 ? (r.selling_price / r.quantity).toFixed(2) : '0';
+        compRows.push([r.channel_name, String(r.quantity), r.selling_price.toFixed(2), avg]);
+      }
+      if (comparison.totals) {
+        const ct = comparison.totals;
+        const avgT = ct.total_quantity > 0 ? (ct.total_revenue / ct.total_quantity).toFixed(2) : '0';
+        compRows.push(['TOTAL', String(ct.total_quantity), ct.total_revenue.toFixed(2), avgT]);
+      }
+    }
+
+    // Combine: item columns on left, spacer, channel summaries on right
+    const maxRows = Math.max(items.length, chRows.length, compRows.length);
+    const lines: string[] = [];
+
+    // Header row: item cols + spacer + summary headers are in chRows row 0/1
+    const hdrParts = ['Item SKU Code', 'Item Type Name', 'Channel Name', 'Selling Price', ''];
+    if (chRows.length > 0) hdrParts.push(...chRows[0]);
+    else hdrParts.push('', '', '', '');
+    if (comparison) {
+      hdrParts.push('');
+      if (compRows.length > 0) hdrParts.push(...compRows[0]);
+      else hdrParts.push('', '', '', '');
+    }
+    lines.push(hdrParts.join(','));
+
+    // Sub-header row (Channel/N QTY/Selling Price/AVG)
+    const subParts = ['', '', '', '', ''];
+    if (chRows.length > 1) subParts.push(...chRows[1]);
+    else subParts.push('', '', '', '');
+    if (comparison) {
+      subParts.push('');
+      if (compRows.length > 1) subParts.push(...compRows[1]);
+      else subParts.push('', '', '', '');
+    }
+    lines.push(subParts.join(','));
+
+    for (let i = 0; i < maxRows; i++) {
+      const parts: string[] = [];
+
+      // Left: item detail
+      if (i < items.length) {
+        const it = items[i];
+        const name = (it.item_type_name || '').replace(/,/g, ' ');
+        parts.push(it.item_sku_code, name, it.channel_name, String(it.selling_price));
+      } else {
+        parts.push('', '', '', '');
+      }
+
+      // Spacer column
+      parts.push('');
+
+      // Right: channel summary (current date) — skip first 2 rows (date header + column header already emitted)
+      const chIdx = i + 2;
+      if (chIdx < chRows.length) {
+        parts.push(...chRows[chIdx]);
+      } else {
+        parts.push('', '', '', '');
+      }
+
+      // Right: comparison
+      if (comparison) {
+        parts.push(''); // spacer between summaries
+        const compIdx = i + 2;
+        if (compIdx < compRows.length) {
+          parts.push(...compRows[compIdx]);
+        } else {
+          parts.push('', '', '', '');
+        }
+      }
+
+      lines.push(parts.join(','));
+    }
+
+    const csv = lines.join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement('a');
     const filename = mode === 'daily' ? `channel-wise-sales-report-${reportDate}.csv`
@@ -263,6 +270,7 @@ export default function DailySalesReportPage() {
   /* ── derived data ──────────────────────────────────────────────────── */
   const totals = raw?.totals;
   const totalRev = totals?.total_revenue || 1;
+  const items: any[] = raw?.items || [];
 
   const enriched = useMemo(() => {
     if (!raw?.report) return [];
@@ -321,6 +329,39 @@ export default function DailySalesReportPage() {
   const SortIcon = ({ k }: { k: SortKey }) =>
     sortKey === k ? (sortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 opacity-30" />;
 
+  /* ── item table: filtered, sorted, paginated ───────────────────────── */
+  const sortedItems = useMemo(() => {
+    let filtered = items;
+    if (itemSearch) {
+      const q = itemSearch.toLowerCase();
+      filtered = items.filter((it: any) =>
+        (it.item_sku_code || '').toLowerCase().includes(q) ||
+        (it.item_type_name || '').toLowerCase().includes(q) ||
+        (it.channel_name || '').toLowerCase().includes(q)
+      );
+    }
+    return [...filtered].sort((a: any, b: any) => {
+      const va = a[itemSortKey] ?? '';
+      const vb = b[itemSortKey] ?? '';
+      if (typeof va === 'string') return itemSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      return itemSortDir === 'asc' ? va - vb : vb - va;
+    });
+  }, [items, itemSearch, itemSortKey, itemSortDir]);
+
+  // Reset page when search/sort changes
+  useEffect(() => { setItemPage(1); }, [itemSearch, itemSortKey, itemSortDir]);
+
+  const totalItemPages = Math.max(1, Math.ceil(sortedItems.length / ITEMS_PER_PAGE));
+  const paginatedItems = sortedItems.slice((itemPage - 1) * ITEMS_PER_PAGE, itemPage * ITEMS_PER_PAGE);
+
+  const toggleItemSort = (key: ItemSortKey) => {
+    if (itemSortKey === key) setItemSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setItemSortKey(key); setItemSortDir('asc'); }
+  };
+
+  const ItemSortIcon = ({ k }: { k: ItemSortKey }) =>
+    itemSortKey === k ? (itemSortDir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-30" />;
+
   /* ── date labels ───────────────────────────────────────────────────── */
   const dateLabel = mode === 'daily'
     ? format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'EEEE, dd MMMM yyyy')
@@ -328,30 +369,31 @@ export default function DailySalesReportPage() {
       ? `${MONTHS[selectedMonth]} ${selectedYear}`
       : `${format(parse(customFrom, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')} – ${format(parse(customTo, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}`;
 
-  const pageTitle = mode === 'daily' ? 'Channel Wise Sales Report'
-    : mode === 'monthly' ? 'Channel Wise Sales Report'
-      : 'Channel Wise Sales Report';
-
-  const pageSubtitle = mode === 'daily' ? 'Channel-wise sales breakdown · Revenue-generating orders only'
-    : mode === 'monthly' ? `Channel-wise sales for ${MONTHS[selectedMonth]} ${selectedYear}`
-      : 'Channel-wise sales for selected date range';
-
-  /* ── year options for monthly mode ─────────────────────────────────── */
   const currentYear = now.getFullYear();
   const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - i);
+
+  const CAL_CLASSES = {
+    root: 'rdp-custom',
+    month_caption: 'text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center py-1',
+    weekday: 'text-[11px] font-medium text-slate-400 dark:text-slate-500 w-9 text-center',
+    day_button: 'h-9 w-9 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center',
+    today: 'font-bold text-blue-600 dark:text-blue-400',
+    selected: '!bg-blue-600 !text-white rounded-lg font-semibold',
+    disabled: 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40',
+    chevron: 'fill-slate-500 dark:fill-slate-400 w-4 h-4',
+  };
 
   /* ══════════════════════════════════════════════════════════════════ */
   return (
     <div className="space-y-8">
-      {/* ─── Header ──────────────────────────────────────────────────── */}
+      {/* ─── Header ──────────────────────────────────────────────── */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{pageTitle}</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{pageSubtitle}</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Channel Wise Sales Report</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Channel-wise sales breakdown · Revenue-generating orders only</p>
       </div>
 
-      {/* ─── Mode Selector ───────────────────────────────────────────── */}
+      {/* ─── Mode Selector ───────────────────────────────────────── */}
       <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5 space-y-5">
-        {/* Tabs */}
         <div className="flex gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-900 w-fit">
           {([
             { key: 'daily' as ReportMode, label: 'Daily', icon: Calendar },
@@ -369,7 +411,7 @@ export default function DailySalesReportPage() {
           ))}
         </div>
 
-        {/* ── Daily mode controls ──────────────────────────────────── */}
+        {/* Daily controls */}
         {mode === 'daily' && (
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[180px] max-w-[260px]" ref={calRef}>
@@ -390,16 +432,7 @@ export default function DailySalesReportPage() {
                         onSelect={(day) => { if (day) { setReportDate(format(day, 'yyyy-MM-dd')); setShowReport(false); setCalOpen(false); } }}
                         disabled={{ after: new Date() }}
                         defaultMonth={parse(reportDate, 'yyyy-MM-dd', new Date())}
-                        classNames={{
-                          root: 'rdp-custom',
-                          month_caption: 'text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center py-1',
-                          weekday: 'text-[11px] font-medium text-slate-400 dark:text-slate-500 w-9 text-center',
-                          day_button: 'h-9 w-9 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center',
-                          today: 'font-bold text-blue-600 dark:text-blue-400',
-                          selected: '!bg-blue-600 !text-white rounded-lg font-semibold',
-                          disabled: 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40',
-                          chevron: 'fill-slate-500 dark:fill-slate-400 w-4 h-4',
-                        }}
+                        classNames={CAL_CLASSES}
                       />
                     </motion.div>
                   )}
@@ -420,10 +453,9 @@ export default function DailySalesReportPage() {
           </div>
         )}
 
-        {/* ── Monthly mode controls ────────────────────────────────── */}
+        {/* Monthly controls */}
         {mode === 'monthly' && (
           <div className="space-y-4">
-            {/* Year selector */}
             <div className="flex items-center gap-3">
               <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Year</label>
               <div className="flex gap-1.5">
@@ -438,8 +470,6 @@ export default function DailySalesReportPage() {
                 ))}
               </div>
             </div>
-
-            {/* Month grid */}
             <div>
               <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Select Month</label>
               <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
@@ -460,8 +490,6 @@ export default function DailySalesReportPage() {
                 })}
               </div>
             </div>
-
-            {/* Generate + CSV */}
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <button onClick={handleGenerate} disabled={isLoading}
                 className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
@@ -478,10 +506,9 @@ export default function DailySalesReportPage() {
           </div>
         )}
 
-        {/* ── Custom range controls ────────────────────────────────── */}
+        {/* Custom range controls */}
         {mode === 'custom' && (
           <div className="flex flex-wrap items-end gap-3">
-            {/* From date */}
             <div className="flex-1 min-w-[180px] max-w-[220px]" ref={calFromRef}>
               <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">From date</label>
               <div className="relative">
@@ -500,24 +527,13 @@ export default function DailySalesReportPage() {
                         onSelect={(day) => { if (day) { setCustomFrom(format(day, 'yyyy-MM-dd')); setShowReport(false); setCalFromOpen(false); } }}
                         disabled={{ after: new Date() }}
                         defaultMonth={parse(customFrom, 'yyyy-MM-dd', new Date())}
-                        classNames={{
-                          root: 'rdp-custom',
-                          month_caption: 'text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center py-1',
-                          weekday: 'text-[11px] font-medium text-slate-400 dark:text-slate-500 w-9 text-center',
-                          day_button: 'h-9 w-9 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center',
-                          today: 'font-bold text-blue-600 dark:text-blue-400',
-                          selected: '!bg-blue-600 !text-white rounded-lg font-semibold',
-                          disabled: 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40',
-                          chevron: 'fill-slate-500 dark:fill-slate-400 w-4 h-4',
-                        }}
+                        classNames={CAL_CLASSES}
                       />
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
             </div>
-
-            {/* To date */}
             <div className="flex-1 min-w-[180px] max-w-[220px]" ref={calToRef}>
               <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">To date</label>
               <div className="relative">
@@ -536,24 +552,13 @@ export default function DailySalesReportPage() {
                         onSelect={(day) => { if (day) { setCustomTo(format(day, 'yyyy-MM-dd')); setShowReport(false); setCalToOpen(false); } }}
                         disabled={{ after: new Date() }}
                         defaultMonth={parse(customTo, 'yyyy-MM-dd', new Date())}
-                        classNames={{
-                          root: 'rdp-custom',
-                          month_caption: 'text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center py-1',
-                          weekday: 'text-[11px] font-medium text-slate-400 dark:text-slate-500 w-9 text-center',
-                          day_button: 'h-9 w-9 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center',
-                          today: 'font-bold text-blue-600 dark:text-blue-400',
-                          selected: '!bg-blue-600 !text-white rounded-lg font-semibold',
-                          disabled: 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40',
-                          chevron: 'fill-slate-500 dark:fill-slate-400 w-4 h-4',
-                        }}
+                        classNames={CAL_CLASSES}
                       />
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
             </div>
-
-            {/* Generate + CSV */}
             <button onClick={handleGenerate} disabled={isLoading}
               className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
@@ -569,58 +574,32 @@ export default function DailySalesReportPage() {
         )}
       </div>
 
-      {/* ─── Loading ─────────────────────────────────────────────────── */}
+      {/* ─── Loading ─────────────────────────────────────────────── */}
       <AnimatePresence>
         {isLoading && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-10 flex flex-col items-center gap-3">
-            {chunkProgress.total > 1 ? (
-              <>
-                <div className="relative h-20 w-20">
-                  <svg className="h-20 w-20 -rotate-90" viewBox="0 0 80 80">
-                    <circle cx="40" cy="40" r="34" fill="none" strokeWidth="5"
-                      className="stroke-slate-200 dark:stroke-slate-700" />
-                    <circle cx="40" cy="40" r="34" fill="none" strokeWidth="5" strokeLinecap="round"
-                      className="stroke-blue-500"
-                      strokeDasharray={`${2 * Math.PI * 34}`}
-                      strokeDashoffset={`${2 * Math.PI * 34 * (1 - chunkProgress.completed / chunkProgress.total)}`}
-                      style={{ transition: 'stroke-dashoffset 0.4s ease' }} />
-                  </svg>
-                  <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-blue-600 dark:text-blue-400">
-                    {Math.round((chunkProgress.completed / chunkProgress.total) * 100)}%
-                  </span>
-                </div>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Fetching sales data… {chunkProgress.completed} of {chunkProgress.total} chunks complete
-                </p>
-                <p className="text-xs text-slate-400 dark:text-slate-500">
-                  Large date range split into {chunkProgress.total} parallel requests (max 90 days each)
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="h-10 w-10 rounded-full border-[3px] border-blue-500 border-t-transparent animate-spin" />
-                <p className="text-sm text-slate-500 dark:text-slate-400">Analysing sales data for {dateLabel}…</p>
-              </>
-            )}
+            <div className="h-10 w-10 rounded-full border-[3px] border-blue-500 border-t-transparent animate-spin" />
+            <p className="text-sm text-slate-500 dark:text-slate-400">Fetching sales data for {dateLabel}…</p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500">Large date ranges may take a few minutes</p>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ─── Error ───────────────────────────────────────────────────── */}
+      {/* ─── Error ───────────────────────────────────────────────── */}
       {showReport && raw && !raw.success && (
         <div className="rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4">
           <p className="text-sm text-rose-600 dark:text-rose-400">{raw.error || 'Failed to generate report'}</p>
         </div>
       )}
 
-      {/* ─── Report content ──────────────────────────────────────────── */}
+      {/* ─── Report content ──────────────────────────────────────── */}
       <AnimatePresence>
         {showReport && raw?.success && totals && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}
             className="space-y-8">
 
-            {/* ── Hero summary ────────────────────────────────────────── */}
+            {/* ── Hero summary ────────────────────────────────────── */}
             <div className="rounded-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 p-6 sm:p-8 shadow-lg text-white relative overflow-hidden">
               <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImciIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg2MHY2MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjMwIiBjeT0iMzAiIHI9IjEuNSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjA2KSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3QgZmlsbD0idXJsKCNnKSIgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIvPjwvc3ZnPg==')] opacity-50" />
               <div className="relative z-10">
@@ -657,7 +636,7 @@ export default function DailySalesReportPage() {
               </div>
             </div>
 
-            {/* ── Charts (Donut + Bar) ────────────────────────────────── */}
+            {/* ── Charts (Donut + Bar) ────────────────────────────── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Donut / Pie */}
               <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5">
@@ -691,7 +670,6 @@ export default function DailySalesReportPage() {
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                {/* Legend */}
                 <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2">
                   {pieData.map((e: any) => (
                     <div key={e.name} className="flex items-center gap-1.5">
@@ -738,7 +716,7 @@ export default function DailySalesReportPage() {
               </div>
             </div>
 
-            {/* ── Insights ────────────────────────────────────────────── */}
+            {/* ── Insights ────────────────────────────────────────── */}
             {insights.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {insights.map((ins, i) => (
@@ -756,9 +734,8 @@ export default function DailySalesReportPage() {
               </div>
             )}
 
-            {/* ── Data Table ──────────────────────────────────────────── */}
+            {/* ── Channel Breakdown Table ─────────────────────────── */}
             <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-              {/* Search */}
               <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-base font-semibold text-slate-900 dark:text-white">Channel Breakdown</h2>
                 <div className="relative w-full sm:w-56">
@@ -769,7 +746,6 @@ export default function DailySalesReportPage() {
                   />
                 </div>
               </div>
-
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -802,7 +778,6 @@ export default function DailySalesReportPage() {
                         <motion.tr key={row.channel_name}
                           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.03 }}
                           className="group transition hover:bg-slate-50/60 dark:hover:bg-slate-700/30">
-                          {/* Channel */}
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
                               <div className="flex-shrink-0 h-8 w-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white"
@@ -819,9 +794,7 @@ export default function DailySalesReportPage() {
                               </div>
                             </div>
                           </td>
-                          {/* Items */}
                           <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300">{row.quantity.toLocaleString()}</td>
-                          {/* Revenue + mini bar */}
                           <td className="px-5 py-4 text-right">
                             <p className={`text-sm font-semibold tabular-nums ${isTop3 ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'}`}>
                               {fmtFull(row.selling_price)}
@@ -830,19 +803,15 @@ export default function DailySalesReportPage() {
                               <div className="h-full rounded-full transition-all duration-500" style={{ width: `${revBarW}%`, background: row.meta.color }} />
                             </div>
                           </td>
-                          {/* Share % */}
                           <td className="px-5 py-4 text-right">
                             <span className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-300">{row.pct.toFixed(1)}%</span>
                           </td>
-                          {/* Orders */}
                           <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">{row.orders}</td>
-                          {/* AOV */}
                           <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-600 dark:text-slate-400">{fmtFull(row.avg)}</td>
                         </motion.tr>
                       );
                     })}
                   </tbody>
-                  {/* Totals footer */}
                   <tfoot>
                     <tr className="bg-slate-50 dark:bg-slate-900/60 border-t-2 border-slate-200 dark:border-slate-600">
                       <td className="px-5 py-4 text-sm font-bold text-slate-900 dark:text-white">Total</td>
@@ -857,7 +826,108 @@ export default function DailySalesReportPage() {
               </div>
             </div>
 
-            {/* ── Footer ──────────────────────────────────────────────── */}
+            {/* ── Item Details (Paginated) ────────────────────────── */}
+            <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-white">Item Details</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">{sortedItems.length} items · {dateLabel}</p>
+                </div>
+                <div className="relative w-full sm:w-56">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)}
+                    placeholder="Search SKU, name, channel…"
+                    className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50/80 dark:bg-slate-900/50 sticky top-0 z-10">
+                      {([
+                        { key: 'item_sku_code' as ItemSortKey, label: 'Item SKU Code', align: 'left' },
+                        { key: 'item_type_name' as ItemSortKey, label: 'Item Type Name', align: 'left' },
+                        { key: 'channel_name' as ItemSortKey, label: 'Channel Name', align: 'left' },
+                        { key: 'selling_price' as ItemSortKey, label: 'Selling Price', align: 'right' },
+                      ] as const).map((col) => (
+                        <th key={col.key} onClick={() => toggleItemSort(col.key)}
+                          className={`px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider cursor-pointer select-none whitespace-nowrap transition hover:text-slate-900 dark:hover:text-white ${col.align === 'left' ? 'text-left' : 'text-right'} text-slate-500 dark:text-slate-400`}>
+                          <span className="inline-flex items-center gap-1">
+                            {col.label} <ItemSortIcon k={col.key} />
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
+                    {paginatedItems.map((item: any, idx: number) => (
+                      <tr key={(itemPage - 1) * ITEMS_PER_PAGE + idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition">
+                        <td className="px-4 py-2 text-slate-700 dark:text-slate-300 font-mono text-xs whitespace-nowrap">{item.item_sku_code}</td>
+                        <td className="px-4 py-2 text-slate-800 dark:text-slate-200 max-w-[400px] truncate">{item.item_type_name}</td>
+                        <td className="px-4 py-2 text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.channel_name}</td>
+                        <td className="px-4 py-2 text-right tabular-nums font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">{item.selling_price}</td>
+                      </tr>
+                    ))}
+                    {paginatedItems.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-400">
+                          {itemSearch ? 'No items match your search' : 'No item data available'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {/* Pagination controls */}
+              {totalItemPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-700">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Showing {((itemPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(itemPage * ITEMS_PER_PAGE, sortedItems.length)} of {sortedItems.length}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setItemPage(1)} disabled={itemPage === 1}
+                      className="px-2 py-1 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                      First
+                    </button>
+                    <button onClick={() => setItemPage((p) => Math.max(1, p - 1))} disabled={itemPage === 1}
+                      className="p-1 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    {Array.from({ length: Math.min(5, totalItemPages) }, (_, i) => {
+                      let page: number;
+                      if (totalItemPages <= 5) {
+                        page = i + 1;
+                      } else if (itemPage <= 3) {
+                        page = i + 1;
+                      } else if (itemPage >= totalItemPages - 2) {
+                        page = totalItemPages - 4 + i;
+                      } else {
+                        page = itemPage - 2 + i;
+                      }
+                      return (
+                        <button key={page} onClick={() => setItemPage(page)}
+                          className={`w-8 h-8 rounded-lg text-xs font-medium transition ${itemPage === page
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                            }`}>
+                          {page}
+                        </button>
+                      );
+                    })}
+                    <button onClick={() => setItemPage((p) => Math.min(totalItemPages, p + 1))} disabled={itemPage === totalItemPages}
+                      className="p-1 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => setItemPage(totalItemPages)} disabled={itemPage === totalItemPages}
+                      className="px-2 py-1 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                      Last
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── Footer ──────────────────────────────────────────── */}
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px] text-slate-400 dark:text-slate-500 px-1">
               <span>Source: {raw.data_source}</span>
               {raw.cached && <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-medium">Cached</span>}
