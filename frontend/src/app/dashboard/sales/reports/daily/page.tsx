@@ -170,9 +170,9 @@ export default function DailySalesReportPage() {
     const csv = [hdr.join(','), ...rows.map((r: any) => r.join(','))].join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement('a');
-    const filename = mode === 'daily' ? `sales-report-${reportDate}.csv`
-      : mode === 'monthly' ? `sales-report-${MONTHS[selectedMonth]}-${selectedYear}.csv`
-        : `sales-report-${customFrom}-to-${customTo}.csv`;
+    const filename = mode === 'daily' ? `channel-wise-sales-report-${reportDate}.csv`
+      : mode === 'monthly' ? `channel-wise-sales-report-${MONTHS[selectedMonth]}-${selectedYear}.csv`
+        : `channel-wise-sales-report-${customFrom}-to-${customTo}.csv`;
     a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   }, [raw, mode, reportDate, selectedMonth, selectedYear, customFrom, customTo]);
@@ -245,13 +245,13 @@ export default function DailySalesReportPage() {
       ? `${MONTHS[selectedMonth]} ${selectedYear}`
       : `${format(parse(customFrom, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')} – ${format(parse(customTo, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}`;
 
-  const pageTitle = mode === 'daily' ? 'Daily Sales Report'
-    : mode === 'monthly' ? 'Monthly Sales Report'
-      : 'Custom Range Sales Report';
+  const pageTitle = mode === 'daily' ? 'Channel Wise Sales Report'
+    : mode === 'monthly' ? 'Channel Wise Sales Report'
+      : 'Channel Wise Sales Report';
 
   const pageSubtitle = mode === 'daily' ? 'Channel-wise sales breakdown · Revenue-generating orders only'
     : mode === 'monthly' ? `Channel-wise sales for ${MONTHS[selectedMonth]} ${selectedYear}`
-      : 'Channel-wise sales for custom date range';
+      : 'Channel-wise sales for selected date range';
 
   /* ── year options for monthly mode ─────────────────────────────────── */
   const currentYear = now.getFullYear();
