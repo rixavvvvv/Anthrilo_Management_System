@@ -277,8 +277,8 @@ export default function DailySalesReportPage() {
           ]).map((tab) => (
             <button key={tab.key} onClick={() => { setMode(tab.key); setShowReport(false); }}
               className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${mode === tab.key
-                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                 }`}>
               <tab.icon className="w-4 h-4" />
               {tab.label}
@@ -347,8 +347,8 @@ export default function DailySalesReportPage() {
                 {yearOptions.map((yr) => (
                   <button key={yr} onClick={() => { setSelectedYear(yr); setShowReport(false); }}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${selectedYear === yr
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                       }`}>
                     {yr}
                   </button>
@@ -366,10 +366,10 @@ export default function DailySalesReportPage() {
                     <button key={m} onClick={() => { if (!isDisabled) { setSelectedMonth(i); setShowReport(false); } }}
                       disabled={isDisabled}
                       className={`px-3 py-2.5 rounded-xl text-sm font-medium transition ${selectedMonth === i && !isDisabled
-                          ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-300 dark:ring-blue-700'
-                          : isDisabled
-                            ? 'bg-slate-50 dark:bg-slate-900/50 text-slate-300 dark:text-slate-600 cursor-not-allowed'
-                            : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400'
+                        ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-300 dark:ring-blue-700'
+                        : isDisabled
+                          ? 'bg-slate-50 dark:bg-slate-900/50 text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                          : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400'
                         }`}>
                       {m.slice(0, 3)}
                     </button>
