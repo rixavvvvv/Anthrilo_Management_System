@@ -53,7 +53,7 @@ const navigation: NavItem[] = [
     icon: BarChart3,
     children: [
       { name: 'All Reports', href: '/dashboard/reports/reports-index', icon: FileText },
-      { name: 'Daily Sales', href: '/dashboard/sales/reports/daily', icon: BarChart3 },
+      { name: 'Channel Wise Sales', href: '/dashboard/sales/reports/daily', icon: BarChart3 },
       { name: 'Daily Returns', href: '/dashboard/sales/reports/returns', icon: BarChart3 },
       { name: 'SKU Sales', href: '/dashboard/reports/sales/bundle-sku', icon: BarChart3 },
       { name: 'Discounts', href: '/dashboard/reports/sales/discount-general', icon: Percent },

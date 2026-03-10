@@ -253,9 +253,9 @@ export default function DailySalesReportPage() {
     const csv = [hdr.join(','), ...rows.map((r: any) => r.join(','))].join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement('a');
-    const filename = mode === 'daily' ? `sales-report-${reportDate}.csv`
-      : mode === 'monthly' ? `sales-report-${MONTHS[selectedMonth]}-${selectedYear}.csv`
-        : `sales-report-${customFrom}-to-${customTo}.csv`;
+    const filename = mode === 'daily' ? `channel-wise-sales-report-${reportDate}.csv`
+      : mode === 'monthly' ? `channel-wise-sales-report-${MONTHS[selectedMonth]}-${selectedYear}.csv`
+        : `channel-wise-sales-report-${customFrom}-to-${customTo}.csv`;
     a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   }, [raw, mode, reportDate, selectedMonth, selectedYear, customFrom, customTo]);
@@ -328,13 +328,13 @@ export default function DailySalesReportPage() {
       ? `${MONTHS[selectedMonth]} ${selectedYear}`
       : `${format(parse(customFrom, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')} – ${format(parse(customTo, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}`;
 
-  const pageTitle = mode === 'daily' ? 'Daily Sales Report'
-    : mode === 'monthly' ? 'Monthly Sales Report'
-      : 'Custom Range Sales Report';
+  const pageTitle = mode === 'daily' ? 'Channel Wise Sales Report'
+    : mode === 'monthly' ? 'Channel Wise Sales Report'
+      : 'Channel Wise Sales Report';
 
   const pageSubtitle = mode === 'daily' ? 'Channel-wise sales breakdown · Revenue-generating orders only'
     : mode === 'monthly' ? `Channel-wise sales for ${MONTHS[selectedMonth]} ${selectedYear}`
-      : 'Channel-wise sales for custom date range';
+      : 'Channel-wise sales for selected date range';
 
   /* ── year options for monthly mode ─────────────────────────────────── */
   const currentYear = now.getFullYear();
@@ -360,8 +360,8 @@ export default function DailySalesReportPage() {
           ]).map((tab) => (
             <button key={tab.key} onClick={() => { setMode(tab.key); setShowReport(false); }}
               className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${mode === tab.key
-                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                 }`}>
               <tab.icon className="w-4 h-4" />
               {tab.label}
@@ -430,8 +430,8 @@ export default function DailySalesReportPage() {
                 {yearOptions.map((yr) => (
                   <button key={yr} onClick={() => { setSelectedYear(yr); setShowReport(false); }}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${selectedYear === yr
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                       }`}>
                     {yr}
                   </button>
@@ -449,10 +449,10 @@ export default function DailySalesReportPage() {
                     <button key={m} onClick={() => { if (!isDisabled) { setSelectedMonth(i); setShowReport(false); } }}
                       disabled={isDisabled}
                       className={`px-3 py-2.5 rounded-xl text-sm font-medium transition ${selectedMonth === i && !isDisabled
-                          ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-300 dark:ring-blue-700'
-                          : isDisabled
-                            ? 'bg-slate-50 dark:bg-slate-900/50 text-slate-300 dark:text-slate-600 cursor-not-allowed'
-                            : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400'
+                        ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-300 dark:ring-blue-700'
+                        : isDisabled
+                          ? 'bg-slate-50 dark:bg-slate-900/50 text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                          : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400'
                         }`}>
                       {m.slice(0, 3)}
                     </button>

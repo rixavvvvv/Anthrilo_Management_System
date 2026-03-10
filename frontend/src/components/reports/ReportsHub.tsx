@@ -37,7 +37,7 @@ const REPORTS: ReportDef[] = [
   // ── Sales ──────────────────────────────────
   {
     id: 'daily-sales',
-    title: 'Sales Report',
+    title: 'Channel Wise Sales Report',
     description: 'Channel-wise revenue breakdown & CSV export',
     href: '/dashboard/sales/reports/daily',
     icon: BarChart3,
