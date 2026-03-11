@@ -54,7 +54,7 @@ const ITEMS_PER_PAGE = 50;
 
 type ReportMode = 'daily' | 'monthly' | 'custom';
 type SortKey = 'channel_name' | 'quantity' | 'selling_price' | 'orders' | 'avg' | 'pct';
-type ItemSortKey = 'item_sku_code' | 'item_type_name' | 'channel_name' | 'selling_price' | 'size';
+type ItemSortKey = 'item_sku_code' | 'item_type_name' | 'channel_name' | 'selling_price' | 'size' | 'good_inventory' | 'virtual_inventory';
 type SortDir = 'asc' | 'desc';
 
 /* ── animated counter ────────────────────────────────────────────────── */
@@ -227,7 +227,7 @@ export default function DailySalesReportPage() {
     const lines: string[] = [];
 
     // Header row: item cols + spacer + summary headers are in chRows row 0/1
-    const hdrParts = ['Item SKU Code', 'Item Type Name', 'Size', 'Channel Name', 'Selling Price', ''];
+    const hdrParts = ['Item SKU Code', 'Item Type Name', 'Size', 'Channel Name', 'Selling Price', 'Good Inventory', 'Virtual Inventory', ''];
     if (chRows.length > 0) hdrParts.push(...chRows[0]);
     else hdrParts.push('', '', '', '');
     if (comparison) {
@@ -238,7 +238,7 @@ export default function DailySalesReportPage() {
     lines.push(hdrParts.join(','));
 
     // Sub-header row (Channel/N QTY/Selling Price/AVG)
-    const subParts = ['', '', '', '', '', ''];
+    const subParts = ['', '', '', '', '', '', '', ''];
     if (chRows.length > 1) subParts.push(...chRows[1]);
     else subParts.push('', '', '', '');
     if (comparison) {
@@ -256,9 +256,9 @@ export default function DailySalesReportPage() {
         const it = items[i];
         const name = (it.item_type_name || '').replace(/,/g, ' ');
         const size = (it.size || '').replace(/,/g, ' ');
-        parts.push(it.item_sku_code, name, size, it.channel_name, String(it.selling_price));
+        parts.push(it.item_sku_code, name, size, it.channel_name, String(it.selling_price), it.good_inventory != null ? String(it.good_inventory) : 'N/A', it.virtual_inventory != null ? String(it.virtual_inventory) : 'N/A');
       } else {
-        parts.push('', '', '', '', '');
+        parts.push('', '', '', '', '', '', '');
       }
 
       // Spacer column
@@ -894,6 +894,8 @@ export default function DailySalesReportPage() {
                         { key: 'size' as ItemSortKey, label: 'Size', align: 'left' },
                         { key: 'channel_name' as ItemSortKey, label: 'Channel Name', align: 'left' },
                         { key: 'selling_price' as ItemSortKey, label: 'Selling Price', align: 'right' },
+                        { key: 'good_inventory' as ItemSortKey, label: 'Good Inventory', align: 'right' },
+                        { key: 'virtual_inventory' as ItemSortKey, label: 'Virtual Inventory', align: 'right' },
                       ] as const).map((col) => (
                         <th key={col.key} onClick={() => toggleItemSort(col.key)}
                           className={`px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider cursor-pointer select-none whitespace-nowrap transition hover:text-slate-900 dark:hover:text-white ${col.align === 'left' ? 'text-left' : 'text-right'} text-slate-500 dark:text-slate-400`}>
@@ -912,11 +914,13 @@ export default function DailySalesReportPage() {
                         <td className="px-4 py-2 text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.size || '—'}</td>
                         <td className="px-4 py-2 text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.channel_name}</td>
                         <td className="px-4 py-2 text-right tabular-nums font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">{item.selling_price}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300 whitespace-nowrap">{item.good_inventory != null ? item.good_inventory : <span className="text-slate-400">N/A</span>}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300 whitespace-nowrap">{item.virtual_inventory != null ? item.virtual_inventory : <span className="text-slate-400">N/A</span>}</td>
                       </tr>
                     ))}
                     {paginatedItems.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400">
+                        <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-400">
                           {itemSearch ? 'No items match your search' : 'No item data available'}
                         </td>
                       </tr>
