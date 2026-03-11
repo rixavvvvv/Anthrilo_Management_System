@@ -113,6 +113,7 @@ class UnicommerceService:
         """
         Create a Unicommerce export job for Sale Orders.
         Returns the jobCode on success, None on failure.
+        Retries up to 3 times on transient errors (timeout, 400, 5xx).
         """
         url = f"{self.base_url}/export/job/create"
 
@@ -135,77 +136,94 @@ class UnicommerceService:
             ],
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
-                headers = await self._get_headers()
-                headers["Facility"] = "anthrilo"
-
-                response = await client.post(url, json=payload, headers=headers)
-
-                # Handle 401 - token refresh
-                if response.status_code == 401:
-                    self.token_manager.invalidate_token()
-                    await self.token_manager.get_valid_token()
+        MAX_RETRIES = 3
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
                     headers = await self._get_headers()
                     headers["Facility"] = "anthrilo"
+
                     response = await client.post(url, json=payload, headers=headers)
 
-                # Handle 400 - may be transient; retry once with fresh token
-                if response.status_code == 400:
-                    try:
-                        error_body = response.json()
-                    except Exception:
-                        error_body = response.text[:500]
-                    logger.warning(
-                        f"Export: Job creation HTTP 400 (retrying with fresh token): {error_body}"
-                    )
-                    self.token_manager.invalidate_token()
-                    await self.token_manager.get_valid_token()
-                    headers = await self._get_headers()
-                    headers["Facility"] = "anthrilo"
-                    await asyncio.sleep(2)
-                    response = await client.post(url, json=payload, headers=headers)
+                    # Handle 401 - token refresh
+                    if response.status_code == 401:
+                        self.token_manager.invalidate_token()
+                        await self.token_manager.get_valid_token()
+                        headers = await self._get_headers()
+                        headers["Facility"] = "anthrilo"
+                        response = await client.post(url, json=payload, headers=headers)
+
+                    # Handle 400 - may be transient; retry with fresh token
+                    if response.status_code == 400:
+                        try:
+                            error_body = response.json()
+                        except Exception:
+                            error_body = response.text[:500]
+                        logger.warning(
+                            f"Export: Job creation HTTP 400 attempt {attempt}/{MAX_RETRIES}: {error_body}"
+                        )
+                        if attempt < MAX_RETRIES:
+                            self.token_manager.invalidate_token()
+                            await asyncio.sleep(3 * attempt)
+                            continue
+                        return None
+
+                    # Handle 5xx
+                    if response.status_code >= 500:
+                        logger.warning(
+                            f"Export: Job creation HTTP {response.status_code} attempt {attempt}/{MAX_RETRIES}"
+                        )
+                        if attempt < MAX_RETRIES:
+                            await asyncio.sleep(3 * attempt)
+                            continue
+                        return None
+
+                    # Other errors
                     if response.status_code >= 400:
                         try:
                             error_body = response.json()
                         except Exception:
                             error_body = response.text[:500]
                         logger.error(
-                            f"Export: Job creation retry also failed HTTP {response.status_code}: {error_body}"
+                            f"Export: Job creation HTTP {response.status_code}: {error_body}"
                         )
                         return None
 
-                # Log error response body for debugging
-                elif response.status_code >= 400:
-                    try:
-                        error_body = response.json()
-                    except Exception:
-                        error_body = response.text[:500]
-                    logger.error(
-                        f"Export: Job creation HTTP {response.status_code}: {error_body}"
-                    )
-                    return None
+                    data = response.json()
 
-                data = response.json()
+                    if data.get("successful"):
+                        job_code = data.get("jobCode")
+                        logger.info(f"Export: Job created successfully {job_code}")
+                        return job_code
+                    else:
+                        errors = data.get("errors", [])
+                        msg = data.get("message", "Unknown error")
+                        logger.error(f"Export: Job creation failed: {msg} | errors={errors}")
+                        return None
 
-                if data.get("successful"):
-                    job_code = data.get("jobCode")
-                    logger.info(f"Export: Job created successfully {job_code}")
-                    return job_code
-                else:
-                    errors = data.get("errors", [])
-                    msg = data.get("message", "Unknown error")
-                    logger.error(f"Export: Job creation failed: {msg} | errors={errors}")
-                    return None
+            except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.PoolTimeout) as e:
+                logger.warning(
+                    f"Export: Job creation timeout attempt {attempt}/{MAX_RETRIES}: {type(e).__name__}"
+                )
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(3 * attempt)
+                    continue
+                return None
 
-        except Exception as e:
-            logger.error(f"Export: Job creation exception: {e}", exc_info=True)
-            return None
+            except Exception as e:
+                logger.error(f"Export: Job creation exception: {e}", exc_info=True)
+                return None
+
+        return None
 
     async def _poll_export_status(
         self, job_code: str, max_wait: int = None
     ) -> Optional[str]:
-        """Poll export job until complete; return download URL or None."""
+        """Poll export job until complete; return download URL or None.
+
+        Individual poll requests that timeout or fail are retried — only
+        persistent failures or the overall max_wait budget cause a return None.
+        """
         if max_wait is None:
             max_wait = self.EXPORT_MAX_POLL_SECONDS
 
@@ -216,10 +234,14 @@ class UnicommerceService:
         poll_interval = self.EXPORT_INITIAL_POLL_INTERVAL
         no_filepath_retries = 0
         MAX_NO_FILEPATH_RETRIES = 3
+        consecutive_errors = 0
+        MAX_CONSECUTIVE_ERRORS = 5
 
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
-                while (time_module.time() - start_time) < max_wait:
+        while (time_module.time() - start_time) < max_wait:
+            elapsed = time_module.time() - start_time
+            try:
+                # Fresh client per request avoids stale connection pool issues
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
                     headers = await self._get_headers()
                     headers["Facility"] = "anthrilo"
 
@@ -233,60 +255,86 @@ class UnicommerceService:
                         response = await client.post(url, json=payload, headers=headers)
 
                     response.raise_for_status()
-                    data = response.json()
 
-                    if data.get("successful"):
-                        # UC export status: top-level fields (not nested)
-                        status = data.get("status", "")
-                        file_path = data.get("filePath", "")
+                # Successful request — reset error counter
+                consecutive_errors = 0
+                data = response.json()
 
-                        elapsed = time_module.time() - start_time
+                if data.get("successful"):
+                    status = data.get("status", "")
+                    file_path = data.get("filePath", "")
 
-                        if status == "COMPLETE":
-                            if file_path:
-                                logger.info(
-                                    f"Export: Job {job_code} COMPLETE in {elapsed:.1f}s {file_path}"
-                                )
-                                return file_path
-                            else:
-                                no_filepath_retries += 1
-                                if no_filepath_retries <= MAX_NO_FILEPATH_RETRIES:
-                                    logger.warning(
-                                        f"Export: Job {job_code} COMPLETE but no filePath "
-                                        f"(attempt {no_filepath_retries}/{MAX_NO_FILEPATH_RETRIES}, {elapsed:.1f}s)"
-                                    )
-                                    await asyncio.sleep(5)
-                                    continue
-                                else:
-                                    logger.error(
-                                        f"Export: Job {job_code} COMPLETE but no filePath after "
-                                        f"{MAX_NO_FILEPATH_RETRIES} retries ({elapsed:.1f}s)"
-                                    )
-                                    return None
-                        elif status in ("FAILED", "CANCELLED"):
-                            logger.error(
-                                f"Export: Job {job_code} {status} after {elapsed:.1f}s"
+                    if status == "COMPLETE":
+                        if file_path:
+                            logger.info(
+                                f"Export: Job {job_code} COMPLETE in {elapsed:.1f}s {file_path}"
                             )
-                            return None
+                            return file_path
                         else:
-                            logger.debug(
-                                f"Export: Job {job_code} status={status}, "
-                                f"elapsed={elapsed:.1f}s, next poll in {poll_interval:.1f}s"
-                            )
-                    else:
-                        logger.warning(
-                            f"Export: Status check not successful: {data.get('message', '')}"
+                            no_filepath_retries += 1
+                            if no_filepath_retries <= MAX_NO_FILEPATH_RETRIES:
+                                logger.warning(
+                                    f"Export: Job {job_code} COMPLETE but no filePath "
+                                    f"(attempt {no_filepath_retries}/{MAX_NO_FILEPATH_RETRIES}, {elapsed:.1f}s)"
+                                )
+                                await asyncio.sleep(5)
+                                continue
+                            else:
+                                logger.error(
+                                    f"Export: Job {job_code} COMPLETE but no filePath after "
+                                    f"{MAX_NO_FILEPATH_RETRIES} retries ({elapsed:.1f}s)"
+                                )
+                                return None
+                    elif status in ("FAILED", "CANCELLED"):
+                        logger.error(
+                            f"Export: Job {job_code} {status} after {elapsed:.1f}s"
                         )
-
-                    await asyncio.sleep(poll_interval)
-                    poll_interval = min(
-                        poll_interval * self.EXPORT_POLL_BACKOFF,
-                        self.EXPORT_MAX_POLL_INTERVAL,
+                        return None
+                    else:
+                        logger.debug(
+                            f"Export: Job {job_code} status={status}, "
+                            f"elapsed={elapsed:.1f}s, next poll in {poll_interval:.1f}s"
+                        )
+                else:
+                    logger.warning(
+                        f"Export: Status check not successful: {data.get('message', '')}"
                     )
 
-        except Exception as e:
-            logger.error(f"Export: Polling exception: {e}", exc_info=True)
-            return None
+            except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.PoolTimeout) as e:
+                consecutive_errors += 1
+                logger.warning(
+                    f"Export: Poll timeout for {job_code} ({consecutive_errors}/{MAX_CONSECUTIVE_ERRORS}, "
+                    f"{elapsed:.0f}s elapsed): {type(e).__name__}"
+                )
+                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                    logger.error(
+                        f"Export: Job {job_code} — {MAX_CONSECUTIVE_ERRORS} consecutive "
+                        f"timeouts, giving up after {elapsed:.0f}s"
+                    )
+                    return None
+                # Wait longer after a timeout before retrying
+                await asyncio.sleep(poll_interval * 2)
+                continue
+
+            except Exception as e:
+                consecutive_errors += 1
+                logger.warning(
+                    f"Export: Poll error for {job_code} ({consecutive_errors}/{MAX_CONSECUTIVE_ERRORS}): {e}"
+                )
+                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                    logger.error(
+                        f"Export: Job {job_code} — {MAX_CONSECUTIVE_ERRORS} consecutive "
+                        f"errors, giving up after {elapsed:.0f}s"
+                    )
+                    return None
+                await asyncio.sleep(poll_interval)
+                continue
+
+            await asyncio.sleep(poll_interval)
+            poll_interval = min(
+                poll_interval * self.EXPORT_POLL_BACKOFF,
+                self.EXPORT_MAX_POLL_INTERVAL,
+            )
 
         elapsed = time_module.time() - start_time
         logger.error(f"Export: Job {job_code} timed out after {elapsed:.0f}s")
@@ -944,7 +992,7 @@ class UnicommerceService:
         }
 
     MAX_CHUNK_DAYS = 15  # Smaller chunks = faster UC export generation
-    MAX_CONCURRENT_CHUNKS = 3  # Process up to 3 chunks in parallel
+    MAX_CONCURRENT_CHUNKS = 2  # Process up to 2 chunks in parallel (avoids UC rate limits)
 
     def _split_date_range(
         self, from_date: datetime, to_date: datetime
@@ -1028,6 +1076,9 @@ class UnicommerceService:
                 async def _process_chunk(idx: int, c_from: datetime, c_to: datetime) -> Tuple[int, List[Dict], float, bool]:
                     """Process a single chunk under the semaphore."""
                     async with semaphore:
+                        # Stagger start to avoid hitting UC simultaneously
+                        if idx > 0:
+                            await asyncio.sleep(2)
                         logger.info(
                             f"  Chunk {idx + 1}/{len(chunks)}: "
                             f"{c_from.strftime('%Y-%m-%d')} -> {c_to.strftime('%Y-%m-%d')}"
