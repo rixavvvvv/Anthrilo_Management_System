@@ -1258,6 +1258,110 @@ class UnicommerceService:
         """Get sales for custom date range"""
         return await self.get_sales_data(from_date, to_date, "custom")
 
+    # ── Inventory Snapshot ─────────────────────────────────────────────
+
+    async def get_inventory_snapshot(
+        self, item_skus: List[str], facility_code: str = "anthrilo"
+    ) -> Dict[str, Dict[str, int]]:
+        """
+        Fetch current inventory snapshot for a list of SKUs.
+
+        Returns a dict keyed by SKU with good_inventory and virtual_inventory.
+        Unicommerce API: POST /inventory/inventorySnapshot/get
+        Batches in groups of 100 to avoid payload limits.
+        """
+        if not item_skus:
+            return {}
+
+        BATCH_SIZE = 100
+        url = f"{self.base_url}/inventory/inventorySnapshot/get"
+        result: Dict[str, Dict[str, int]] = {}
+
+        unique_skus = list(set(item_skus))
+        batches = [
+            unique_skus[i:i + BATCH_SIZE]
+            for i in range(0, len(unique_skus), BATCH_SIZE)
+        ]
+
+        logger.info(
+            f"Inventory: Fetching snapshot for {len(unique_skus)} unique SKUs "
+            f"in {len(batches)} batches"
+        )
+
+        for batch_idx, batch in enumerate(batches):
+            payload = {
+                "itemTypeSKUs": batch,
+            }
+
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    headers = await self._get_headers()
+                    headers["Facility"] = facility_code
+
+                    response = await client.post(url, json=payload, headers=headers)
+
+                    if response.status_code == 401:
+                        self.token_manager.invalidate_token()
+                        await self.token_manager.get_valid_token()
+                        headers = await self._get_headers()
+                        headers["Facility"] = facility_code
+                        response = await client.post(url, json=payload, headers=headers)
+
+                    if response.status_code != 200:
+                        logger.warning(
+                            f"Inventory: Batch {batch_idx + 1}/{len(batches)} "
+                            f"HTTP {response.status_code}"
+                        )
+                        continue
+
+                    data = response.json()
+
+                    if not data.get("successful"):
+                        logger.warning(
+                            f"Inventory: Batch {batch_idx + 1} not successful: "
+                            f"{data.get('message', '')}"
+                        )
+                        continue
+
+                    snapshots = data.get("inventorySnapshots", [])
+                    for snap in snapshots:
+                        sku = snap.get("itemTypeSKU", "")
+                        if not sku:
+                            continue
+                        inventory = snap.get("inventory", 0)
+                        virtual_inv = snap.get("virtualInventory", 0)
+                        # inventory = total physical available (good) inventory
+                        # virtualInventory = stock available for sale across channels
+                        result[sku] = {
+                            "good_inventory": int(inventory) if inventory else 0,
+                            "virtual_inventory": int(virtual_inv) if virtual_inv else 0,
+                        }
+
+                    logger.info(
+                        f"Inventory: Batch {batch_idx + 1}/{len(batches)} "
+                        f"got {len(snapshots)} snapshots"
+                    )
+
+            except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.PoolTimeout) as e:
+                logger.warning(
+                    f"Inventory: Batch {batch_idx + 1} timeout: {type(e).__name__}"
+                )
+                continue
+            except Exception as e:
+                logger.warning(
+                    f"Inventory: Batch {batch_idx + 1} error: {e}"
+                )
+                continue
+
+            # Brief delay between batches
+            if batch_idx < len(batches) - 1:
+                await asyncio.sleep(0.5)
+
+        logger.info(
+            f"Inventory: Got data for {len(result)}/{len(unique_skus)} SKUs"
+        )
+        return result
+
 
     async def get_today_orders_paginated(
         self, page: int = 1, page_size: int = 12

@@ -390,6 +390,22 @@ async def get_daily_sales_report(
         # Sort items by channel then SKU
         items_detail.sort(key=lambda x: (x["channel_name"], x["item_sku_code"]))
 
+        # ── Fetch inventory snapshot for all unique SKUs ──
+        unique_skus = list(set(item["item_sku_code"] for item in items_detail if item["item_sku_code"]))
+        inventory_map = {}
+        try:
+            if unique_skus:
+                inventory_map = await service.get_inventory_snapshot(unique_skus)
+        except Exception as inv_err:
+            logger.warning(f"Could not fetch inventory data: {inv_err}")
+
+        # Attach inventory data to each item
+        for item in items_detail:
+            sku = item["item_sku_code"]
+            inv = inventory_map.get(sku, {})
+            item["good_inventory"] = inv.get("good_inventory", None)
+            item["virtual_inventory"] = inv.get("virtual_inventory", None)
+
         # ── Fetch comparison data (previous day / period) ──
         comparison = None
         try:
