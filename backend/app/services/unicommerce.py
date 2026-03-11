@@ -56,6 +56,7 @@ class UnicommerceService:
         "totalPrice",
         "channelProductId",
         "itemDetails",
+        "itemTypeName",
         "category",
     ]
 
@@ -440,10 +441,36 @@ class UnicommerceService:
                     or ""
                 ).strip()
 
+                item_type_name = (
+                    row.get("Item Type Name")
+                    or row.get("itemTypeName")
+                    or ""
+                ).strip()
+
+                size = (
+                    row.get("Size")
+                    or row.get("size")
+                    or ""
+                ).strip()
+
+                # Parse size from item type name if not in a dedicated column
+                # Handles: "SET - AQUA - 12-14 YEARS", "DRESS - OFF WHITE - 6-12 MONTHS"
+                resolved_name = item_type_name or item_details or sku_code
+                if not size and resolved_name:
+                    size_match = re.search(
+                        r'[\s\-]*(\d+(?:\s*-\s*\d+)?\s*(?:YEARS|MONTHS|YRS|MOS|Y|M))\s*$',
+                        resolved_name, re.IGNORECASE,
+                    )
+                    if size_match:
+                        size = size_match.group(1).strip()
+                        resolved_name = resolved_name[:size_match.start()].rstrip(' -')
+
                 item = {
                     "code": item_code,
                     "itemSku": sku_code,
                     "itemName": item_details or sku_code,
+                    "itemTypeName": resolved_name,
+                    "size": size,
                     "sellingPrice": selling_price,
                     "maxRetailPrice": mrp,
                     "quantity": 1,  # Each CSV row = 1 unit
