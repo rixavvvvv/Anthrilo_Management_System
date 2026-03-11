@@ -76,6 +76,9 @@ class UnicommerceService:
         # In-memory cache
         self._cache: Dict[str, Tuple[datetime, Any]] = {}
 
+        # Serialize export job creation — UC allows only one at a time
+        self._export_lock = asyncio.Lock()
+
         logger.info(
             f"UnicommerceService v3 initialized | "
             f"Tenant: {self.tenant} | "
@@ -115,6 +118,8 @@ class UnicommerceService:
         Create a Unicommerce export job for Sale Orders.
         Returns the jobCode on success, None on failure.
         Retries up to 3 times on transient errors (timeout, 400, 5xx).
+        If UC reports a duplicate job (error 100014), offset the date range
+        slightly and retry so UC treats it as a new configuration.
         """
         url = f"{self.base_url}/export/job/create"
 
@@ -122,20 +127,23 @@ class UnicommerceService:
         start_ms = int(from_date.timestamp() * 1000)
         end_ms = int(to_date.timestamp() * 1000)
 
-        payload = {
-            "exportJobTypeName": "Sale Orders",
-            "frequency": "ONETIME",
-            "exportColums": self.EXPORT_COLUMNS,
-            "exportFilters": [
-                {
-                    "id": "addedOn",
-                    "dateRange": {
-                        "start": start_ms,
-                        "end": end_ms,
-                    },
-                }
-            ],
-        }
+        def _build_payload(s_ms: int, e_ms: int) -> dict:
+            return {
+                "exportJobTypeName": "Sale Orders",
+                "frequency": "ONETIME",
+                "exportColums": self.EXPORT_COLUMNS,
+                "exportFilters": [
+                    {
+                        "id": "addedOn",
+                        "dateRange": {
+                            "start": s_ms,
+                            "end": e_ms,
+                        },
+                    }
+                ],
+            }
+
+        payload = _build_payload(start_ms, end_ms)
 
         MAX_RETRIES = 3
         for attempt in range(1, MAX_RETRIES + 1):
@@ -199,6 +207,36 @@ class UnicommerceService:
                     else:
                         errors = data.get("errors", [])
                         msg = data.get("message", "Unknown error")
+
+                        # UC error 100014: an export job is already running
+                        already_running = any(
+                            str(e.get("code", "")) == "100014"
+                            or "already" in str(e.get("description", "")).lower()
+                            for e in errors
+                        ) if errors else "already" in msg.lower()
+
+                        if already_running:
+                            logger.warning(
+                                f"Export: Duplicate job detected (100014), offsetting date range to bypass"
+                            )
+                            # Offset start_ms by 1ms each retry to create a "new" configuration
+                            for retry in range(5):
+                                offset_start = start_ms + retry + 1
+                                new_payload = _build_payload(offset_start, end_ms)
+                                await asyncio.sleep(2)
+                                headers = await self._get_headers()
+                                headers["Facility"] = "anthrilo"
+                                retry_resp = await client.post(url, json=new_payload, headers=headers)
+                                retry_data = retry_resp.json()
+                                if retry_data.get("successful"):
+                                    jc = retry_data.get("jobCode")
+                                    logger.info(f"Export: Job created on offset retry {retry+1}: {jc}")
+                                    return jc
+                                r_errors = retry_data.get("errors", [])
+                                logger.info(f"Export: Offset retry {retry+1}/5 — {r_errors}")
+                            logger.error("Export: Job still busy after all retries")
+                            return None
+
                         logger.error(f"Export: Job creation failed: {msg} | errors={errors}")
                         return None
 
@@ -548,7 +586,14 @@ class UnicommerceService:
     async def fetch_orders_via_export(
         self, from_date: datetime, to_date: datetime
     ) -> Dict[str, Any]:
-        """Fetch orders via export job API (only method used)."""
+        """Fetch orders via export job API (serialized with lock)."""
+        async with self._export_lock:
+            return await self._fetch_orders_via_export_inner(from_date, to_date)
+
+    async def _fetch_orders_via_export_inner(
+        self, from_date: datetime, to_date: datetime
+    ) -> Dict[str, Any]:
+        """Inner export fetch — runs under _export_lock."""
         start_time = time_module.time()
         logger.info("Starting export job fetch")
         logger.info(f"  Range: {from_date.isoformat()} {to_date.isoformat()}")
