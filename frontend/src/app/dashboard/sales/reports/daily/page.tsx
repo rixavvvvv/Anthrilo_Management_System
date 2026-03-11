@@ -54,7 +54,7 @@ const ITEMS_PER_PAGE = 50;
 
 type ReportMode = 'daily' | 'monthly' | 'custom';
 type SortKey = 'channel_name' | 'quantity' | 'selling_price' | 'orders' | 'avg' | 'pct';
-type ItemSortKey = 'item_sku_code' | 'item_type_name' | 'channel_name' | 'selling_price';
+type ItemSortKey = 'item_sku_code' | 'item_type_name' | 'channel_name' | 'selling_price' | 'size';
 type SortDir = 'asc' | 'desc';
 
 /* ── animated counter ────────────────────────────────────────────────── */
@@ -157,6 +157,34 @@ export default function DailySalesReportPage() {
 
   const handleGenerate = useCallback(() => { setShowReport(true); refetch(); }, [refetch]);
 
+  /* ── Estimated loading progress ─────────────────────────────────── */
+  const [loadProgress, setLoadProgress] = useState(0);
+  useEffect(() => {
+    if (!isLoading) { setLoadProgress(0); return; }
+    // Estimate total time based on date range
+    let totalDays = 1;
+    if (mode === 'monthly') {
+      totalDays = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+    } else if (mode === 'custom') {
+      const d0 = new Date(customFrom);
+      const d1 = new Date(customTo);
+      totalDays = Math.max(1, Math.ceil((d1.getTime() - d0.getTime()) / 86400000) + 1);
+    }
+    const chunks = Math.ceil(totalDays / 15);
+    // ~10s per chunk, minimum 12s for single-day
+    const estimatedMs = Math.max(12000, chunks * 10000);
+    const startTime = Date.now();
+    const tick = () => {
+      const elapsed = Date.now() - startTime;
+      // Asymptotic curve: reaches ~95% at estimated time, never 100% until done
+      const pct = Math.min(95, (elapsed / estimatedMs) * 90 + (elapsed > estimatedMs ? 5 * (1 - Math.exp(-(elapsed - estimatedMs) / 30000)) : 0));
+      setLoadProgress(Math.round(pct));
+    };
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [isLoading, mode, customFrom, customTo, selectedMonth, selectedYear]);
+
   /* ── CSV download (item-level + channel summary + comparison on right side) */
   const handleCSV = useCallback(() => {
     if (!raw) return;
@@ -199,7 +227,7 @@ export default function DailySalesReportPage() {
     const lines: string[] = [];
 
     // Header row: item cols + spacer + summary headers are in chRows row 0/1
-    const hdrParts = ['Item SKU Code', 'Item Type Name', 'Channel Name', 'Selling Price', ''];
+    const hdrParts = ['Item SKU Code', 'Item Type Name', 'Size', 'Channel Name', 'Selling Price', ''];
     if (chRows.length > 0) hdrParts.push(...chRows[0]);
     else hdrParts.push('', '', '', '');
     if (comparison) {
@@ -210,7 +238,7 @@ export default function DailySalesReportPage() {
     lines.push(hdrParts.join(','));
 
     // Sub-header row (Channel/N QTY/Selling Price/AVG)
-    const subParts = ['', '', '', '', ''];
+    const subParts = ['', '', '', '', '', ''];
     if (chRows.length > 1) subParts.push(...chRows[1]);
     else subParts.push('', '', '', '');
     if (comparison) {
@@ -227,9 +255,10 @@ export default function DailySalesReportPage() {
       if (i < items.length) {
         const it = items[i];
         const name = (it.item_type_name || '').replace(/,/g, ' ');
-        parts.push(it.item_sku_code, name, it.channel_name, String(it.selling_price));
+        const size = (it.size || '').replace(/,/g, ' ');
+        parts.push(it.item_sku_code, name, size, it.channel_name, String(it.selling_price));
       } else {
-        parts.push('', '', '', '');
+        parts.push('', '', '', '', '');
       }
 
       // Spacer column
@@ -337,6 +366,7 @@ export default function DailySalesReportPage() {
       filtered = items.filter((it: any) =>
         (it.item_sku_code || '').toLowerCase().includes(q) ||
         (it.item_type_name || '').toLowerCase().includes(q) ||
+        (it.size || '').toLowerCase().includes(q) ||
         (it.channel_name || '').toLowerCase().includes(q)
       );
     }
@@ -578,9 +608,23 @@ export default function DailySalesReportPage() {
       <AnimatePresence>
         {isLoading && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-10 flex flex-col items-center gap-3">
+            className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-10 flex flex-col items-center gap-4">
             <div className="h-10 w-10 rounded-full border-[3px] border-blue-500 border-t-transparent animate-spin" />
             <p className="text-sm text-slate-500 dark:text-slate-400">Fetching sales data for {dateLabel}…</p>
+            <div className="w-full max-w-xs">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium text-blue-600 dark:text-blue-400">{loadProgress}%</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500">Estimated</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${loadProgress}%` }}
+                  transition={{ duration: 0.4, ease: 'easeOut' }}
+                />
+              </div>
+            </div>
             <p className="text-[11px] text-slate-400 dark:text-slate-500">Large date ranges may take a few minutes</p>
           </motion.div>
         )}
@@ -847,6 +891,7 @@ export default function DailySalesReportPage() {
                       {([
                         { key: 'item_sku_code' as ItemSortKey, label: 'Item SKU Code', align: 'left' },
                         { key: 'item_type_name' as ItemSortKey, label: 'Item Type Name', align: 'left' },
+                        { key: 'size' as ItemSortKey, label: 'Size', align: 'left' },
                         { key: 'channel_name' as ItemSortKey, label: 'Channel Name', align: 'left' },
                         { key: 'selling_price' as ItemSortKey, label: 'Selling Price', align: 'right' },
                       ] as const).map((col) => (
@@ -864,13 +909,14 @@ export default function DailySalesReportPage() {
                       <tr key={(itemPage - 1) * ITEMS_PER_PAGE + idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition">
                         <td className="px-4 py-2 text-slate-700 dark:text-slate-300 font-mono text-xs whitespace-nowrap">{item.item_sku_code}</td>
                         <td className="px-4 py-2 text-slate-800 dark:text-slate-200 max-w-[400px] truncate">{item.item_type_name}</td>
+                        <td className="px-4 py-2 text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.size || '—'}</td>
                         <td className="px-4 py-2 text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.channel_name}</td>
                         <td className="px-4 py-2 text-right tabular-nums font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">{item.selling_price}</td>
                       </tr>
                     ))}
                     {paginatedItems.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-400">
+                        <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400">
                           {itemSearch ? 'No items match your search' : 'No item data available'}
                         </td>
                       </tr>

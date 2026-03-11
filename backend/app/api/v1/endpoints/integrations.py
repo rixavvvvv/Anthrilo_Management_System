@@ -382,7 +382,8 @@ async def get_daily_sales_report(
                     pass
                 items_detail.append({
                     "item_sku_code": item.get("itemSku", ""),
-                    "item_type_name": item.get("itemName", ""),
+                    "item_type_name": item.get("itemTypeName", ""),
+                    "size": item.get("size", ""),
                     "channel_name": channel,
                     "selling_price": round(selling_price, 2),
                 })
