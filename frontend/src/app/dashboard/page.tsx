@@ -64,8 +64,6 @@ export default function DashboardPage() {
     refetchInterval: 5 * 60 * 1000,
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
   });
 
   const { data: yesterdayData, isLoading: loadingYesterday } = useQuery({
@@ -73,27 +71,26 @@ export default function DashboardPage() {
     queryFn: async () => (await ucSales.getYesterday()).data,
     refetchInterval: 10 * 60 * 1000,
     staleTime: 5 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
+    enabled: !loadingToday,
   });
 
+  // Delay last-7-days until today finishes to avoid concurrent UC export jobs
   const { data: last7Days, isLoading: loading7d } = useQuery({
     queryKey: ['unicommerce-last-7-days'],
     queryFn: async () => (await ucSales.getLast7Days()).data,
     refetchInterval: 30 * 60 * 1000,
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
     placeholderData: (prev: any) => prev,
+    enabled: !loadingToday,
   });
 
+  // Delay channels until last-7-days finishes (uses same backend data)
   const { data: channelData } = useQuery({
     queryKey: ['unicommerce-channels'],
     queryFn: async () => (await ucSales.getChannelRevenue('last_7_days')).data,
     staleTime: 5 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
+    enabled: !loading7d,
   });
 
   // -- Derived Values --
