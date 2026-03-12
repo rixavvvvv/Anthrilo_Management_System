@@ -4,7 +4,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { Column } from '@/components/ui/DataTable';
-import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
+import { PageHeader, ProgressLoader, StatCard } from '@/components/ui/Common';
 
 const PAGE_SIZE = 20;
 
@@ -280,9 +280,14 @@ export default function BundleSkuPage() {
             <span className="ml-2 text-xs text-slate-400">(click a row to see components)</span>
           </span>
         </div>
-        {isLoading || isFetching ? (
-          <LoadingSpinner message="Fetching bundle catalog from Unicommerce..." />
-        ) : paginated.length === 0 ? (
+        <ProgressLoader loading={isLoading || isFetching} stages={[
+          { at: 0, label: 'Connecting to Unicommerce…' },
+          { at: 15, label: 'Fetching item master…' },
+          { at: 40, label: 'Identifying bundle SKUs…' },
+          { at: 70, label: 'Resolving components…' },
+          { at: 90, label: 'Finalizing…' },
+        ]} />
+        {isLoading || isFetching ? null : paginated.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-sm text-slate-500 dark:text-slate-400">No bundle SKUs match the current filters.</p>
           </div>

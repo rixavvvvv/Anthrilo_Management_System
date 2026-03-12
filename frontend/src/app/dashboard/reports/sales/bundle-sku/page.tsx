@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
-import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
+import { PageHeader, ProgressLoader, StatCard } from '@/components/ui/Common';
 
 const PAGE_SIZE = 12;
 
@@ -119,9 +119,13 @@ export default function SKUSalesPage() {
           <h2 className="text-slate-900 dark:text-white">SKU Sales Breakdown</h2>
           <span className="text-sm text-slate-500 dark:text-slate-400">{filtered.length} SKUs</span>
         </div>
-        {isLoading ? (
-          <LoadingSpinner message="Fetching SKU sales from Anthrilo..." />
-        ) : (
+        <ProgressLoader loading={isLoading} stages={[
+          { at: 0, label: 'Connecting to Unicommerce…' },
+          { at: 25, label: 'Fetching SKU sales…' },
+          { at: 60, label: 'Building breakdown…' },
+          { at: 85, label: 'Finalizing…' },
+        ]} />
+        {!isLoading && (
           <DataTable data={paginated} columns={columns} emptyMessage="No SKU sales data for this period." />
         )}
       </div>

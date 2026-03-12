@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { rawMaterialsReports } from '@/lib/api/reports';
 import { DataTable, Column } from '@/components/ui/DataTable';
-import { PageHeader, LoadingSpinner, StatCard, ErrorPanel } from '@/components/ui/Common';
+import { PageHeader, ProgressLoader, StatCard, ErrorPanel } from '@/components/ui/Common';
  
 export default function YarnForecastingPage() {
   const [forecastDays, setForecastDays] = useState(30);
@@ -177,9 +177,13 @@ export default function YarnForecastingPage() {
         <h2 className="mb-4 text-gray-900 dark:text-gray-100 text-lg font-semibold">
           Yarn Forecast — {forecastDays} Day Window
         </h2>
-        {isLoading ? (
-          <LoadingSpinner message="Calculating demand forecasts..." />
-        ) : (
+        <ProgressLoader loading={isLoading} stages={[
+          { at: 0, label: 'Connecting to Unicommerce…' },
+          { at: 20, label: 'Fetching sales history…' },
+          { at: 50, label: 'Calculating demand forecasts…' },
+          { at: 80, label: 'Finalizing…' },
+        ]} />
+        {!isLoading && (
           <DataTable data={items} columns={columns} emptyMessage="No yarn data available for forecasting." />
         )}
       </div>

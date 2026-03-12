@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
-import { PageHeader, LoadingSpinner } from '@/components/ui/Common';
+import { PageHeader, ProgressLoader } from '@/components/ui/Common';
 import { DataTable, Column } from '@/components/ui/DataTable';
 
 type FilterMode = 'monthly' | 'custom';
@@ -230,9 +230,14 @@ export default function FabricPage() {
                         )}
                     </div>
                 </div>
-                {isLoading || isRefreshing ? (
-                    <LoadingSpinner message="Fetching fabric data... (this may take a few minutes on first load)" />
-                ) : (
+                <ProgressLoader loading={isLoading || isRefreshing} stages={[
+                    { at: 0, label: 'Initializing export job…' },
+                    { at: 15, label: 'Fetching fabric orders…' },
+                    { at: 40, label: 'Parsing sale order items…' },
+                    { at: 70, label: 'Building fabric report…' },
+                    { at: 90, label: 'Finalizing…' },
+                ]} />
+                {!(isLoading || isRefreshing) && (
                     <>
                         <DataTable
                             data={paginatedItems}

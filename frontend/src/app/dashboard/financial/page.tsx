@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { adsApi } from '@/lib/api/ads';
-import { PageHeader, LoadingSpinner, ErrorPanel } from '@/components/ui/Common';
+import { PageHeader, ProgressLoader, ErrorPanel } from '@/components/ui/Common';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
@@ -98,7 +98,13 @@ export default function FinancialPage() {
     <div className="space-y-6">
       <PageHeader title="Financial Management" description="Revenue analytics, discounts, advertising, and profitability" />
 
-      {isLoading ? <LoadingSpinner message="Loading financial data..." /> : (
+      <ProgressLoader loading={isLoading} stages={[
+          { at: 0, label: 'Connecting to Unicommerce…' },
+          { at: 20, label: 'Fetching financial data…' },
+          { at: 50, label: 'Aggregating metrics…' },
+          { at: 80, label: 'Almost done…' },
+      ]} />
+      {!isLoading && (
         <>
           {/* KPI Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

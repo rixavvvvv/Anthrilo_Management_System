@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { adsApi } from '@/lib/api/ads';
-import { PageHeader, LoadingSpinner, ErrorPanel, EmptyState } from '@/components/ui/Common';
+import { PageHeader, ProgressLoader, ErrorPanel, EmptyState } from '@/components/ui/Common';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { motion } from 'framer-motion';
 import {
@@ -124,7 +124,13 @@ export default function ROIAnalysisPage() {
     <div className="space-y-5">
       <PageHeader title="ROI Analysis" description="Ad spend vs revenue, ROAS, and profitability across channels" />
 
-      {isLoading ? <LoadingSpinner message="Calculating ROI metrics..." /> : (
+      <ProgressLoader loading={isLoading} stages={[
+        { at: 0, label: 'Connecting to data sources…' },
+        { at: 25, label: 'Fetching ad spend & revenue…' },
+        { at: 55, label: 'Calculating ROI metrics…' },
+        { at: 85, label: 'Finalizing…' },
+      ]} />
+      {!isLoading && (
         <>
           {/* KPI Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

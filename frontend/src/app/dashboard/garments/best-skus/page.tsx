@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { unicommerceApi } from '@/lib/api';
-import { PageHeader, LoadingSpinner } from '@/components/ui/Common';
+import { PageHeader, ProgressLoader } from '@/components/ui/Common';
 import { DataTable, Column } from '@/components/ui/DataTable';
 
 export default function BestSkusPage() {
@@ -210,9 +210,14 @@ export default function BestSkusPage() {
                         )}
                     </div>
                 </div>
-                {isLoading || isRefreshing ? (
-                    <LoadingSpinner message="Fetching monthly sales data from all channels... (this may take a few minutes on first load)" />
-                ) : (
+                <ProgressLoader loading={isLoading || isRefreshing} stages={[
+                    { at: 0, label: 'Initializing export job…' },
+                    { at: 15, label: 'Fetching orders from all channels…' },
+                    { at: 40, label: 'Calculating revenue per SKU…' },
+                    { at: 70, label: 'Ranking top sellers…' },
+                    { at: 90, label: 'Finalizing…' },
+                ]} />
+                {!(isLoading || isRefreshing) && (
                     <DataTable
                         data={skus}
                         columns={columns}

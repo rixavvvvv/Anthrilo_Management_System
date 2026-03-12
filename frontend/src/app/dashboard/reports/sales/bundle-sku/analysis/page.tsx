@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
-import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
+import { PageHeader, ProgressLoader, StatCard } from '@/components/ui/Common';
 import { ChartCard } from '@/components/dashboard';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -272,9 +272,13 @@ export default function BundleSalesAnalysisPage() {
       </div>
 
       {/* ── Loading / Error ── */}
-      {(isLoading || isFetching) && (
-        <LoadingSpinner message="Analysing bundle sales — fetching orders & matching components…" />
-      )}
+      <ProgressLoader loading={isLoading || isFetching} stages={[
+        { at: 0, label: 'Initializing export job…' },
+        { at: 15, label: 'Fetching orders…' },
+        { at: 40, label: 'Matching components to bundles…' },
+        { at: 70, label: 'Calculating revenue attribution…' },
+        { at: 90, label: 'Finalizing…' },
+      ]} />
 
       {error && (
         <div className="card bg-rose-50 dark:bg-rose-900/20 mb-6">

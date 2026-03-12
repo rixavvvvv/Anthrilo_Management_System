@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
-import { PageHeader, LoadingSpinner } from '@/components/ui/Common';
+import { PageHeader, ProgressLoader } from '@/components/ui/Common';
 
 export default function ChannelRevenuePage() {
   const [period, setPeriod] = useState('last_7_days');
@@ -104,9 +104,13 @@ export default function ChannelRevenuePage() {
 
       <div className="card">
         <h2 className="mb-4 text-gray-900 dark:text-gray-100">Channel Settlement Details</h2>
-        {isLoading ? (
-          <LoadingSpinner message="Fetching channel revenue from Anthrilo..." />
-        ) : (
+        <ProgressLoader loading={isLoading} stages={[
+          { at: 0, label: 'Connecting to Unicommerce…' },
+          { at: 25, label: 'Fetching channel revenue…' },
+          { at: 60, label: 'Building report…' },
+          { at: 85, label: 'Finalizing…' },
+        ]} />
+        {!isLoading && (
           <DataTable data={channels} columns={columns} emptyMessage="No channel revenue data for this period." />
         )}
       </div>
