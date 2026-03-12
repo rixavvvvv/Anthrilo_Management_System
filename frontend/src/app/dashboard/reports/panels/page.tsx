@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
-import { PageHeader, LoadingSpinner, StatCard } from '@/components/ui/Common';
+import { PageHeader, ProgressLoader, StatCard } from '@/components/ui/Common';
 import Link from 'next/link';
 
 export default function PanelReportsPage() {
@@ -114,9 +114,13 @@ export default function PanelReportsPage() {
             {/* Channel Table */}
             <div className="card">
                 <h2 className="mb-4 text-gray-900 dark:text-gray-100">Channel Performance — {periodLabels[period] || period}</h2>
-                {isLoading ? (
-                    <LoadingSpinner message="Fetching channel data from Anthrilo..." />
-                ) : (
+                <ProgressLoader loading={isLoading} stages={[
+                    { at: 0, label: 'Connecting to Unicommerce…' },
+                    { at: 25, label: 'Fetching channel data…' },
+                    { at: 60, label: 'Building report…' },
+                    { at: 85, label: 'Finalizing…' },
+                ]} />
+                {!isLoading && (
                     <DataTable data={channels} columns={columns} emptyMessage="No channel data available for this period." />
                 )}
             </div>

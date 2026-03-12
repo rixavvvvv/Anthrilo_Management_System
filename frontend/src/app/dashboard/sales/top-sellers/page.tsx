@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
-import { PageHeader, LoadingSpinner, StatCard, ErrorPanel } from '@/components/ui/Common';
+import { PageHeader, ProgressLoader, StatCard, ErrorPanel } from '@/components/ui/Common';
 
 export default function TopSellersPage() {
   const [period, setPeriod] = useState('last_7_days');
@@ -119,9 +119,13 @@ export default function TopSellersPage() {
 
       <div className="card">
         <h2 className="mb-4 text-gray-900 dark:text-gray-100">Top 50 by Units Sold</h2>
-        {isLoading ? (
-          <LoadingSpinner message="Fetching sales data from Unicommerce..." />
-        ) : (
+        <ProgressLoader loading={isLoading} stages={[
+          { at: 0, label: 'Connecting to Unicommerce…' },
+          { at: 20, label: 'Fetching sales data…' },
+          { at: 50, label: 'Ranking top sellers…' },
+          { at: 80, label: 'Finalizing…' },
+        ]} />
+        {!isLoading && (
           <DataTable data={rankedData} columns={columns} emptyMessage="No sales data for this period." />
         )}
       </div>

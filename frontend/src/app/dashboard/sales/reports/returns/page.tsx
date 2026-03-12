@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ProgressLoader } from '@/components/ui/Common';
 import {
   Calendar, Download, BarChart3, TrendingUp, TrendingDown, AlertTriangle,
   ArrowUpDown, ArrowUp, ArrowDown, Search, Flame, ShieldAlert,
@@ -299,15 +300,13 @@ export default function DailyReturnReportPage() {
       </div>
 
       {/* ─── Loading ─────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {isLoading && (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-10 flex flex-col items-center gap-3">
-            <div className="h-10 w-10 rounded-full border-[3px] border-violet-500 border-t-transparent animate-spin" />
-            <p className="text-sm text-slate-500 dark:text-slate-400">Analysing return data for {dateLabel}…</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ProgressLoader loading={isLoading} stages={[
+        { at: 0, label: 'Initializing export job…' },
+        { at: 15, label: 'Fetching return orders…' },
+        { at: 40, label: 'Classifying RTO vs CIR…' },
+        { at: 70, label: 'Building channel breakdown…' },
+        { at: 90, label: 'Finalizing…' },
+      ]} />
 
       {/* ─── Error ───────────────────────────────────────────────── */}
       {showReport && raw && !raw.success && !isLoading && (

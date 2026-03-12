@@ -37,7 +37,7 @@ const REPORTS: ReportDef[] = [
   // ── Sales ──────────────────────────────────
   {
     id: 'daily-sales',
-    title: 'Channel Wise Sales Report',
+    title: 'Sales Report',
     description: 'Channel-wise revenue breakdown & CSV export',
     href: '/dashboard/sales/reports/daily',
     icon: BarChart3,
@@ -123,6 +123,17 @@ const REPORTS: ReportDef[] = [
     category: 'Sales',
     frequency: 'Daily',
     badge: 'Popular',
+    popular: true,
+  },
+  {
+    id: 'sales-activity',
+    title: 'Sales Activity',
+    description: 'SKU movement, stock activity & channel-wise breakdowns with Excel export',
+    href: '/dashboard/sales/activity',
+    icon: FileText,
+    category: 'Sales',
+    frequency: 'Daily',
+    badge: 'New',
     popular: true,
   },
 

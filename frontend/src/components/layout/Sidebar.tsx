@@ -53,7 +53,7 @@ const navigation: NavItem[] = [
     icon: BarChart3,
     children: [
       { name: 'All Reports', href: '/dashboard/reports/reports-index', icon: FileText },
-      { name: 'Channel Wise Sales', href: '/dashboard/sales/reports/daily', icon: BarChart3 },
+      { name: 'Sales Report', href: '/dashboard/sales/reports/daily', icon: BarChart3 },
       { name: 'Daily Returns', href: '/dashboard/sales/reports/returns', icon: BarChart3 },
       { name: 'SKU Sales', href: '/dashboard/reports/sales/bundle-sku', icon: BarChart3 },
       { name: 'Discounts', href: '/dashboard/reports/sales/discount-general', icon: Percent },
@@ -79,6 +79,7 @@ const navigation: NavItem[] = [
     children: [
       { name: 'Transactions', href: '/dashboard/sales/transactions', icon: Receipt },
       { name: 'Panels', href: '/dashboard/sales/panels', icon: PieChart },
+      { name: 'Sales Activity', href: '/dashboard/sales/activity', icon: BarChart3 },
       { name: 'COD vs Prepaid', href: '/dashboard/sales/cod-prepaid', icon: ShoppingCart },
       { name: 'Top Sellers', href: '/dashboard/sales/top-sellers', icon: TrendingUp },
     ],

@@ -479,6 +479,115 @@ async def get_daily_sales_report(
         return {"success": False, "error": str(e)}
 
 
+# SALES ACTIVITY REPORT ENDPOINT
+
+@router.get("/unicommerce/sales-activity")
+async def get_sales_activity_report(
+    from_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
+    to_date: str = Query(..., description="End date (YYYY-MM-DD)"),
+):
+    """
+    Sales Activity Report — returns item-level data for Size Wise, Item Wise,
+    Channel Wise (Detailed), and Channel Wise (Summary) reports.
+
+    Groups sold items by SKU+Size+Channel, attaches cancel/return counts
+    and inventory snapshots (good + virtual).
+    """
+    try:
+        service = get_unicommerce_service()
+
+        from_dt = datetime.strptime(from_date, "%Y-%m-%d").replace(
+            hour=0, minute=0, second=0, tzinfo=timezone.utc
+        )
+        to_dt = datetime.strptime(to_date, "%Y-%m-%d").replace(
+            hour=23, minute=59, second=59, tzinfo=timezone.utc
+        )
+
+        result = await service.get_custom_range_sales(from_dt, to_dt)
+        if not result.get("success"):
+            return result
+
+        raw_orders = result.get("_orders", [])
+
+        # ── Build item-level rows from ALL orders (including cancelled/returned) ──
+        # Track sold / cancelled / returned quantities per (sku, size, channel)
+        from collections import defaultdict
+        detail_map = defaultdict(lambda: {
+            "item_sku_code": "",
+            "item_type_name": "",
+            "size": "",
+            "channel": "",
+            "total_sale_qty": 0,
+            "cancel_qty": 0,
+            "return_qty": 0,
+        })
+
+        for order in raw_orders:
+            status = (order.get("status") or "").upper()
+            channel = order.get("channel", "UNKNOWN")
+
+            for item in order.get("saleOrderItems", []):
+                sku = item.get("itemSku", "") or ""
+                item_type = item.get("itemTypeName", "") or ""
+                size = item.get("size", "") or ""
+                qty = int(item.get("quantity", 1) or 1)
+
+                key = (sku, size, channel)
+                row = detail_map[key]
+                row["item_sku_code"] = sku
+                row["item_type_name"] = item_type
+                row["size"] = size
+                row["channel"] = channel
+
+                if status in ("CANCELLED", "CANCELED"):
+                    row["cancel_qty"] += qty
+                elif status in ("RETURNED", "REFUNDED"):
+                    row["return_qty"] += qty
+                else:
+                    row["total_sale_qty"] += qty
+
+        items = list(detail_map.values())
+
+        # ── Fetch inventory snapshot for all unique SKUs ──
+        unique_skus = list(set(r["item_sku_code"] for r in items if r["item_sku_code"]))
+        inventory_map = {}
+        try:
+            if unique_skus:
+                inventory_map = await service.get_inventory_snapshot(unique_skus)
+        except Exception as inv_err:
+            logger.warning(f"Sales activity: inventory fetch failed: {inv_err}")
+
+        # Attach inventory + compute net_sale
+        for row in items:
+            row["net_sale"] = row["total_sale_qty"] - row["cancel_qty"] - row["return_qty"]
+            inv = inventory_map.get(row["item_sku_code"], {})
+            row["stock_good"] = inv.get("good_inventory", 0)
+            row["stock_virtual"] = inv.get("virtual_inventory", 0)
+
+        # Sort by SKU then size
+        items.sort(key=lambda x: (x["item_sku_code"], x["size"], x["channel"]))
+
+        logger.info(
+            f"Sales activity report: {len(items)} item rows, "
+            f"{len(unique_skus)} unique SKUs, "
+            f"date range {from_date} to {to_date}"
+        )
+
+        return {
+            "success": True,
+            "from_date": from_date,
+            "to_date": to_date,
+            "items": items,
+            "total_skus": len(unique_skus),
+        }
+
+    except ValueError as e:
+        return {"success": False, "error": f"Invalid date format. Use YYYY-MM-DD: {e}"}
+    except Exception as e:
+        logger.error(f"Error generating sales activity report: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
 # CHANNEL BREAKDOWN ENDPOINT
 
 @router.get("/unicommerce/channel-revenue")

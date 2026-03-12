@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 
 interface StatCardProps {
   title: string;
@@ -76,6 +77,87 @@ export function LoadingSpinner({ size = 'md', message }: LoadingSpinnerProps) {
       <div className={`${sizeClasses[size]} border-[3px] border-slate-200 dark:border-slate-700 border-t-primary-500 rounded-full animate-spin`}></div>
       {message && <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">{message}</p>}
     </div>
+  );
+}
+
+/* ── Progress Loader ───────────────────────────────────────── */
+
+export interface ProgressStage { at: number; label: string; }
+
+interface ProgressLoaderProps {
+  loading: boolean;
+  stages?: ProgressStage[];
+  skeletonRows?: number;
+}
+
+const DEFAULT_STAGES: ProgressStage[] = [
+  { at: 0, label: 'Connecting to Unicommerce…' },
+  { at: 12, label: 'Initializing export job…' },
+  { at: 30, label: 'Fetching data…' },
+  { at: 55, label: 'Processing results…' },
+  { at: 75, label: 'Building report…' },
+  { at: 92, label: 'Finalizing…' },
+];
+
+export function ProgressLoader({ loading, stages, skeletonRows = 5 }: ProgressLoaderProps) {
+  const [progress, setProgress] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stageList = stages ?? DEFAULT_STAGES;
+
+  useEffect(() => {
+    if (loading) {
+      setProgress(0);
+      let p = 0;
+      timerRef.current = setInterval(() => {
+        const inc = p < 30 ? 3 : p < 60 ? 1.5 : p < 80 ? 0.6 : 0.2;
+        p = Math.min(p + inc, 92);
+        setProgress(p);
+      }, 400);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (progress > 0) {
+        setProgress(100);
+        const t = setTimeout(() => setProgress(0), 500);
+        return () => clearTimeout(t);
+      }
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [loading]);
+
+  if (!loading && progress === 0) return null;
+
+  const stageLabel = stageList.slice().reverse().find(s => progress >= s.at)?.label ?? '';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-6 space-y-4"
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+          {stageLabel}
+        </span>
+        <span className="text-sm font-bold text-primary-600 dark:text-primary-400 tabular-nums">
+          {Math.round(progress)}%
+        </span>
+      </div>
+      <div className="h-2.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+        <motion.div
+          className="h-full rounded-full bg-gradient-to-r from-primary-500 to-primary-600"
+          initial={{ width: 0 }}
+          animate={{ width: `${progress}%` }}
+          transition={{ duration: 0.4, ease: 'easeOut' }}
+        />
+      </div>
+      <div className="space-y-2 pt-1">
+        {Array.from({ length: skeletonRows }).map((_, i) => (
+          <div key={i} className="h-8 bg-slate-100 dark:bg-slate-800/60 rounded animate-pulse"
+            style={{ opacity: 1 - i * 0.14 }} />
+        ))}
+      </div>
+    </motion.div>
   );
 }
 

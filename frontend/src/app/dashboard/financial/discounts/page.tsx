@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
-import { PageHeader, LoadingSpinner, ErrorPanel } from '@/components/ui/Common';
+import { PageHeader, ProgressLoader, ErrorPanel } from '@/components/ui/Common';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
@@ -98,9 +98,13 @@ export default function DiscountsPage() {
 
       {error && <ErrorPanel message="Failed to load discount data. Please try again." />}
 
-      {isLoading ? (
-        <LoadingSpinner message="Loading discount analytics..." />
-      ) : (
+      <ProgressLoader loading={isLoading} stages={[
+        { at: 0, label: 'Connecting to Unicommerce…' },
+        { at: 25, label: 'Fetching discount data…' },
+        { at: 55, label: 'Computing analytics…' },
+        { at: 85, label: 'Finalizing…' },
+      ]} />
+      {!isLoading && (
         <>
           {/* KPI Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

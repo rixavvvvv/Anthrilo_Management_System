@@ -418,8 +418,8 @@ export default function DailySalesReportPage() {
     <div className="space-y-8">
       {/* ─── Header ──────────────────────────────────────────────── */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Channel Wise Sales Report</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Channel-wise sales breakdown · Revenue-generating orders only</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Sales Report</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Sales breakdown · Revenue-generating orders only</p>
       </div>
 
       {/* ─── Mode Selector ───────────────────────────────────────── */}

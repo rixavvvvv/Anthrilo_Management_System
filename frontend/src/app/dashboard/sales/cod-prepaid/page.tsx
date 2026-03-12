@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
+import { ProgressLoader } from '@/components/ui/Common';
 
 const fmt = (v: number) =>
   v >= 10_000_000 ? `₹${(v / 10_000_000).toFixed(2)}Cr`
@@ -71,23 +72,14 @@ export default function CodVsPrepaidPage() {
         </div>
       )}
 
-      {/* Loading skeleton */}
-      {isLoading && (
-        <div className="space-y-4">
-          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-3">
-            <div className="h-5 w-5 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
-            <p className="text-sm text-slate-600 dark:text-slate-400">Analysing {monthNames[month - 1]} {year} payment data — this may take a few seconds on first load…</p>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[1,2,3,4].map(i => (
-              <div key={i} className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-5 animate-pulse">
-                <div className="h-3 w-16 bg-slate-200 dark:bg-slate-700 rounded mb-3" />
-                <div className="h-7 w-24 bg-slate-200 dark:bg-slate-700 rounded" />
-            </div>
-          ))}
-          </div>
-        </div>
-      )}
+      {/* Loading */}
+      <ProgressLoader loading={isLoading} stages={[
+        { at: 0, label: 'Initializing export job…' },
+        { at: 15, label: 'Fetching orders…' },
+        { at: 40, label: 'Classifying COD vs Prepaid…' },
+        { at: 70, label: 'Aggregating channel data…' },
+        { at: 90, label: 'Finalizing…' },
+      ]} />
 
       {!isLoading && data?.success && (
         <>

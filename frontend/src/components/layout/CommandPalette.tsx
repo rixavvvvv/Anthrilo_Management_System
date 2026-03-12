@@ -48,7 +48,7 @@ const SEARCH_ITEMS: SearchItem[] = [
   },
   {
     id: 'daily-sales',
-    title: 'Channel Wise Sales Report',
+    title: 'Sales Report',
     description: 'Channel-wise daily revenue breakdown',
     href: '/dashboard/sales/reports/daily',
     icon: BarChart3,

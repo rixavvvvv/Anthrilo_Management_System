@@ -105,6 +105,10 @@ export const unicommerceApi = {
   getChannelRevenue: (period: string = 'last_30_days') =>
     apiClient.get('/integrations/unicommerce/channel-revenue', { params: { period } }),
 
+  // Sales Activity Report
+  getSalesActivity: (params: { from_date: string; to_date: string }) =>
+    apiClient.get('/integrations/unicommerce/sales-activity', { params }),
+
   // Validation
   validateRevenue: () => apiClient.get('/integrations/unicommerce/validate'),
 
