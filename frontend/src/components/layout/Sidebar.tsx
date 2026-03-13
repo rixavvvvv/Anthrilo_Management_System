@@ -26,6 +26,14 @@ import {
   Target,
   Layers,
   Megaphone,
+  Truck,
+  ClipboardList,
+  Building2,
+  PackageCheck,
+  Scissors,
+  CheckCircle,
+  QrCode,
+  Factory,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -92,6 +100,29 @@ const navigation: NavItem[] = [
       { name: 'Discounts', href: '/dashboard/financial/discounts', icon: Percent },
       { name: 'Ads', href: '/dashboard/financial/ads', icon: Megaphone },
       { name: 'ROI Analysis', href: '/dashboard/financial/roi', icon: Target },
+    ],
+  },
+  {
+    name: 'Procurement',
+    icon: Truck,
+    children: [
+      { name: 'Suppliers', href: '/dashboard/procurement/suppliers', icon: Building2 },
+      { name: 'Purchase Orders', href: '/dashboard/procurement/purchase-orders', icon: ClipboardList },
+      { name: 'Gate Entry', href: '/dashboard/procurement/gate-entry', icon: PackageCheck },
+      { name: 'MRN', href: '/dashboard/procurement/mrn', icon: FileText },
+    ],
+  },
+  {
+    name: 'Manufacturing',
+    icon: Factory,
+    children: [
+      { name: 'Yarn Store', href: '/dashboard/manufacturing/yarn-store', icon: Package },
+      { name: 'Knit Orders', href: '/dashboard/manufacturing/knit-orders', icon: Layers },
+      { name: 'Processing', href: '/dashboard/manufacturing/processing', icon: Boxes },
+      { name: 'Cutting', href: '/dashboard/manufacturing/cutting', icon: Scissors },
+      { name: 'Stitching', href: '/dashboard/manufacturing/stitching', icon: Shirt },
+      { name: 'Finishing', href: '/dashboard/manufacturing/finishing', icon: CheckCircle },
+      { name: 'Barcoding', href: '/dashboard/manufacturing/barcoding', icon: QrCode },
     ],
   },
 ];
