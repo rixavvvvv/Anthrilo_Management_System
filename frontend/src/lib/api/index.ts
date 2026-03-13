@@ -263,13 +263,13 @@ export const garmentProductionApi = {
   // Finishing
   recordFinishing: (data: any) =>
     apiClient.post<GarmentFinishing>('/garment-production/finishing', data),
-  getFinishingStages: (params?: { stitching_order_id?: number; garment_id?: number; stage?: string }) =>
-    apiClient.get<GarmentFinishing[]>('/garment-production/finishing', { params }),
+  getFinishingStages: (stitchingOrderId: number) =>
+    apiClient.get<GarmentFinishing[]>(`/garment-production/finishing/${stitchingOrderId}`),
   // Barcodes
-  generateBarcodes: (data: { garment_finishing_id: number; sizes: Record<string, number>; mrp: number }) =>
-    apiClient.post<BarcodeLabel[]>('/garment-production/barcodes', data),
-  getBarcodes: (params?: { garment_id?: number; is_printed?: boolean; batch_number?: string }) =>
+  generateBarcodes: (data: { garment_finishing_id: number; garment_id: number; sizes: Record<string, number>; mrp: number; batch_number?: string }) =>
+    apiClient.post<BarcodeLabel[]>('/garment-production/barcodes/batch', data),
+  getBarcodes: (params?: { garment_id?: number; is_printed?: boolean; batch_number?: string; skip?: number; limit?: number }) =>
     apiClient.get<BarcodeLabel[]>('/garment-production/barcodes', { params }),
   markPrinted: (barcodeIds: number[]) =>
-    apiClient.post('/garment-production/barcodes/mark-printed', { barcode_ids: barcodeIds }),
+    apiClient.post('/garment-production/barcodes/mark-printed', barcodeIds),
 };
