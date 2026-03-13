@@ -988,15 +988,18 @@ async def get_sales_by_sku(
         sku_map = {}
         for order in raw_orders:
             channel = order.get("channel", "UNKNOWN")
-            status = order.get("status", "")
-            include = status not in ("CANCELLED", "RETURNED", "UNFULFILLABLE")
+            status = (order.get("status") or "").strip().upper()
+            include = status not in service.EXCLUDED_STATUSES
 
             for item in order.get("saleOrderItems", []):
+                if not include:
+                    continue
+
                 sku = item.get("itemSku", "UNKNOWN")
                 if sku not in sku_map:
                     sku_map[sku] = {
                         "sku": sku,
-                        "name": item.get("itemName", ""),
+                        "name": item.get("itemTypeName") or item.get("itemName", ""),
                         "total_quantity": 0,
                         "total_revenue": 0.0,
                         "total_mrp": 0.0,
@@ -1016,17 +1019,16 @@ async def get_sales_by_sku(
                 if mrp <= 0:
                     mrp = selling
 
-                if include:
-                    sku_map[sku]["total_quantity"] += qty
-                    sku_map[sku]["total_revenue"] += selling
-                    sku_map[sku]["total_mrp"] += mrp
-                    sku_map[sku]["order_count"] += 1
+                sku_map[sku]["total_quantity"] += qty
+                sku_map[sku]["total_revenue"] += selling
+                sku_map[sku]["total_mrp"] += mrp
+                sku_map[sku]["order_count"] += 1
 
-                    if channel not in sku_map[sku]["channels"]:
-                        sku_map[sku]["channels"][channel] = {
-                            "quantity": 0, "revenue": 0.0}
-                    sku_map[sku]["channels"][channel]["quantity"] += qty
-                    sku_map[sku]["channels"][channel]["revenue"] += selling
+                if channel not in sku_map[sku]["channels"]:
+                    sku_map[sku]["channels"][channel] = {
+                        "quantity": 0, "revenue": 0.0}
+                sku_map[sku]["channels"][channel]["quantity"] += qty
+                sku_map[sku]["channels"][channel]["revenue"] += selling
 
         # Compute discount from MRP, avg selling price, and round
         for s in sku_map.values():
@@ -1049,8 +1051,11 @@ async def get_sales_by_sku(
             for ch in s["channels"].values():
                 ch["revenue"] = round(ch["revenue"], 2)
 
-        skus = sorted(sku_map.values(),
-                      key=lambda x: x["total_revenue"], reverse=True)
+        # Keep ordering deterministic for tied revenues.
+        skus = sorted(
+            sku_map.values(),
+            key=lambda x: (-x["total_revenue"], -x["total_quantity"], x["sku"]),
+        )
         total_revenue = round(sum(s["total_revenue"] for s in skus), 2)
         total_mrp = round(sum(s["total_mrp"] for s in skus), 2)
         total_quantity = sum(s["total_quantity"] for s in skus)
