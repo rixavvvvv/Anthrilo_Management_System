@@ -546,6 +546,53 @@ async def get_sales_activity_report(
                 else:
                     row["total_sale_qty"] += qty
 
+        # ── Merge real return events (RTO/CIR) from return stream by SKU+Channel ──
+        # Sale order status rarely carries returns; Unicommerce emits returns separately.
+        return_map = defaultdict(int)  # (sku, channel) -> qty
+        try:
+            day = from_dt.date()
+            end_day = to_dt.date()
+            while day <= end_day:
+                day_str = day.strftime("%Y-%m-%d")
+                return_report = await get_daily_return_report(date=day_str, return_type="ALL")
+                if return_report.get("success"):
+                    for ret in return_report.get("returns", []):
+                        ret_channel = (ret.get("channel") or "UNKNOWN").upper()
+                        for it in ret.get("items", []):
+                            sku = (it.get("sku") or "").strip()
+                            try:
+                                rqty = int(float(it.get("quantity", 0) or 0))
+                            except (TypeError, ValueError):
+                                rqty = 0
+                            if sku and rqty > 0:
+                                return_map[(sku, ret_channel)] += rqty
+                day += timedelta(days=1)
+        except Exception as ret_err:
+            logger.warning(f"Sales activity: return merge failed: {ret_err}")
+
+        # Apply return qty to existing rows, distributing across sizes for same SKU+Channel.
+        if return_map:
+            for (sku, channel), qty in return_map.items():
+                matching_keys = [k for k in detail_map.keys() if k[0] == sku and (k[2] or "").upper() == channel]
+                if not matching_keys:
+                    continue
+
+                basis = []
+                basis_total = 0
+                for k in matching_keys:
+                    b = max(int(detail_map[k].get("total_sale_qty", 0)), 1)
+                    basis.append((k, b))
+                    basis_total += b
+
+                allocated = 0
+                for idx, (k, b) in enumerate(basis):
+                    if idx == len(basis) - 1:
+                        add_qty = max(qty - allocated, 0)
+                    else:
+                        add_qty = int(round((qty * b) / basis_total)) if basis_total > 0 else 0
+                    detail_map[k]["return_qty"] += add_qty
+                    allocated += add_qty
+
         items = list(detail_map.values())
 
         # ── Fetch inventory snapshot for all unique SKUs ──
