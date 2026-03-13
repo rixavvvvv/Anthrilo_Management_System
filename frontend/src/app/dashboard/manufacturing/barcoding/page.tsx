@@ -16,7 +16,7 @@ export default function BarcodingPage() {
 
   const { data: barcodes, isLoading, error } = useQuery({
     queryKey: ['barcodes'],
-    queryFn: () => garmentProductionApi.getBarcodes({ limit: 500 }).then(r => r.data),
+    queryFn: () => garmentProductionApi.getBarcodes().then(r => r.data),
     staleTime: 30_000,
   });
 
@@ -26,7 +26,7 @@ export default function BarcodingPage() {
   });
 
   const printMut = useMutation({
-    mutationFn: (id: number) => garmentProductionApi.markPrinted(id).then(r => r.data),
+    mutationFn: (ids: number[]) => garmentProductionApi.markPrinted(ids).then(r => r.data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['barcodes'] }); setMarkId(null); },
   });
 
@@ -79,7 +79,7 @@ export default function BarcodingPage() {
       <ConfirmDialog
         open={markId !== null}
         onClose={() => setMarkId(null)}
-        onConfirm={() => markId && printMut.mutate(markId)}
+        onConfirm={() => { if (markId !== null) printMut.mutate([markId]); }}
         title="Mark as Printed"
         message="Mark this barcode label as printed?"
         loading={printMut.isPending}
@@ -98,10 +98,9 @@ function BarcodeTable({ barcodes, onMarkPrint }: { barcodes: BarcodeLabel[]; onM
           <thead>
             <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
               <th className="px-4 py-3">Barcode</th>
-              <th className="px-4 py-3">SKU</th>
-              <th className="px-4 py-3">Garment</th>
+              <th className="px-4 py-3">Garment ID</th>
               <th className="px-4 py-3">Size</th>
-              <th className="px-4 py-3">Color</th>
+              <th className="px-4 py-3">Batch</th>
               <th className="px-4 py-3 text-right">MRP ₹</th>
               <th className="px-4 py-3">Printed</th>
               <th className="px-4 py-3">Actions</th>
@@ -110,11 +109,10 @@ function BarcodeTable({ barcodes, onMarkPrint }: { barcodes: BarcodeLabel[]; onM
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {barcodes.map((b: BarcodeLabel) => (
               <tr key={b.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                <td className="px-4 py-3 font-mono text-xs font-medium text-primary-600">{b.barcode_value}</td>
-                <td className="px-4 py-3 font-mono text-xs">{b.sku || '-'}</td>
-                <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{b.garment_name || '-'}</td>
+                <td className="px-4 py-3 font-mono text-xs font-medium text-primary-600">{b.barcode}</td>
+                <td className="px-4 py-3 font-mono text-xs">{b.garment_id}</td>
                 <td className="px-4 py-3">{b.size}</td>
-                <td className="px-4 py-3">{b.color || '-'}</td>
+                <td className="px-4 py-3 font-mono text-xs">{b.batch_number || '-'}</td>
                 <td className="px-4 py-3 text-right tabular-nums">₹{b.mrp?.toLocaleString('en-IN') ?? '-'}</td>
                 <td className="px-4 py-3">
                   {b.is_printed
@@ -140,9 +138,8 @@ function BarcodeTable({ barcodes, onMarkPrint }: { barcodes: BarcodeLabel[]; onM
 function BatchForm({ onSubmit, loading }: { onSubmit: (v: any) => void; loading: boolean }) {
   const [form, setForm] = useState({
     garment_finishing_id: 0,
-    garment_name: '',
-    sku: '',
-    color: '',
+    garment_id: 0,
+    batch_number: '',
     mrp: 0,
     sizes: '{}',
   });
@@ -155,18 +152,16 @@ function BatchForm({ onSubmit, loading }: { onSubmit: (v: any) => void; loading:
       try { sizes = JSON.parse(form.sizes); } catch { sizes = {}; }
       onSubmit({
         garment_finishing_id: form.garment_finishing_id,
-        garment_name: form.garment_name || undefined,
-        sku: form.sku || undefined,
-        color: form.color || undefined,
+        garment_id: form.garment_id,
+        batch_number: form.batch_number || undefined,
         mrp: form.mrp || undefined,
         sizes,
       });
     }} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div><label className="label">Garment Finishing ID *</label><input className="input" type="number" required value={form.garment_finishing_id || ''} onChange={e => set('garment_finishing_id', parseInt(e.target.value) || 0)} /></div>
-        <div><label className="label">SKU</label><input className="input" value={form.sku} onChange={e => set('sku', e.target.value)} placeholder="e.g. ANT-TSH-001" /></div>
-        <div><label className="label">Garment Name</label><input className="input" value={form.garment_name} onChange={e => set('garment_name', e.target.value)} placeholder="e.g. Polo T-Shirt" /></div>
-        <div><label className="label">Color</label><input className="input" value={form.color} onChange={e => set('color', e.target.value)} /></div>
+        <div><label className="label">Garment ID *</label><input className="input" type="number" required value={form.garment_id || ''} onChange={e => set('garment_id', parseInt(e.target.value) || 0)} /></div>
+        <div><label className="label">Batch Number</label><input className="input" value={form.batch_number} onChange={e => set('batch_number', e.target.value)} placeholder="e.g. BATCH-2026-001" /></div>
         <div><label className="label">MRP ₹</label><input className="input" type="number" step="0.01" value={form.mrp || ''} onChange={e => set('mrp', parseFloat(e.target.value) || 0)} /></div>
       </div>
       <div>
@@ -174,7 +169,7 @@ function BatchForm({ onSubmit, loading }: { onSubmit: (v: any) => void; loading:
         <input className="input font-mono text-xs" value={form.sizes} onChange={e => set('sizes', e.target.value)} placeholder='{"S":50,"M":100,"L":80,"XL":40}' />
         <p className="text-xs text-slate-400 mt-1">One barcode per piece will be generated for each size.</p>
       </div>
-      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.garment_finishing_id} className="btn btn-primary">{loading ? 'Generating…' : 'Generate Barcodes'}</button></div>
+      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.garment_finishing_id || !form.garment_id} className="btn btn-primary">{loading ? 'Generating…' : 'Generate Barcodes'}</button></div>
     </form>
   );
 }

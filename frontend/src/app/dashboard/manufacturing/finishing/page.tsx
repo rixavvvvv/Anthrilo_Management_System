@@ -30,14 +30,20 @@ const STAGE_COLORS: Record<string, string> = {
 
 export default function FinishingPage() {
   const qc = useQueryClient();
+  const [stitchingOrderId, setStitchingOrderId] = useState<number>(0);
   const [stageFilter, setStageFilter] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
 
   const { data: stages, isLoading, error } = useQuery({
-    queryKey: ['finishing-stages', stageFilter],
-    queryFn: () => garmentProductionApi.getFinishingStages({ stage: stageFilter || undefined, limit: 200 }).then(r => r.data),
+    queryKey: ['finishing-stages', stitchingOrderId],
+    queryFn: () => garmentProductionApi.getFinishingStages(stitchingOrderId).then(r => r.data),
+    enabled: stitchingOrderId > 0,
     staleTime: 30_000,
   });
+
+  const filteredStages = stageFilter
+    ? (stages || []).filter((s: GarmentFinishing) => s.stage === stageFilter)
+    : (stages || []);
 
   const recordMut = useMutation({
     mutationFn: (data: any) => garmentProductionApi.recordFinishing(data).then(r => r.data),
@@ -49,6 +55,14 @@ export default function FinishingPage() {
       <PageHeader title="Finishing" description="Track finishing stages for stitched garments" action={{ label: '+ Record Stage', onClick: () => setModalOpen(true) }} />
 
       <div className="flex gap-3">
+        <input
+          className="input w-48"
+          type="number"
+          min={1}
+          placeholder="Stitching Order ID"
+          value={stitchingOrderId || ''}
+          onChange={e => setStitchingOrderId(parseInt(e.target.value) || 0)}
+        />
         <select className="input w-48" value={stageFilter} onChange={e => setStageFilter(e.target.value)}>
           <option value="">All Stages</option>
           {FINISHING_STAGES.map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
@@ -58,9 +72,11 @@ export default function FinishingPage() {
       {error && <ErrorPanel message={(error as Error).message} />}
       <ProgressLoader loading={isLoading} />
 
-      {!isLoading && stages && stages.length === 0 && <EmptyState title="No finishing records" />}
+      {!isLoading && stitchingOrderId === 0 && <EmptyState title="Enter stitching order ID to view stages" />}
 
-      {!isLoading && stages && stages.length > 0 && (
+      {!isLoading && stitchingOrderId > 0 && filteredStages.length === 0 && <EmptyState title="No finishing records" />}
+
+      {!isLoading && stitchingOrderId > 0 && filteredStages.length > 0 && (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -77,7 +93,7 @@ export default function FinishingPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {stages.map((gf: GarmentFinishing) => (
+                {filteredStages.map((gf: GarmentFinishing) => (
                   <tr key={gf.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs">#{gf.stitching_order_id}</td>
                     <td className="px-4 py-3">
@@ -87,9 +103,9 @@ export default function FinishingPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-500">{gf.stage_date}</td>
                     <td className="px-4 py-3 text-right tabular-nums font-medium">{gf.pieces_in}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-green-600 font-medium">{gf.pieces_passed ?? '-'}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-green-600 font-medium">{gf.pieces_ok ?? '-'}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-red-500">{gf.pieces_rejected ?? '-'}</td>
-                    <td className="px-4 py-3">{gf.worker_name || '-'}</td>
+                    <td className="px-4 py-3">{gf.operator || '-'}</td>
                     <td className="px-4 py-3 text-xs text-slate-400 max-w-[200px] truncate">{gf.remarks || '-'}</td>
                   </tr>
                 ))}
@@ -112,9 +128,9 @@ function FinishingForm({ onSubmit, loading }: { onSubmit: (v: any) => void; load
     stage: 'THREAD_CUTTING' as string,
     stage_date: new Date().toISOString().slice(0, 10),
     pieces_in: 0,
-    pieces_passed: null as number | null,
-    pieces_rejected: null as number | null,
-    worker_name: '',
+    pieces_ok: 0,
+    pieces_rejected: 0,
+    operator: '',
     remarks: '',
   });
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
@@ -124,9 +140,9 @@ function FinishingForm({ onSubmit, loading }: { onSubmit: (v: any) => void; load
       e.preventDefault();
       onSubmit({
         ...form,
-        pieces_passed: form.pieces_passed ?? undefined,
-        pieces_rejected: form.pieces_rejected ?? undefined,
-        worker_name: form.worker_name || undefined,
+        pieces_ok: form.pieces_ok || 0,
+        pieces_rejected: form.pieces_rejected || 0,
+        operator: form.operator || undefined,
         remarks: form.remarks || undefined,
       });
     }} className="space-y-4">
@@ -140,12 +156,12 @@ function FinishingForm({ onSubmit, loading }: { onSubmit: (v: any) => void; load
         </div>
         <div><label className="label">Date *</label><input className="input" type="date" required value={form.stage_date} onChange={e => set('stage_date', e.target.value)} /></div>
         <div><label className="label">Pieces In *</label><input className="input" type="number" required value={form.pieces_in || ''} onChange={e => set('pieces_in', parseInt(e.target.value) || 0)} /></div>
-        <div><label className="label">Pieces Passed</label><input className="input" type="number" value={form.pieces_passed ?? ''} onChange={e => set('pieces_passed', e.target.value ? parseInt(e.target.value) : null)} /></div>
-        <div><label className="label">Pieces Rejected</label><input className="input" type="number" value={form.pieces_rejected ?? ''} onChange={e => set('pieces_rejected', e.target.value ? parseInt(e.target.value) : null)} /></div>
-        <div><label className="label">Worker Name</label><input className="input" value={form.worker_name} onChange={e => set('worker_name', e.target.value)} /></div>
+        <div><label className="label">Pieces OK *</label><input className="input" type="number" required value={form.pieces_ok || ''} onChange={e => set('pieces_ok', parseInt(e.target.value) || 0)} /></div>
+        <div><label className="label">Pieces Rejected</label><input className="input" type="number" value={form.pieces_rejected || ''} onChange={e => set('pieces_rejected', parseInt(e.target.value) || 0)} /></div>
+        <div><label className="label">Operator</label><input className="input" value={form.operator} onChange={e => set('operator', e.target.value)} /></div>
       </div>
       <div><label className="label">Remarks</label><textarea className="input" rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} /></div>
-      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.stitching_order_id || !form.pieces_in} className="btn btn-primary">{loading ? 'Recording…' : 'Record Stage'}</button></div>
+      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.stitching_order_id || !form.pieces_in || !form.pieces_ok} className="btn btn-primary">{loading ? 'Recording…' : 'Record Stage'}</button></div>
     </form>
   );
 }
