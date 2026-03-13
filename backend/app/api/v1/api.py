@@ -1,6 +1,11 @@
 from fastapi import APIRouter
 from app.api.v1.endpoints import auth, yarns, fabrics, processes, garments, inventory, sales, panels, production, discounts, ads, reports
 from app.api.v1.endpoints import integrations
+# Manufacturing Module
+from app.api.v1.endpoints import (
+    suppliers, purchase_orders, gate_entry, mrns,
+    yarn_store, knitting, processing, garment_production,
+)
 # Unicommerce API modules
 from app.api.v1.endpoints import (
     uc_vendors, uc_grn, uc_catalog, uc_inventory,
@@ -38,6 +43,26 @@ api_router.include_router(
     discounts.router, prefix="/discounts", tags=["Discount Management"])
 api_router.include_router(ads.router, prefix="/ads",
                           tags=["Ads Management"])
+
+# Procurement Module
+api_router.include_router(
+    suppliers.router, prefix="/suppliers", tags=["Supplier Master"])
+api_router.include_router(
+    purchase_orders.router, prefix="/purchase-orders", tags=["Purchase Orders"])
+api_router.include_router(
+    gate_entry.router, prefix="/gate-entries", tags=["Gate Entry"])
+api_router.include_router(
+    mrns.router, prefix="/mrns", tags=["MRN"])
+
+# Manufacturing Module
+api_router.include_router(
+    yarn_store.router, prefix="/yarn-store", tags=["Yarn Store"])
+api_router.include_router(
+    knitting.router, prefix="/knitting", tags=["Knitting"])
+api_router.include_router(
+    processing.router, prefix="/processing", tags=["Processing"])
+api_router.include_router(
+    garment_production.router, prefix="/garment-production", tags=["Garment Production"])
 
 # Reports (All Modules)
 api_router.include_router(
