@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
@@ -8,6 +8,9 @@ import { PageHeader, ProgressLoader, StatCard, ErrorPanel } from '@/components/u
 
 export default function TopSellersPage() {
   const [period, setPeriod] = useState('last_7_days');
+
+  const formatChannelName = (channel: string) =>
+    (channel || 'UNKNOWN').replace(/_/g, ' ');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['uc-top-sellers', period],
@@ -26,6 +29,61 @@ export default function TopSellersPage() {
   const avgQtyPerSku = summary.total_skus > 0 ? summary.total_quantity / summary.total_skus : 0;
 
   const rankedData = topByQty.map((item: any, idx: number) => ({ ...item, rank: idx + 1 }));
+
+  const channelTopProducts = useMemo(() => {
+    const rows: any[] = [];
+
+    allSkus.forEach((skuItem: any) => {
+      const channels = skuItem?.channels || {};
+
+      Object.entries(channels).forEach(([channelName, chData]: any) => {
+        rows.push({
+          channel_name: channelName,
+          sku: skuItem.sku,
+          name: skuItem.name,
+          total_quantity: chData?.quantity || 0,
+          total_revenue: chData?.revenue || 0,
+        });
+      });
+    });
+
+    const grouped: Record<string, any[]> = {};
+    rows.forEach((row) => {
+      if (!grouped[row.channel_name]) grouped[row.channel_name] = [];
+      grouped[row.channel_name].push(row);
+    });
+
+    const flattened: any[] = [];
+    Object.entries(grouped).forEach(([channelName, items]: any) => {
+      const channelRevenue = items.reduce((acc: number, item: any) => acc + (item.total_revenue || 0), 0);
+      const sorted = [...items]
+        .sort((a, b) => {
+          if (b.total_revenue !== a.total_revenue) {
+            return b.total_revenue - a.total_revenue;
+          }
+          if (b.total_quantity !== a.total_quantity) {
+            return b.total_quantity - a.total_quantity;
+          }
+          return String(a.sku).localeCompare(String(b.sku));
+        })
+        .slice(0, 5);
+
+      sorted.forEach((item, idx) => {
+        const sharePct = channelRevenue > 0 ? ((item.total_revenue / channelRevenue) * 100) : 0;
+        flattened.push({
+          ...item,
+          channel_label: formatChannelName(channelName),
+          channel_rank: idx + 1,
+          channel_share_pct: Number(sharePct.toFixed(1)),
+        });
+      });
+    });
+
+    return flattened.sort((a, b) => {
+      if (a.channel_label === b.channel_label) return a.channel_rank - b.channel_rank;
+      return a.channel_label.localeCompare(b.channel_label);
+    });
+  }, [allSkus]);
 
   const columns: Column<any>[] = [
     {
@@ -78,6 +136,41 @@ export default function TopSellersPage() {
     },
   ];
 
+  const channelColumns: Column<any>[] = [
+    {
+      key: 'channel_label',
+      header: 'Channel',
+      width: '16%',
+      render: (value: any) => <span className="font-medium text-gray-800 dark:text-gray-200">{value}</span>,
+    },
+    {
+      key: 'channel_rank',
+      header: 'Rank',
+      width: '6%',
+      render: (value: any) => <span className="font-bold text-gray-500">#{value}</span>,
+    },
+    { key: 'sku', header: 'SKU', width: '12%' },
+    { key: 'name', header: 'Product Name', width: '26%' },
+    {
+      key: 'total_quantity',
+      header: 'Units Sold',
+      width: '10%',
+      render: (value) => <span className="font-bold text-gray-900 dark:text-gray-100">{value}</span>,
+    },
+    {
+      key: 'total_revenue',
+      header: 'Revenue',
+      width: '14%',
+      render: (value) => <span className="text-green-600 dark:text-green-400 font-bold">₹{(value || 0).toFixed(2)}</span>,
+    },
+    {
+      key: 'channel_share_pct',
+      header: 'Channel Share',
+      width: '10%',
+      render: (value) => <span className="text-gray-700 dark:text-gray-300">{value}%</span>,
+    },
+  ];
+
   return (
     <div>
       <PageHeader
@@ -103,11 +196,10 @@ export default function TopSellersPage() {
             <button
               key={p.key}
               onClick={() => setPeriod(p.key)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                period === p.key
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${period === p.key
                   ? 'bg-primary-600 text-white'
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
+                }`}
             >
               {p.label}
             </button>
@@ -127,6 +219,25 @@ export default function TopSellersPage() {
         ]} />
         {!isLoading && (
           <DataTable data={rankedData} columns={columns} emptyMessage="No sales data for this period." />
+        )}
+      </div>
+
+      <div className="card mt-6">
+        <h2 className="mb-1 text-gray-900 dark:text-gray-100">Channel-wise Top Performing Products</h2>
+        <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+          Top 5 products by revenue within each channel for the selected period.
+        </p>
+        <ProgressLoader loading={isLoading} stages={[
+          { at: 0, label: 'Grouping by channel…' },
+          { at: 40, label: 'Ranking products per channel…' },
+          { at: 80, label: 'Preparing table…' },
+        ]} />
+        {!isLoading && (
+          <DataTable
+            data={channelTopProducts}
+            columns={channelColumns}
+            emptyMessage="No channel-wise product data for this period."
+          />
         )}
       </div>
     </div>
