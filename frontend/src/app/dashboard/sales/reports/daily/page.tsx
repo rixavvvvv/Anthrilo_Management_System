@@ -126,7 +126,7 @@ export default function DailySalesReportPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, [calOpen, calFromOpen, calToOpen]);
 
-  const queryParams = useMemo(() => {
+  const queryParams = useMemo((): { date?: string; from_date?: string; to_date?: string } => {
     if (mode === 'daily') {
       return { date: reportDate };
     } else if (mode === 'weekly') {
@@ -176,8 +176,8 @@ export default function DailySalesReportPage() {
     if (mode === 'weekly') {
       totalDays = 7;
     } else if (mode === 'monthly') {
-      const from = new Date(queryParams.from_date);
-      const to = new Date(queryParams.to_date);
+      const from = new Date(queryParams.from_date!);
+      const to = new Date(queryParams.to_date!);
       totalDays = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / 86400000) + 1);
     } else if (mode === 'custom') {
       const d0 = new Date(customFrom);
@@ -304,9 +304,9 @@ export default function DailySalesReportPage() {
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement('a');
     const filename = mode === 'daily' ? `channel-wise-sales-report-${reportDate}.csv`
-      : mode === 'weekly' ? `channel-wise-sales-report-week-${queryParams.from_date}-to-${queryParams.to_date}.csv`
-      : mode === 'monthly' ? `channel-wise-sales-report-month-${queryParams.from_date}-to-${queryParams.to_date}.csv`
-        : `channel-wise-sales-report-${customFrom}-to-${customTo}.csv`;
+      : mode === 'weekly' ? `channel-wise-sales-report-week-${queryParams.from_date!}-to-${queryParams.to_date!}.csv`
+        : mode === 'monthly' ? `channel-wise-sales-report-month-${queryParams.from_date!}-to-${queryParams.to_date!}.csv`
+          : `channel-wise-sales-report-${customFrom}-to-${customTo}.csv`;
     a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   }, [raw, mode, reportDate, customFrom, customTo, queryParams]);
@@ -411,10 +411,10 @@ export default function DailySalesReportPage() {
   const dateLabel = mode === 'daily'
     ? format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'EEEE, dd MMMM yyyy')
     : mode === 'weekly'
-      ? `${format(parse(queryParams.from_date, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')} – ${format(parse(queryParams.to_date, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}`
-    : mode === 'monthly'
-      ? `${format(parse(queryParams.from_date, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')} – ${format(parse(queryParams.to_date, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}`
-      : `${format(parse(customFrom, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')} – ${format(parse(customTo, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}`;
+      ? `${format(parse(queryParams.from_date!, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')} – ${format(parse(queryParams.to_date!, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}`
+      : mode === 'monthly'
+        ? `${format(parse(queryParams.from_date!, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')} – ${format(parse(queryParams.to_date!, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}`
+        : `${format(parse(customFrom, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')} – ${format(parse(customTo, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}`;
 
   const CAL_CLASSES = {
     root: 'rdp-custom',
@@ -504,7 +504,7 @@ export default function DailySalesReportPage() {
         {mode === 'weekly' && (
           <div className="space-y-4">
             <div className="text-sm text-slate-600 dark:text-slate-300">
-              Weekly report uses the last completed week: {queryParams.from_date} to {queryParams.to_date}
+              Weekly report uses the last completed week: {queryParams.from_date!} to {queryParams.to_date!}
             </div>
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <button onClick={handleGenerate} disabled={queryLoading}
@@ -526,7 +526,7 @@ export default function DailySalesReportPage() {
         {mode === 'monthly' && (
           <div className="space-y-4">
             <div className="text-sm text-slate-600 dark:text-slate-300">
-              Monthly report uses the last completed month: {queryParams.from_date} to {queryParams.to_date}
+              Monthly report uses the last completed month: {queryParams.from_date!} to {queryParams.to_date!}
             </div>
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <button onClick={handleGenerate} disabled={queryLoading}
