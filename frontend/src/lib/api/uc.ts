@@ -17,7 +17,7 @@ export const ucSales = {
     getCustomOrders: unicommerceApi.getCustomOrders,
     getSalesReport: unicommerceApi.getSalesReport,
     getDailySalesReport: unicommerceApi.getDailySalesReport,
-    getDailyReturnReport: unicommerceApi.getDailyReturnReport,
+    getReturnReport: unicommerceApi.getReturnReport,
     getChannelRevenue: unicommerceApi.getChannelRevenue,
     validateRevenue: unicommerceApi.validateRevenue,
     getBestSkusMonthly: unicommerceApi.getBestSkusMonthly,

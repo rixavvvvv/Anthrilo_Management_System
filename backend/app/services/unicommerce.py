@@ -1,4 +1,4 @@
-﻿"""Unicommerce integration service.
+"""Unicommerce integration service.
 
 Handles fetching and processing sale orders via the Unicommerce API.
 Uses the export job API exclusively for bulk CSV downloads.
@@ -1552,22 +1552,6 @@ class UnicommerceService:
                 logger.error(f"Error fetching order {order_code}: {e}")
                 return {"successful": False, "error": str(e)}
 
-    # Backward-compatible aliases
-    async def get_last_24_hours_sales(self) -> Dict[str, Any]:
-        return await self.get_today_sales()
-
-    async def get_detailed_sales_report(
-        self,
-        from_date: Optional[datetime] = None,
-        to_date: Optional[datetime] = None
-    ) -> Dict[str, Any]:
-        now = datetime.now(timezone.utc)
-        if to_date is None:
-            to_date = now
-        if from_date is None:
-            from_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        return await self.get_custom_range_sales(from_date, to_date)
-
     # ── Fabric-only sales data ────────────────────────────────────────
 
     async def _download_parse_export_fabric(self, download_url: str) -> List[Dict]:
@@ -2309,6 +2293,390 @@ class UnicommerceService:
                 "analysis_time": elapsed,
             },
         }
+
+
+    # ── Return Export Job (Tally Return GST Report 3.0) ──────────────
+
+    RETURN_EXPORT_COLUMNS = [
+        "invoiceDate", "saleOrderCode", "invoiceCode", "channelName",
+        "channelLedgerName", "productCode", "productSKU", "QTY",
+        "unitPrice", "Currency", "currencyConversionRate", "total",
+        "customerName", "shippingAddressName", "shippingAddressLine1",
+        "shippingAddressLine2", "shippingAddressCity",
+        "shippingAddressState", "shippingAddressCountry",
+        "shippingAddressPincode", "shippingAddressPhone",
+        "shippingProvider", "trackingNumber", "sales", "salesLedger",
+        "cgst", "cgstRate", "sgst", "sgstRate", "igst", "igstRate",
+        "utgst", "utgstRate", "cess", "cessRate", "OtherCharges",
+        "OtherChargesLedger", "OtherCharges1", "OtherChargesLedger1",
+        "Servicetax", "ServicetaxLedger", "discountLedger",
+        "discountAmount", "imei", "godDown", "dispatchdate",
+        "narration", "entity", "voucherTypeName", "tin", "original",
+        "original1", "channelInvoiceDate", "channelState",
+        "channelPartyGSTIN", "customerGSTIN", "billingPartyCode",
+        "taxVerification", "gstregistrationtype", "rpcode", "irn",
+        "acknowledgementNumber", "productHSNCode", "returnType",
+    ]
+
+    async def _create_return_export_job(
+        self, from_date: datetime, to_date: datetime
+    ) -> Optional[str]:
+        """
+        Create a Unicommerce export job for Tally Return GST Report 3.0.
+        Returns the jobCode on success, None on failure.
+        Uses dateRange filter with epoch milliseconds.
+        """
+        url = f"{self.base_url}/export/job/create"
+
+        start_ms = int(from_date.timestamp() * 1000)
+        end_ms = int(to_date.timestamp() * 1000)
+
+        def _build_payload(s_ms: int, e_ms: int) -> dict:
+            return {
+                "exportJobTypeName": "Tally Return GST Report 3.0",
+                "frequency": "ONETIME",
+                "exportColums": self.RETURN_EXPORT_COLUMNS,
+                "exportFilters": [
+                    {
+                        "id": "dateRange",
+                        "dateRange": {
+                            "start": s_ms,
+                            "end": e_ms,
+                        },
+                    }
+                ],
+            }
+
+        payload = _build_payload(start_ms, end_ms)
+
+        MAX_RETRIES = 3
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    headers = await self._get_headers()
+                    headers["Facility"] = "anthrilo"
+
+                    response = await client.post(url, json=payload, headers=headers)
+
+                    if response.status_code == 401:
+                        self.token_manager.invalidate_token()
+                        await self.token_manager.get_valid_token()
+                        headers = await self._get_headers()
+                        headers["Facility"] = "anthrilo"
+                        response = await client.post(url, json=payload, headers=headers)
+
+                    if response.status_code == 400:
+                        try:
+                            error_body = response.json()
+                        except Exception:
+                            error_body = response.text[:500]
+                        logger.warning(
+                            f"Return Export: Job creation HTTP 400 attempt {attempt}/{MAX_RETRIES}: {error_body}"
+                        )
+                        if attempt < MAX_RETRIES:
+                            self.token_manager.invalidate_token()
+                            await asyncio.sleep(3 * attempt)
+                            continue
+                        return None
+
+                    if response.status_code >= 500:
+                        logger.warning(
+                            f"Return Export: Job creation HTTP {response.status_code} attempt {attempt}/{MAX_RETRIES}"
+                        )
+                        if attempt < MAX_RETRIES:
+                            await asyncio.sleep(3 * attempt)
+                            continue
+                        return None
+
+                    if response.status_code >= 400:
+                        try:
+                            error_body = response.json()
+                        except Exception:
+                            error_body = response.text[:500]
+                        logger.error(
+                            f"Return Export: Job creation HTTP {response.status_code}: {error_body}"
+                        )
+                        return None
+
+                    data = response.json()
+
+                    if data.get("successful"):
+                        job_code = data.get("jobCode")
+                        logger.info(f"Return Export: Job created successfully {job_code}")
+                        return job_code
+                    else:
+                        errors = data.get("errors", [])
+                        msg = data.get("message", "Unknown error")
+
+                        already_running = any(
+                            str(e.get("code", "")) == "100014"
+                            or "already" in str(e.get("description", "")).lower()
+                            for e in errors
+                        ) if errors else "already" in msg.lower()
+
+                        if already_running:
+                            logger.warning(
+                                "Return Export: Duplicate job detected (100014), offsetting date range"
+                            )
+                            for retry in range(5):
+                                offset_start = start_ms + retry + 1
+                                new_payload = _build_payload(offset_start, end_ms)
+                                await asyncio.sleep(2)
+                                headers = await self._get_headers()
+                                headers["Facility"] = "anthrilo"
+                                retry_resp = await client.post(url, json=new_payload, headers=headers)
+                                retry_data = retry_resp.json()
+                                if retry_data.get("successful"):
+                                    jc = retry_data.get("jobCode")
+                                    logger.info(f"Return Export: Job created on offset retry {retry+1}: {jc}")
+                                    return jc
+                                logger.info(f"Return Export: Offset retry {retry+1}/5 — {retry_data.get('errors', [])}")
+                            logger.error("Return Export: Job still busy after all retries")
+                            return None
+
+                        logger.error(f"Return Export: Job creation failed: {msg} | errors={errors}")
+                        return None
+
+            except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.PoolTimeout) as e:
+                logger.warning(
+                    f"Return Export: Job creation timeout attempt {attempt}/{MAX_RETRIES}: {type(e).__name__}"
+                )
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(3 * attempt)
+                    continue
+                return None
+            except Exception as e:
+                logger.error(f"Return Export: Job creation exception: {e}", exc_info=True)
+                return None
+
+        return None
+
+    async def _download_parse_return_export(self, download_url: str) -> List[Dict]:
+        """
+        Download Tally Return GST Report CSV and parse into return item records.
+        Each CSV row represents one returned item with channel, SKU, price, qty,
+        return type, GST breakdown, etc.
+        """
+        try:
+            download_timeout = httpx.Timeout(120.0, connect=15.0)
+
+            async with httpx.AsyncClient(timeout=download_timeout) as client:
+                response = await client.get(download_url)
+                if response.status_code in (401, 403):
+                    headers = await self._get_headers()
+                    response = await client.get(download_url, headers=headers)
+                response.raise_for_status()
+                csv_text = response.text
+
+            if not csv_text or not csv_text.strip():
+                logger.warning("Return Export: Downloaded CSV is empty")
+                return []
+
+            reader = csv.DictReader(io.StringIO(csv_text))
+            fieldnames = reader.fieldnames or []
+            logger.info(f"Return Export: CSV columns ({len(fieldnames)}): {fieldnames[:15]}...")
+
+            items = []
+            row_count = 0
+
+            for row in reader:
+                row_count += 1
+
+                sale_order_code = (
+                    row.get("Sale Order Number")
+                    or row.get("Sale Order Code")
+                    or row.get("saleOrderCode")
+                    or ""
+                ).strip()
+
+                channel = (
+                    row.get("Channel entry")
+                    or row.get("Channel Name")
+                    or row.get("channelName")
+                    or "UNKNOWN"
+                ).strip().replace(" ", "_")
+
+                sku = (
+                    row.get("Product SKU Code")
+                    or row.get("Product SKU")
+                    or row.get("productSKU")
+                    or ""
+                ).strip()
+
+                invoice_code = (
+                    row.get("Invoice number")
+                    or row.get("Invoice Code")
+                    or row.get("invoiceCode")
+                    or ""
+                ).strip()
+
+                return_type_raw = (
+                    row.get("Return Type")
+                    or row.get("returnType")
+                    or ""
+                ).strip().upper()
+
+                try:
+                    qty = int(float(
+                        row.get("Qty")
+                        or row.get("QTY")
+                        or row.get("quantity")
+                        or 1
+                    ))
+                except (ValueError, TypeError):
+                    qty = 1
+
+                try:
+                    unit_price = float(
+                        row.get("Unit Price")
+                        or row.get("unitPrice")
+                        or 0
+                    )
+                except (ValueError, TypeError):
+                    unit_price = 0.0
+
+                try:
+                    total = float(
+                        row.get("Total")
+                        or row.get("total")
+                        or 0
+                    )
+                except (ValueError, TypeError):
+                    total = unit_price * qty
+
+                try:
+                    sales_value = float(
+                        row.get("Sales")
+                        or row.get("sales")
+                        or 0
+                    )
+                except (ValueError, TypeError):
+                    sales_value = 0.0
+
+                # Classify RTO vs CIR
+                # Actual UC values: "COURIER RETURN" → RTO, "CUSTOMER RETURN" → CIR
+                if "COURIER" in return_type_raw or "RTO" in return_type_raw:
+                    classified_type = "RTO"
+                elif "CUSTOMER" in return_type_raw or "CIR" in return_type_raw or "REVERSE" in return_type_raw:
+                    classified_type = "CIR"
+                else:
+                    classified_type = "RTO" if return_type_raw else "UNKNOWN"
+
+                item_name = (
+                    row.get("Product Name")
+                    or row.get("Product Code")
+                    or row.get("productCode")
+                    or sku
+                )
+
+                items.append({
+                    "saleOrderCode": sale_order_code,
+                    "invoiceCode": invoice_code,
+                    "channel": channel,
+                    "sku": sku,
+                    "itemName": item_name,
+                    "quantity": qty,
+                    "unitPrice": unit_price,
+                    "total": total,
+                    "salesValue": sales_value,
+                    "returnType": classified_type,
+                    "returnTypeRaw": return_type_raw,
+                })
+
+            logger.info(
+                f"Return Export: Parsed {row_count} CSV rows → {len(items)} return items"
+            )
+            return items
+
+        except Exception as e:
+            logger.error(f"Return Export: Download/parse failed: {e}", exc_info=True)
+            return []
+
+    async def fetch_returns_via_export(
+        self, from_date: datetime, to_date: datetime
+    ) -> Dict[str, Any]:
+        """
+        Fetch returns via the Export Job API (Tally Return GST Report 3.0).
+        Serialized with _export_lock since UC allows only one export at a time.
+
+        Returns dict with: successful, items (list of return item records),
+        total_items, total_time, method.
+        """
+        async with self._export_lock:
+            return await self._fetch_returns_via_export_inner(from_date, to_date)
+
+    async def _fetch_returns_via_export_inner(
+        self, from_date: datetime, to_date: datetime
+    ) -> Dict[str, Any]:
+        """Inner return export fetch — runs under _export_lock."""
+        start_time = time_module.time()
+        logger.info("Starting return export job fetch")
+        logger.info(f"  Range: {from_date.isoformat()} → {to_date.isoformat()}")
+
+        try:
+            # Step 1: Create export job
+            job_code = await self._create_return_export_job(from_date, to_date)
+            create_time = time_module.time() - start_time
+
+            if not job_code:
+                logger.error("Return Export: Job creation failed")
+                return {
+                    "successful": False,
+                    "error": "Return export job creation failed",
+                    "items": [],
+                    "total_items": 0,
+                }
+
+            logger.info(f"  Step 1 done in {create_time:.1f}s — job={job_code}")
+
+            # Step 2: Poll until complete (reuse existing _poll_export_status)
+            download_url = await self._poll_export_status(job_code)
+            poll_time = time_module.time() - start_time - create_time
+
+            if not download_url:
+                logger.error("Return Export: Job failed or timed out")
+                return {
+                    "successful": False,
+                    "error": "Return export job timed out or failed",
+                    "items": [],
+                    "total_items": 0,
+                }
+
+            logger.info(f"  Step 2 done in {poll_time:.1f}s — file ready")
+
+            # Step 3: Download and parse CSV
+            items = await self._download_parse_return_export(download_url)
+            download_time = time_module.time() - start_time - create_time - poll_time
+            total_time = time_module.time() - start_time
+
+            logger.info(
+                f"  Step 3 done in {download_time:.1f}s — {len(items)} return items"
+            )
+            logger.info(
+                f"Return Export done: {len(items)} items in {total_time:.1f}s total"
+            )
+
+            return {
+                "successful": True,
+                "items": items,
+                "total_items": len(items),
+                "phase1_time": round(create_time + poll_time, 2),
+                "phase2_time": round(download_time, 2),
+                "total_time": round(total_time, 2),
+                "method": "export_job_tally_return",
+            }
+
+        except Exception as e:
+            total_time = time_module.time() - start_time
+            logger.error(
+                f"Return Export: Failed after {total_time:.1f}s: {e}", exc_info=True
+            )
+            return {
+                "successful": False,
+                "error": f"Return export failed: {str(e)}",
+                "items": [],
+                "total_items": 0,
+            }
 
 
 # Singleton factory

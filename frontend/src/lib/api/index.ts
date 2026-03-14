@@ -92,9 +92,14 @@ export const unicommerceApi = {
   getDailySalesReport: (params: { date?: string; from_date?: string; to_date?: string }) =>
     apiClient.get('/integrations/unicommerce/daily-sales-report', { params }),
 
-  // Daily Return Report - Channel + SKU breakdown (Two-Phase API)
-  getDailyReturnReport: (date: string, returnType: string = 'ALL') =>
-    apiClient.get('/integrations/unicommerce/daily-return-report', { params: { date, return_type: returnType } }),
+  // Return Report - Channel + SKU breakdown
+  getReturnReport: (params: {
+    date?: string;
+    from_date?: string;
+    to_date?: string;
+    period?: 'daily' | 'weekly' | 'monthly' | 'custom';
+    return_type?: string;
+  }) => apiClient.get('/integrations/unicommerce/return-report', { params }),
 
   // Best performing SKUs monthly
   getBestSkusMonthly: (params?: { month?: number; year?: number; limit?: number; force_refresh?: boolean; b2c_only?: boolean }) =>

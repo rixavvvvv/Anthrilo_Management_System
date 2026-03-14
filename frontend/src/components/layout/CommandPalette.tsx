@@ -56,13 +56,13 @@ const SEARCH_ITEMS: SearchItem[] = [
     keywords: ['sales', 'daily', 'revenue', 'channel'],
   },
   {
-    id: 'daily-returns',
-    title: 'Daily Returns Report',
+    id: 'return-report',
+    title: 'Return Report',
     description: 'Returns & refunds summary',
     href: '/dashboard/sales/reports/returns',
     icon: Undo2,
     category: 'Reports',
-    keywords: ['returns', 'refunds', 'daily'],
+    keywords: ['returns', 'refunds', 'rto', 'cir'],
   },
   {
     id: 'sku-sales',

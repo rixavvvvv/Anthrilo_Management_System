@@ -65,19 +65,30 @@ type ChSortKey = 'channel' | 'returns' | 'items' | 'value' | 'rto' | 'cir' | 'pc
 type SkuSortKey = 'sku' | 'name' | 'quantity' | 'value' | 'return_count';
 type Dir = 'asc' | 'desc';
 
-const RETURN_TYPES = [
-  { value: 'ALL', label: 'All Returns' },
-  { value: 'RTO', label: 'RTO Only' },
-  { value: 'CIR', label: 'Customer Returns' },
-] as const;
+type ReportPeriod = 'daily' | 'weekly' | 'monthly' | 'custom';
+
+const PERIOD_OPTIONS: { value: ReportPeriod; label: string }[] = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'custom', label: 'Custom' },
+];
 
 /* ═══════════════════════════════════════════════════════════════════ */
-export default function DailyReturnReportPage() {
+export default function ReturnReportPage() {
   const [reportDate, setReportDate] = useState<string>(() => {
     const d = new Date(); d.setDate(d.getDate() - 1);
     return d.toISOString().split('T')[0];
   });
-  const [returnType, setReturnType] = useState('ALL');
+  const [fromDate, setFromDate] = useState<string>(() => {
+    const d = new Date(); d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  });
+  const [toDate, setToDate] = useState<string>(() => {
+    const d = new Date(); d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [period, setPeriod] = useState<ReportPeriod>('daily');
   const [showReport, setShowReport] = useState(true);
   const [calOpen, setCalOpen] = useState(false);
   const calRef = useRef<HTMLDivElement>(null);
@@ -100,10 +111,21 @@ export default function DailyReturnReportPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, [calOpen]);
 
+  const canGenerate = period !== 'custom' || (!!fromDate && !!toDate);
+
   const { data: raw, isLoading, refetch } = useQuery({
-    queryKey: ['daily-return-report', reportDate, returnType],
-    queryFn: async () => (await ucSales.getDailyReturnReport(reportDate, returnType)).data,
-    enabled: showReport,
+    queryKey: ['return-report', period, reportDate, fromDate, toDate],
+    queryFn: async () => {
+      const params: any = { return_type: 'ALL', period };
+      if (period === 'custom') {
+        params.from_date = fromDate;
+        params.to_date = toDate;
+      } else if (period === 'daily') {
+        params.date = reportDate;
+      }
+      return (await ucSales.getReturnReport(params)).data;
+    },
+    enabled: showReport && canGenerate,
     staleTime: 5 * 60_000,
   });
 
@@ -123,9 +145,12 @@ export default function DailyReturnReportPage() {
     rows.push(['TOTAL', raw.totals.total_returns, raw.totals.total_items, raw.totals.total_value.toFixed(2), '100%', '100%', raw.totals.rto_count, raw.totals.cir_count]);
     const csv = [hdr.join(','), ...rows.map((r: any) => r.join(','))].join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    const a = document.createElement('a'); a.href = url; a.download = `return-report-${reportDate}-${returnType}.csv`;
+    const from = raw?.from_date || reportDate;
+    const to = raw?.to_date || reportDate;
+    const suffix = from === to ? from : `${from}_to_${to}`;
+    const a = document.createElement('a'); a.href = url; a.download = `return-report-${suffix}.csv`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-  }, [raw, reportDate, returnType]);
+  }, [raw, reportDate]);
 
   /* ── derived data ──────────────────────────────────────────────── */
   const totals = raw?.totals;
@@ -223,69 +248,107 @@ export default function DailyReturnReportPage() {
   const SortIcn = ({ active, dir }: { active: boolean; dir: Dir }) =>
     active ? (dir === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 opacity-30" />;
 
-  const dateLabel = format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'EEEE, dd MMMM yyyy');
+  const dateLabel = useMemo(() => {
+    const from = raw?.from_date || (period === 'custom' ? fromDate : reportDate);
+    const to = raw?.to_date || (period === 'custom' ? toDate : reportDate);
+    if (from === to) {
+      return format(parse(from, 'yyyy-MM-dd', new Date()), 'EEEE, dd MMMM yyyy');
+    }
+    return `${format(parse(from, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')} - ${format(parse(to, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}`;
+  }, [raw, period, fromDate, toDate, reportDate]);
 
   /* ═══════════════════════════════════════════════════════════════ */
   return (
     <div className="space-y-8">
       {/* ─── Header ──────────────────────────────────────────────── */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Daily Return Report</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Return Report</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">RTO & Customer-Initiated Returns · Risk analytics</p>
       </div>
 
       {/* ─── Filters ─────────────────────────────────────────────── */}
       <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5">
         <div className="flex flex-wrap items-end gap-3">
-          {/* Date picker */}
-          <div className="flex-1 min-w-[180px] max-w-[240px]" ref={calRef}>
-            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Report date</label>
-            <div className="relative">
-              <button type="button" onClick={() => setCalOpen(o => !o)}
-                className="w-full flex items-center gap-2 pl-3 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 text-left">
-                <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                <span>{format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}</span>
-              </button>
-              <AnimatePresence>
-                {calOpen && (
-                  <motion.div initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.97 }} transition={{ duration: 0.15 }}
-                    className="absolute left-0 top-full mt-2 z-50 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl p-3">
-                    <DayPicker mode="single"
-                      selected={parse(reportDate, 'yyyy-MM-dd', new Date())}
-                      onSelect={(day) => { if (day) { setReportDate(format(day, 'yyyy-MM-dd')); setShowReport(false); setCalOpen(false); } }}
-                      disabled={{ after: new Date() }}
-                      defaultMonth={parse(reportDate, 'yyyy-MM-dd', new Date())}
-                      classNames={{
-                        root: 'rdp-custom',
-                        month_caption: 'text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center py-1',
-                        weekday: 'text-[11px] font-medium text-slate-400 dark:text-slate-500 w-9 text-center',
-                        day_button: 'h-9 w-9 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center',
-                        today: 'font-bold text-violet-600 dark:text-violet-400',
-                        selected: '!bg-violet-600 !text-white rounded-lg font-semibold',
-                        disabled: 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40',
-                        chevron: 'fill-slate-500 dark:fill-slate-400 w-4 h-4',
-                      }}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-
-          {/* Return type */}
-          <div className="min-w-[150px]">
-            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Type</label>
+          {/* Period */}
+          <div className="min-w-[260px]">
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Range</label>
             <div className="flex rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 overflow-hidden">
-              {RETURN_TYPES.map((t) => (
-                <button key={t.value} onClick={() => { setReturnType(t.value); setShowReport(false); }}
-                  className={`flex-1 px-3 py-2 text-xs font-medium transition ${returnType === t.value ? 'bg-violet-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
-                  {t.value === 'ALL' ? 'All' : t.value}
+              {PERIOD_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => { setPeriod(opt.value); setShowReport(false); setCalOpen(false); }}
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition ${period === opt.value ? 'bg-violet-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                >
+                  {opt.label}
                 </button>
               ))}
             </div>
           </div>
 
-          <button onClick={handleGenerate} disabled={isLoading}
+          {/* Date picker */}
+          {period === 'daily' && (
+            <div className="flex-1 min-w-[180px] max-w-[240px]" ref={calRef}>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Report date</label>
+              <div className="relative">
+                <button type="button" onClick={() => setCalOpen(o => !o)}
+                  className="w-full flex items-center gap-2 pl-3 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 text-left">
+                  <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  <span>{format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}</span>
+                </button>
+                <AnimatePresence>
+                  {calOpen && (
+                    <motion.div initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.97 }} transition={{ duration: 0.15 }}
+                      className="absolute left-0 top-full mt-2 z-50 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl p-3">
+                      <DayPicker mode="single"
+                        selected={parse(reportDate, 'yyyy-MM-dd', new Date())}
+                        onSelect={(day) => { if (day) { setReportDate(format(day, 'yyyy-MM-dd')); setShowReport(false); setCalOpen(false); } }}
+                        disabled={{ after: new Date() }}
+                        defaultMonth={parse(reportDate, 'yyyy-MM-dd', new Date())}
+                        classNames={{
+                          root: 'rdp-custom',
+                          month_caption: 'text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center py-1',
+                          weekday: 'text-[11px] font-medium text-slate-400 dark:text-slate-500 w-9 text-center',
+                          day_button: 'h-9 w-9 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center',
+                          today: 'font-bold text-violet-600 dark:text-violet-400',
+                          selected: '!bg-violet-600 !text-white rounded-lg font-semibold',
+                          disabled: 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40',
+                          chevron: 'fill-slate-500 dark:fill-slate-400 w-4 h-4',
+                        }}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          )}
+
+          {period === 'custom' && (
+            <>
+              <div className="min-w-[170px]">
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">From</label>
+                <input
+                  type="date"
+                  value={fromDate}
+                  max={toDate || undefined}
+                  onChange={(e) => { setFromDate(e.target.value); setShowReport(false); }}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+              <div className="min-w-[170px]">
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">To</label>
+                <input
+                  type="date"
+                  value={toDate}
+                  min={fromDate || undefined}
+                  max={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => { setToDate(e.target.value); setShowReport(false); }}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+            </>
+          )}
+
+          <button onClick={handleGenerate} disabled={isLoading || !canGenerate}
             className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
             {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
             {isLoading ? 'Generating…' : 'Generate Report'}
@@ -326,7 +389,7 @@ export default function DailyReturnReportPage() {
               <div className="relative z-10">
                 <div className="flex items-center gap-2 mb-1">
                   <ShieldAlert className="w-4 h-4 opacity-70" />
-                  <span className="text-xs font-medium opacity-70 uppercase tracking-wider">{dateLabel} · {returnType === 'ALL' ? 'RTO + CIR' : returnType}</span>
+                  <span className="text-xs font-medium opacity-70 uppercase tracking-wider">{dateLabel} · RTO + CIR</span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-4">
                   <div>
@@ -360,7 +423,7 @@ export default function DailyReturnReportPage() {
             {totals.total_returns === 0 && (
               <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-8 text-center">
                 <p className="text-2xl mb-2">✅</p>
-                <p className="text-sm text-emerald-700 dark:text-emerald-300 font-medium">No returns found for this date</p>
+                <p className="text-sm text-emerald-700 dark:text-emerald-300 font-medium">No returns found for this selected range</p>
               </div>
             )}
 
@@ -664,8 +727,8 @@ export default function DailyReturnReportPage() {
 
                 {/* ── Footer ──────────────────────────────────────── */}
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px] text-slate-400 dark:text-slate-500 px-1">
-                  <span>Source: return/search + return/get API</span>
-                  <span>Type: {returnType === 'ALL' ? 'RTO + CIR' : returnType}</span>
+                  <span>Source: Export Job API (Tally Return GST Report 3.0)</span>
+                  <span>Scope: All Returns (RTO + CIR)</span>
                 </div>
               </>
             )}
