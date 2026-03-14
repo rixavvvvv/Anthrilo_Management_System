@@ -496,12 +496,15 @@ async def get_sales_activity_report(
     try:
         service = get_unicommerce_service()
 
+        # Construct dates in IST and convert to UTC so the Unicommerce
+        # export filter covers the correct IST business day boundaries.
+        # Using UTC directly would miss orders between IST 00:00–05:30.
         from_dt = datetime.strptime(from_date, "%Y-%m-%d").replace(
-            hour=0, minute=0, second=0, tzinfo=timezone.utc
-        )
+            hour=0, minute=0, second=0, tzinfo=IST
+        ).astimezone(timezone.utc)
         to_dt = datetime.strptime(to_date, "%Y-%m-%d").replace(
-            hour=23, minute=59, second=59, tzinfo=timezone.utc
-        )
+            hour=23, minute=59, second=59, tzinfo=IST
+        ).astimezone(timezone.utc)
 
         result = await service.get_custom_range_sales(from_dt, to_dt)
         if not result.get("success"):
@@ -582,14 +585,30 @@ async def get_sales_activity_report(
 
         # ── Merge real return events (RTO/CIR) from export-based return report ──
         # Sale order status rarely carries returns; Unicommerce emits returns separately.
+        # Use a timeout so large date ranges don't block the entire report.
         return_map = defaultdict(int)  # (sku, channel) -> qty fallback bucket
+        return_items_total = 0
+        return_items_matched = 0
         try:
             # One custom-range call is significantly faster than per-day calls.
-            return_report = await get_return_report(
-                from_date=from_date,
-                to_date=to_date,
-                period="custom",
-                return_type="ALL",
+            # Timeout: 600s to accommodate chunked return exports for
+            # large date ranges (yearly = ~12 chunks × ~30s each).
+            logger.info(f"Sales activity: fetching return report for {from_date} to {to_date}")
+            return_report = await asyncio.wait_for(
+                get_return_report(
+                    from_date=from_date,
+                    to_date=to_date,
+                    period="custom",
+                    return_type="ALL",
+                ),
+                timeout=600.0,
+            )
+            logger.info(
+                f"Sales activity: return report result — "
+                f"success={return_report.get('success')}, "
+                f"returns_count={len(return_report.get('returns', []))}, "
+                f"totals={return_report.get('totals', {})}, "
+                f"error={return_report.get('error', 'none')}"
             )
             if return_report.get("success"):
                 for ret in return_report.get("returns", []):
@@ -604,10 +623,13 @@ async def get_sales_activity_report(
                         if not sku or rqty <= 0:
                             continue
 
+                        return_items_total += rqty
+
                         # Primary (real, precise): saleOrderCode + SKU
                         direct_keys = order_sku_to_detail_keys.get((so_code_norm, sku), []) if so_code_norm else []
                         if len(direct_keys) == 1:
                             detail_map[direct_keys[0]]["return_qty"] += rqty
+                            return_items_matched += rqty
                             continue
 
                         if len(direct_keys) > 1:
@@ -624,17 +646,30 @@ async def get_sales_activity_report(
                             unknown_row["size"] = "UNKNOWN"
                             unknown_row["channel"] = sample_row.get("channel") or ret_channel
                             unknown_row["return_qty"] += rqty
+                            return_items_matched += rqty
                             continue
 
                         # Fallback: SKU + channel bucket (still real data, lower precision).
                         return_map[(sku, ret_channel)] += rqty
+
+                logger.info(
+                    f"Sales activity: return merge phase 1 — "
+                    f"total_return_items={return_items_total}, "
+                    f"direct_matched={return_items_matched}, "
+                    f"fallback_buckets={len(return_map)}"
+                )
             else:
                 logger.warning(
                     "Sales activity: return-report custom range failed: "
                     f"{return_report.get('error', 'unknown error')}"
                 )
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"Sales activity: return-report timed out for range {from_date} to {to_date}, "
+                "proceeding without return data"
+            )
         except Exception as ret_err:
-            logger.warning(f"Sales activity: return merge failed: {ret_err}")
+            logger.warning(f"Sales activity: return merge failed: {ret_err}", exc_info=True)
 
         # Apply return qty using only real data.
         # If a SKU+channel maps to multiple sizes, we cannot know exact size split from return export,
