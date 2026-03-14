@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { format, parse, lastDayOfMonth } from 'date-fns';
+import { format, parse } from 'date-fns';
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -52,7 +52,7 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 
 const ITEMS_PER_PAGE = 50;
 
-type ReportMode = 'daily' | 'monthly' | 'custom';
+type ReportMode = 'daily' | 'weekly' | 'monthly' | 'custom';
 type SortKey = 'channel_name' | 'quantity' | 'selling_price' | 'orders' | 'avg' | 'pct';
 type ItemSortKey = 'item_sku_code' | 'item_type_name' | 'channel_name' | 'selling_price' | 'size' | 'good_inventory' | 'virtual_inventory';
 type SortDir = 'asc' | 'desc';
@@ -92,8 +92,6 @@ export default function DailySalesReportPage() {
   const calRef = useRef<HTMLDivElement>(null);
 
   const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
-  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
 
   const [customFrom, setCustomFrom] = useState<string>(() => {
     const d = new Date(); d.setDate(d.getDate() - 7);
@@ -131,18 +129,29 @@ export default function DailySalesReportPage() {
   const queryParams = useMemo(() => {
     if (mode === 'daily') {
       return { date: reportDate };
+    } else if (mode === 'weekly') {
+      const currentWeekStart = new Date(now);
+      currentWeekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+      const weekStart = new Date(currentWeekStart);
+      weekStart.setDate(currentWeekStart.getDate() - 7);
+      const weekEnd = new Date(currentWeekStart);
+      weekEnd.setDate(currentWeekStart.getDate() - 1);
+      const from = format(weekStart, 'yyyy-MM-dd');
+      const to = format(weekEnd, 'yyyy-MM-dd');
+      return { from_date: from, to_date: to };
     } else if (mode === 'monthly') {
-      const first = new Date(selectedYear, selectedMonth, 1);
-      const last = lastDayOfMonth(first);
-      return { from_date: format(first, 'yyyy-MM-dd'), to_date: format(last, 'yyyy-MM-dd') };
+      const firstOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastOfPreviousMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      const firstOfPreviousMonth = new Date(lastOfPreviousMonth.getFullYear(), lastOfPreviousMonth.getMonth(), 1);
+      return { from_date: format(firstOfPreviousMonth, 'yyyy-MM-dd'), to_date: format(lastOfPreviousMonth, 'yyyy-MM-dd') };
     } else {
       return { from_date: customFrom, to_date: customTo };
     }
-  }, [mode, reportDate, selectedMonth, selectedYear, customFrom, customTo]);
+  }, [mode, reportDate, customFrom, customTo, now]);
 
   const queryKey = useMemo(() => ['sales-report', mode, ...Object.values(queryParams)], [mode, queryParams]);
 
-  const { data: raw, isLoading, refetch } = useQuery({
+  const { data: raw, isLoading, isFetching, refetch } = useQuery({
     queryKey,
     queryFn: async () => {
       const res = await ucSales.getDailySalesReport(queryParams);
@@ -156,15 +165,20 @@ export default function DailySalesReportPage() {
   });
 
   const handleGenerate = useCallback(() => { setShowReport(true); refetch(); }, [refetch]);
+  const queryLoading = isLoading || isFetching;
 
   /* ── Estimated loading progress ─────────────────────────────────── */
   const [loadProgress, setLoadProgress] = useState(0);
   useEffect(() => {
-    if (!isLoading) { setLoadProgress(0); return; }
+    if (!queryLoading) { setLoadProgress(0); return; }
     // Estimate total time based on date range
     let totalDays = 1;
-    if (mode === 'monthly') {
-      totalDays = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+    if (mode === 'weekly') {
+      totalDays = 7;
+    } else if (mode === 'monthly') {
+      const from = new Date(queryParams.from_date);
+      const to = new Date(queryParams.to_date);
+      totalDays = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / 86400000) + 1);
     } else if (mode === 'custom') {
       const d0 = new Date(customFrom);
       const d1 = new Date(customTo);
@@ -183,7 +197,7 @@ export default function DailySalesReportPage() {
     tick();
     const id = setInterval(tick, 500);
     return () => clearInterval(id);
-  }, [isLoading, mode, customFrom, customTo, selectedMonth, selectedYear]);
+  }, [queryLoading, mode, customFrom, customTo, queryParams]);
 
   /* ── CSV download (item-level + channel summary + comparison on right side) */
   const handleCSV = useCallback(() => {
@@ -290,11 +304,12 @@ export default function DailySalesReportPage() {
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement('a');
     const filename = mode === 'daily' ? `channel-wise-sales-report-${reportDate}.csv`
-      : mode === 'monthly' ? `channel-wise-sales-report-${MONTHS[selectedMonth]}-${selectedYear}.csv`
+      : mode === 'weekly' ? `channel-wise-sales-report-week-${queryParams.from_date}-to-${queryParams.to_date}.csv`
+      : mode === 'monthly' ? `channel-wise-sales-report-month-${queryParams.from_date}-to-${queryParams.to_date}.csv`
         : `channel-wise-sales-report-${customFrom}-to-${customTo}.csv`;
     a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-  }, [raw, mode, reportDate, selectedMonth, selectedYear, customFrom, customTo]);
+  }, [raw, mode, reportDate, customFrom, customTo, queryParams]);
 
   /* ── derived data ──────────────────────────────────────────────────── */
   const totals = raw?.totals;
@@ -395,12 +410,11 @@ export default function DailySalesReportPage() {
   /* ── date labels ───────────────────────────────────────────────────── */
   const dateLabel = mode === 'daily'
     ? format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'EEEE, dd MMMM yyyy')
+    : mode === 'weekly'
+      ? `${format(parse(queryParams.from_date, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')} – ${format(parse(queryParams.to_date, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}`
     : mode === 'monthly'
-      ? `${MONTHS[selectedMonth]} ${selectedYear}`
+      ? `${format(parse(queryParams.from_date, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')} – ${format(parse(queryParams.to_date, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}`
       : `${format(parse(customFrom, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')} – ${format(parse(customTo, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}`;
-
-  const currentYear = now.getFullYear();
-  const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
   const CAL_CLASSES = {
     root: 'rdp-custom',
@@ -427,6 +441,7 @@ export default function DailySalesReportPage() {
         <div className="flex gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-900 w-fit">
           {([
             { key: 'daily' as ReportMode, label: 'Daily', icon: Calendar },
+            { key: 'weekly' as ReportMode, label: 'Weekly', icon: Layers },
             { key: 'monthly' as ReportMode, label: 'Monthly', icon: Layers },
             { key: 'custom' as ReportMode, label: 'Custom Range', icon: BarChart3 },
           ]).map((tab) => (
@@ -445,7 +460,9 @@ export default function DailySalesReportPage() {
         {mode === 'daily' && (
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[180px] max-w-[260px]" ref={calRef}>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Report date</label>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">
+                Report date
+              </label>
               <div className="relative">
                 <button type="button" onClick={() => setCalOpen((o) => !o)}
                   className="w-full flex items-center gap-2 pl-3 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-left">
@@ -469,10 +486,10 @@ export default function DailySalesReportPage() {
                 </AnimatePresence>
               </div>
             </div>
-            <button onClick={handleGenerate} disabled={isLoading}
+            <button onClick={handleGenerate} disabled={queryLoading}
               className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
-              {isLoading ? 'Generating…' : 'Generate Report'}
+              {queryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
+              {queryLoading ? 'Generating…' : 'Generate Report'}
             </button>
             {showReport && raw?.success && (
               <button onClick={handleCSV}
@@ -484,47 +501,38 @@ export default function DailySalesReportPage() {
         )}
 
         {/* Monthly controls */}
-        {mode === 'monthly' && (
+        {mode === 'weekly' && (
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Year</label>
-              <div className="flex gap-1.5">
-                {yearOptions.map((yr) => (
-                  <button key={yr} onClick={() => { setSelectedYear(yr); setShowReport(false); }}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${selectedYear === yr
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                      }`}>
-                    {yr}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Select Month</label>
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                {MONTHS.map((m, i) => {
-                  const isDisabled = selectedYear === currentYear && i > now.getMonth();
-                  return (
-                    <button key={m} onClick={() => { if (!isDisabled) { setSelectedMonth(i); setShowReport(false); } }}
-                      disabled={isDisabled}
-                      className={`px-3 py-2.5 rounded-xl text-sm font-medium transition ${selectedMonth === i && !isDisabled
-                        ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-300 dark:ring-blue-700'
-                        : isDisabled
-                          ? 'bg-slate-50 dark:bg-slate-900/50 text-slate-300 dark:text-slate-600 cursor-not-allowed'
-                          : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400'
-                        }`}>
-                      {m.slice(0, 3)}
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="text-sm text-slate-600 dark:text-slate-300">
+              Weekly report uses the last completed week: {queryParams.from_date} to {queryParams.to_date}
             </div>
             <div className="flex flex-wrap items-center gap-3 pt-1">
-              <button onClick={handleGenerate} disabled={isLoading}
+              <button onClick={handleGenerate} disabled={queryLoading}
                 className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
-                {isLoading ? 'Generating…' : `Generate ${MONTHS[selectedMonth]} Report`}
+                {queryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
+                {queryLoading ? 'Generating…' : 'Generate Last Week Report'}
+              </button>
+              {showReport && raw?.success && (
+                <button onClick={handleCSV}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition shadow-sm">
+                  <Download className="w-4 h-4" /> Download CSV
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Monthly controls */}
+        {mode === 'monthly' && (
+          <div className="space-y-4">
+            <div className="text-sm text-slate-600 dark:text-slate-300">
+              Monthly report uses the last completed month: {queryParams.from_date} to {queryParams.to_date}
+            </div>
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <button onClick={handleGenerate} disabled={queryLoading}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
+                {queryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
+                {queryLoading ? 'Generating…' : 'Generate Last Month Report'}
               </button>
               {showReport && raw?.success && (
                 <button onClick={handleCSV}
@@ -589,10 +597,10 @@ export default function DailySalesReportPage() {
                 </AnimatePresence>
               </div>
             </div>
-            <button onClick={handleGenerate} disabled={isLoading}
+            <button onClick={handleGenerate} disabled={queryLoading}
               className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
-              {isLoading ? 'Generating…' : 'Generate Report'}
+              {queryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
+              {queryLoading ? 'Generating…' : 'Generate Report'}
             </button>
             {showReport && raw?.success && (
               <button onClick={handleCSV}
@@ -606,7 +614,7 @@ export default function DailySalesReportPage() {
 
       {/* ─── Loading ─────────────────────────────────────────────── */}
       <AnimatePresence>
-        {isLoading && (
+        {queryLoading && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-10 flex flex-col items-center gap-4">
             <div className="h-10 w-10 rounded-full border-[3px] border-blue-500 border-t-transparent animate-spin" />

@@ -113,7 +113,7 @@ export default function ReturnReportPage() {
 
   const canGenerate = period !== 'custom' || (!!fromDate && !!toDate);
 
-  const { data: raw, isLoading, refetch } = useQuery({
+  const { data: raw, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['return-report', period, reportDate, fromDate, toDate],
     queryFn: async () => {
       const params: any = { return_type: 'ALL', period };
@@ -128,6 +128,8 @@ export default function ReturnReportPage() {
     enabled: showReport && canGenerate,
     staleTime: 5 * 60_000,
   });
+
+  const queryLoading = isLoading || isFetching;
 
   const handleGenerate = useCallback(() => { setShowReport(true); refetch(); }, [refetch]);
 
@@ -348,10 +350,10 @@ export default function ReturnReportPage() {
             </>
           )}
 
-          <button onClick={handleGenerate} disabled={isLoading || !canGenerate}
+          <button onClick={handleGenerate} disabled={queryLoading || !canGenerate}
             className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
-            {isLoading ? 'Generating…' : 'Generate Report'}
+            {queryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
+            {queryLoading ? 'Generating…' : 'Generate Report'}
           </button>
           {showReport && raw?.success && (
             <button onClick={handleCSV}
@@ -363,7 +365,7 @@ export default function ReturnReportPage() {
       </div>
 
       {/* ─── Loading ─────────────────────────────────────────────── */}
-      <ProgressLoader loading={isLoading} stages={[
+      <ProgressLoader loading={queryLoading} stages={[
         { at: 0, label: 'Initializing export job…' },
         { at: 15, label: 'Fetching return orders…' },
         { at: 40, label: 'Classifying RTO vs CIR…' },
@@ -372,7 +374,7 @@ export default function ReturnReportPage() {
       ]} />
 
       {/* ─── Error ───────────────────────────────────────────────── */}
-      {showReport && raw && !raw.success && !isLoading && (
+      {showReport && raw && !raw.success && !queryLoading && (
         <div className="rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4">
           <p className="text-sm text-rose-600 dark:text-rose-400">{raw.error || 'Failed to generate report'}</p>
         </div>
@@ -380,7 +382,7 @@ export default function ReturnReportPage() {
 
       {/* ─── Report content ──────────────────────────────────────── */}
       <AnimatePresence>
-        {showReport && raw?.success && totals && !isLoading && (
+        {showReport && raw?.success && totals && !queryLoading && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="space-y-8">
 
             {/* ── Hero summary ────────────────────────────────────── */}

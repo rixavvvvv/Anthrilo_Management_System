@@ -3,8 +3,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { unicommerceApi } from '@/lib/api';
 import { useState, useMemo } from 'react';
-
-type TimeFilter = 'today' | 'yesterday' | 'last_7_days' | 'custom';
+import {
+    ReportDateMode,
+    getTodayYmd,
+    getYesterdayYmd,
+    resolveReportDateRange,
+} from '@/lib/report-date-range';
 
 // Format currency
 const formatCurrency = (value: number | undefined | null): string => {
@@ -142,32 +146,34 @@ const ChannelChart = ({ channels }: { channels: any[] }) => {
 
 export default function SalesReportsPage() {
     // State
-    const [timeFilter, setTimeFilter] = useState<TimeFilter>('today');
+    const [dateMode, setDateMode] = useState<ReportDateMode>('daily');
+    const [anchorDate, setAnchorDate] = useState(() => {
+        const date = new Date();
+        date.setDate(date.getDate() - 1);
+        return date.toISOString().split('T')[0];
+    });
     const [currentPage, setCurrentPage] = useState(1);
     const [customDates, setCustomDates] = useState({
         from: new Date().toISOString().split('T')[0],
         to: new Date().toISOString().split('T')[0]
     });
 
-    // Map time filter to API period
-    const apiPeriod = useMemo(() => {
-        switch (timeFilter) {
-            case 'today': return 'today';
-            case 'yesterday': return 'yesterday';
-            case 'last_7_days': return 'last_7_days';
-            case 'custom': return 'custom';
-        }
-    }, [timeFilter]);
+    const effectiveRange = useMemo(() => resolveReportDateRange({
+        mode: dateMode,
+        anchorDate,
+        fromDate: customDates.from,
+        toDate: customDates.to,
+    }), [dateMode, anchorDate, customDates]);
 
     // Fetch summary data
     const { data: report, isLoading: summaryLoading, error: summaryError, refetch } = useQuery({
-        queryKey: ['salesReport', apiPeriod, customDates],
+        queryKey: ['salesReport', dateMode, effectiveRange.fromDate, effectiveRange.toDate],
         queryFn: async () => {
-            const params: any = { period: apiPeriod };
-            if (apiPeriod === 'custom') {
-                params.from_date = customDates.from;
-                params.to_date = customDates.to;
-            }
+            const params: any = {
+                period: 'custom',
+                from_date: effectiveRange.fromDate,
+                to_date: effectiveRange.toDate,
+            };
             const response = await unicommerceApi.getSalesReport(params);
             return response.data;
         },
@@ -178,29 +184,15 @@ export default function SalesReportsPage() {
 
     // Fetch paginated orders
     const { data: ordersData, isLoading: ordersLoading, isFetching: ordersFetching } = useQuery({
-        queryKey: ['salesOrders', apiPeriod, customDates, currentPage],
+        queryKey: ['salesOrders', dateMode, effectiveRange.fromDate, effectiveRange.toDate, currentPage],
         queryFn: async () => {
-            let response;
-            switch (timeFilter) {
-                case 'today':
-                    response = await unicommerceApi.getTodayOrders(currentPage, 12);
-                    break;
-                case 'yesterday':
-                    response = await unicommerceApi.getYesterdayOrders(currentPage, 12);
-                    break;
-                case 'last_7_days':
-                    response = await unicommerceApi.getLast7DaysOrders(currentPage, 12);
-                    break;
-                case 'custom':
-                    response = await unicommerceApi.getCustomOrders({
-                        from_date: customDates.from,
-                        to_date: customDates.to,
-                        page: currentPage,
-                        page_size: 12
-                    });
-                    break;
-            }
-            return response?.data;
+            const response = await unicommerceApi.getCustomOrders({
+                from_date: effectiveRange.fromDate,
+                to_date: effectiveRange.toDate,
+                page: currentPage,
+                page_size: 12
+            });
+            return response.data;
         },
         refetchInterval: 5 * 60 * 1000,
         staleTime: 1 * 60 * 1000,
@@ -208,17 +200,27 @@ export default function SalesReportsPage() {
 
     // Fetch channel revenue
     const { data: channelData } = useQuery({
-        queryKey: ['channelRevenue', apiPeriod],
+        queryKey: ['channelRevenue', dateMode, effectiveRange.fromDate, effectiveRange.toDate],
         queryFn: async () => {
-            const response = await unicommerceApi.getChannelRevenue(apiPeriod);
+            const today = getTodayYmd();
+            const yesterday = getYesterdayYmd();
+
+            const channelPeriod =
+                dateMode === 'daily' && effectiveRange.fromDate === today
+                    ? 'today'
+                    : dateMode === 'daily' && effectiveRange.fromDate === yesterday
+                        ? 'yesterday'
+                        : 'last_7_days';
+
+            const response = await unicommerceApi.getChannelRevenue(channelPeriod);
             return response.data;
         },
         staleTime: 5 * 60 * 1000,
     });
 
-    // Reset page when filter changes
-    const handleFilterChange = (filter: TimeFilter) => {
-        setTimeFilter(filter);
+    // Reset page when range mode changes
+    const handleModeChange = (mode: ReportDateMode) => {
+        setDateMode(mode);
         setCurrentPage(1);
     };
 
@@ -256,19 +258,19 @@ export default function SalesReportsPage() {
                 </button>
             </div>
 
-            {/* Time Filter Tabs */}
+            {/* Global Date Range */}
             <div className="card">
                 <div className="flex flex-wrap items-center gap-3">
                     {([
-                        { id: 'today', label: '📅 Today' },
-                        { id: 'yesterday', label: '📆 Yesterday' },
-                        { id: 'last_7_days', label: '📊 Last 7 Days' },
-                        { id: 'custom', label: '⚙️ Custom' },
+                        { id: 'daily', label: 'Daily' },
+                        { id: 'weekly', label: 'Weekly' },
+                        { id: 'monthly', label: 'Monthly' },
+                        { id: 'custom', label: 'Custom' },
                     ] as const).map((filter) => (
                         <button
                             key={filter.id}
-                            onClick={() => handleFilterChange(filter.id)}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${timeFilter === filter.id
+                            onClick={() => handleModeChange(filter.id)}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${dateMode === filter.id
                                 ? 'bg-primary-600 text-white shadow-lg'
                                 : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                                 }`}
@@ -277,7 +279,22 @@ export default function SalesReportsPage() {
                         </button>
                     ))}
 
-                    {timeFilter === 'custom' && (
+                    {dateMode === 'daily' && (
+                        <div className="flex items-center gap-2 ml-4">
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Report Date</span>
+                            <input
+                                type="date"
+                                value={anchorDate}
+                                onChange={(e) => {
+                                    setAnchorDate(e.target.value);
+                                    setCurrentPage(1);
+                                }}
+                                className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
+                            />
+                        </div>
+                    )}
+
+                    {dateMode === 'custom' && (
                         <div className="flex items-center gap-2 ml-4">
                             <input
                                 type="date"
@@ -300,6 +317,8 @@ export default function SalesReportsPage() {
                             />
                         </div>
                     )}
+
+                    <div className="text-xs text-gray-500 dark:text-gray-400 ml-4">{effectiveRange.label}</div>
                 </div>
 
                 {/* Fetch info */}

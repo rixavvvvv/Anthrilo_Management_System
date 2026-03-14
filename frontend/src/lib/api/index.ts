@@ -109,8 +109,15 @@ export const unicommerceApi = {
   getSkuVelocity: (params?: { month?: number; year?: number; limit?: number; min_qty?: number; b2c_only?: boolean; force_refresh?: boolean }) =>
     apiClient.get('/integrations/unicommerce/sku-velocity', { params }),
 
-  // COD vs Prepaid monthly
-  getCodVsPrepaid: (params?: { month?: number; year?: number }) =>
+  // COD vs Prepaid date-range report
+  getCodVsPrepaid: (params?: {
+    period?: 'daily' | 'weekly' | 'monthly' | 'custom';
+    date?: string;
+    from_date?: string;
+    to_date?: string;
+    month?: number;
+    year?: number;
+  }) =>
     apiClient.get('/integrations/unicommerce/cod-vs-prepaid', { params }),
 
   // Channel revenue breakdown

@@ -1253,11 +1253,15 @@ async def get_return_report(
             end_date = datetime.strptime(to_date, "%Y-%m-%d").date()
             period_norm = "custom"
         elif period_norm == "weekly":
-            end_date = today_ist
-            start_date = end_date - timedelta(days=6)
+            # Last completed Monday-Sunday week
+            current_week_start = today_ist - timedelta(days=today_ist.weekday())
+            start_date = current_week_start - timedelta(days=7)
+            end_date = current_week_start - timedelta(days=1)
         elif period_norm == "monthly":
-            end_date = today_ist
-            start_date = end_date - timedelta(days=29)
+            # Last completed calendar month
+            first_of_current_month = today_ist.replace(day=1)
+            end_date = first_of_current_month - timedelta(days=1)
+            start_date = end_date.replace(day=1)
         else:
             base_date = datetime.strptime(date, "%Y-%m-%d").date() if date else (today_ist - timedelta(days=1))
             start_date = base_date
@@ -1909,31 +1913,73 @@ async def get_sku_velocity(
 
 @router.get("/unicommerce/cod-vs-prepaid")
 async def get_cod_vs_prepaid(
+    period: str = Query("monthly", description="daily, weekly, monthly, custom"),
+    date: str = Query(None, description="Anchor date for daily/weekly/monthly (YYYY-MM-DD)"),
+    from_date: str = Query(None, description="Custom start date (YYYY-MM-DD)"),
+    to_date: str = Query(None, description="Custom end date (YYYY-MM-DD)"),
     month: int = Query(None, description="Month (1-12), defaults to current"),
     year: int = Query(None, description="Year, defaults to current"),
 ):
-    """Get COD vs Prepaid breakdown for a given month with Redis caching."""
+    """Get COD vs Prepaid breakdown for a date range with Redis caching."""
     try:
         service = get_unicommerce_service()
         now = datetime.now(IST)
-        m = month or now.month
-        y = year or now.year
+
+        period_norm = (period or "monthly").strip().lower()
+
+        if from_date and to_date:
+            start_date = datetime.strptime(from_date, "%Y-%m-%d").date()
+            end_date = datetime.strptime(to_date, "%Y-%m-%d").date()
+            period_norm = "custom"
+        elif period_norm == "custom":
+            if not from_date or not to_date:
+                return {
+                    "success": False,
+                    "error": "Both from_date and to_date are required for custom period",
+                }
+            start_date = datetime.strptime(from_date, "%Y-%m-%d").date()
+            end_date = datetime.strptime(to_date, "%Y-%m-%d").date()
+        elif period_norm in {"daily", "weekly", "monthly"}:
+            anchor = datetime.strptime(date, "%Y-%m-%d").date() if date else now.date()
+            if period_norm == "daily":
+                start_date = anchor
+                end_date = anchor
+            elif period_norm == "weekly":
+                # Last completed Monday-Sunday week
+                current_week_start = now.date() - timedelta(days=now.date().weekday())
+                start_date = current_week_start - timedelta(days=7)
+                end_date = current_week_start - timedelta(days=1)
+            else:
+                # Last completed calendar month
+                first_of_current_month = now.date().replace(day=1)
+                end_date = first_of_current_month - timedelta(days=1)
+                start_date = end_date.replace(day=1)
+        else:
+            # Backward compatibility: month/year selectors map to monthly range.
+            m = month or now.month
+            y = year or now.year
+            start_date = datetime(y, m, 1).date()
+            if m == 12:
+                end_date = datetime(y, 12, 31).date()
+            else:
+                end_date = (datetime(y, m + 1, 1) - timedelta(days=1)).date()
+            period_norm = "monthly"
+
+        if start_date > end_date:
+            return {"success": False, "error": "from_date cannot be greater than to_date"}
 
         # Check Redis cache (persistent across workers/restarts)
-        cache_key = f"uc:cod_prepaid:{y}:{m}"
+        cache_key = f"uc:cod_prepaid:{period_norm}:{start_date.isoformat()}:{end_date.isoformat()}"
         cached = CacheService.get(cache_key)
         if cached:
-            logger.info(f"COD vs Prepaid {y}-{m:02d}: Redis cache hit")
+            logger.info(
+                f"COD vs Prepaid {start_date.isoformat()} to {end_date.isoformat()}: Redis cache hit"
+            )
             cached["_cached"] = True
             return cached
 
-        from_dt = datetime(y, m, 1, 0, 0, 0, tzinfo=timezone.utc)
-        if m == 12:
-            to_dt = datetime(y + 1, 1, 1, 0, 0, 0,
-                             tzinfo=timezone.utc) - timedelta(seconds=1)
-        else:
-            to_dt = datetime(y, m + 1, 1, 0, 0, 0,
-                             tzinfo=timezone.utc) - timedelta(seconds=1)
+        from_dt = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=IST).astimezone(timezone.utc)
+        to_dt = datetime.combine(end_date, datetime.max.time().replace(microsecond=0)).replace(tzinfo=IST).astimezone(timezone.utc)
 
         if to_dt > now.replace(tzinfo=timezone.utc):
             to_dt = now.replace(tzinfo=timezone.utc)
@@ -1999,7 +2045,8 @@ async def get_cod_vs_prepaid(
         total_revenue = cod_revenue + prepaid_revenue
 
         logger.info(
-            f"COD vs Prepaid: processed {total_orders} orders ({cod_orders} COD, {prepaid_orders} Prepaid) for {y}-{m:02d}")
+            f"COD vs Prepaid: processed {total_orders} orders ({cod_orders} COD, {prepaid_orders} Prepaid) "
+            f"for {start_date.isoformat()} to {end_date.isoformat()}")
 
         for ch in channel_breakdown.values():
             ch["cod_revenue"] = round(ch["cod_revenue"], 2)
@@ -2012,8 +2059,9 @@ async def get_cod_vs_prepaid(
 
         result = {
             "success": True,
-            "month": m, "year": y,
-            "period": f"{y}-{m:02d}",
+            "period": period_norm,
+            "from_date": start_date.isoformat(),
+            "to_date": end_date.isoformat(),
             "cod": {
                 "orders": cod_orders, "revenue": round(cod_revenue, 2), "items": cod_items,
                 "percentage": round(cod_orders / total_orders * 100, 1) if total_orders > 0 else 0,
@@ -2029,12 +2077,16 @@ async def get_cod_vs_prepaid(
             "channels": channels,
         }
 
+        # Preserve legacy fields for consumers still expecting month/year.
+        result["month"] = start_date.month
+        result["year"] = start_date.year
+
         # Redis cache: current month 4hr, historical 24hr
-        is_current = (y == now.year and m == now.month)
+        is_current = (start_date.year == now.year and start_date.month == now.month and end_date >= now.date())
         ttl = 14400 if is_current else 86400
         CacheService.set(cache_key, result, ttl)
         logger.info(
-            f"COD vs Prepaid: cached result for {y}-{m:02d} (TTL={ttl}s)")
+            f"COD vs Prepaid: cached result for {start_date.isoformat()} to {end_date.isoformat()} (TTL={ttl}s)")
 
         return result
 

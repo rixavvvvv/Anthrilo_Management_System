@@ -9,6 +9,7 @@ import ItemWiseReportTable from '@/components/reports/ItemWiseReportTable';
 import ChannelWiseReportTable from '@/components/reports/ChannelWiseReportTable';
 import ChannelSummaryTable from '@/components/reports/ChannelSummaryTable';
 import { unicommerceApi } from '@/lib/api';
+import { resolveReportDateRange } from '@/lib/report-date-range';
 import { generateSalesActivityExcel } from '@/utils/exportSalesActivityExcel';
 
 function formatDate(d: Date): string {
@@ -62,32 +63,16 @@ export default function SalesActivityPage() {
   const progressLabel = PROGRESS_STAGES.slice().reverse().find(s => progress >= s.at)?.label ?? '';
 
   const effectiveRange = useMemo(() => {
-    if (dateMode === 'custom') {
-      return {
-        from: fromDate,
-        to: toDate,
-        label: `${fromDate || '—'} to ${toDate || '—'}`,
-      };
-    }
-
-    const base = new Date(anchorDate || today);
-    if (Number.isNaN(base.getTime())) {
-      return { from: '', to: '', label: 'Invalid date' };
-    }
-
-    const to = formatDate(base);
-    const fromBase = new Date(base);
-    if (dateMode === 'weekly') {
-      fromBase.setDate(fromBase.getDate() - 6);
-    } else if (dateMode === 'monthly') {
-      fromBase.setDate(fromBase.getDate() - 29);
-    }
-    const from = formatDate(fromBase);
-    const modeLabel = dateMode === 'daily' ? 'Daily' : dateMode === 'weekly' ? 'Weekly' : 'Monthly';
+    const resolved = resolveReportDateRange({
+      mode: dateMode,
+      anchorDate: anchorDate || today,
+      fromDate,
+      toDate,
+    });
     return {
-      from,
-      to,
-      label: `${modeLabel}: ${from} to ${to}`,
+      from: resolved.fromDate,
+      to: resolved.toDate,
+      label: resolved.label,
     };
   }, [dateMode, anchorDate, fromDate, toDate, today]);
 

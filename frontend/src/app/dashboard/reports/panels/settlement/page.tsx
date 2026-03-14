@@ -1,13 +1,50 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { PageHeader, ProgressLoader } from '@/components/ui/Common';
+import {
+  ReportDateMode,
+  getTodayYmd,
+  getYesterdayYmd,
+  resolveReportDateRange,
+} from '@/lib/report-date-range';
 
 export default function ChannelRevenuePage() {
-  const [period, setPeriod] = useState('last_7_days');
+  const [mode, setMode] = useState<ReportDateMode>('weekly');
+  const [anchorDate, setAnchorDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
+    return date.toISOString().split('T')[0];
+  });
+  const [fromDate, setFromDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 7);
+    return date.toISOString().split('T')[0];
+  });
+  const [toDate, setToDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
+    return date.toISOString().split('T')[0];
+  });
+
+  const effectiveRange = useMemo(() => resolveReportDateRange({
+    mode,
+    anchorDate,
+    fromDate,
+    toDate,
+  }), [mode, anchorDate, fromDate, toDate]);
+
+  const period = useMemo(() => {
+    const today = getTodayYmd();
+    const yesterday = getYesterdayYmd();
+
+    if (mode === 'daily' && effectiveRange.fromDate === today) return 'today';
+    if (mode === 'daily' && effectiveRange.fromDate === yesterday) return 'yesterday';
+    return 'last_7_days';
+  }, [mode, effectiveRange.fromDate]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['uc-channel-revenue', period],
@@ -81,18 +118,36 @@ export default function ChannelRevenuePage() {
       </div>
 
       <div className="card mb-4">
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap items-center">
           {[
-            { key: 'today', label: 'Today' },
-            { key: 'yesterday', label: 'Yesterday' },
-            { key: 'last_7_days', label: '7 Days' },
-            { key: 'last_30_days', label: '30 Days' },
+            { key: 'daily', label: 'Daily' },
+            { key: 'weekly', label: 'Weekly' },
+            { key: 'monthly', label: 'Monthly' },
+            { key: 'custom', label: 'Custom' },
           ].map((p) => (
-            <button key={p.key} onClick={() => setPeriod(p.key)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${period === p.key ? 'bg-primary-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
+            <button key={p.key} onClick={() => setMode(p.key as ReportDateMode)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === p.key ? 'bg-primary-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
               {p.label}
             </button>
           ))}
+
+          {mode === 'daily' && (
+            <input
+              type="date"
+              value={anchorDate}
+              onChange={(e) => setAnchorDate(e.target.value)}
+              className="input max-w-xs"
+            />
+          )}
+
+          {mode === 'custom' && (
+            <>
+              <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="input max-w-xs" />
+              <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="input max-w-xs" />
+            </>
+          )}
+
+          <div className="text-xs text-gray-500 dark:text-gray-400">{effectiveRange.label}</div>
         </div>
       </div>
 

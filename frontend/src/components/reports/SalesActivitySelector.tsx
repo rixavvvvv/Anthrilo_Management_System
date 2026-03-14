@@ -110,7 +110,7 @@ export default function SalesActivitySelector({
                   </div>
                 </div>
               </>
-            ) : (
+            ) : dateMode === 'daily' ? (
               <div className="flex-1 min-w-[180px] max-w-[280px]">
                 <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">
                   Reference Date
@@ -127,7 +127,7 @@ export default function SalesActivitySelector({
                   />
                 </div>
               </div>
-            )}
+            ) : null}
 
             <div className="flex-1 min-w-[220px]">
               <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">

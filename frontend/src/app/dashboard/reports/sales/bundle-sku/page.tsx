@@ -5,18 +5,45 @@ import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { PageHeader, ProgressLoader, StatCard } from '@/components/ui/Common';
+import { ReportDateMode, resolveReportDateRange } from '@/lib/report-date-range';
 
 const PAGE_SIZE = 12;
 
 export default function SKUSalesPage() {
-  const [period, setPeriod] = useState('today');
+  const [mode, setMode] = useState<ReportDateMode>('daily');
+  const [anchorDate, setAnchorDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
+    return date.toISOString().split('T')[0];
+  });
+  const [fromDate, setFromDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 7);
+    return date.toISOString().split('T')[0];
+  });
+  const [toDate, setToDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
+    return date.toISOString().split('T')[0];
+  });
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
 
+  const effectiveRange = useMemo(() => resolveReportDateRange({
+    mode,
+    anchorDate,
+    fromDate,
+    toDate,
+  }), [mode, anchorDate, fromDate, toDate]);
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['uc-sales-by-sku', period],
+    queryKey: ['uc-sales-by-sku', mode, effectiveRange.fromDate, effectiveRange.toDate],
     queryFn: async () => {
-      const response = await ucSales.getSalesBySku({ period });
+      const response = await ucSales.getSalesBySku({
+        period: 'custom',
+        from_date: effectiveRange.fromDate,
+        to_date: effectiveRange.toDate,
+      });
       return response.data;
     },
     staleTime: 120_000,
@@ -92,17 +119,27 @@ export default function SKUSalesPage() {
         <div className="flex gap-4 items-center flex-wrap">
           <div className="flex gap-2">
             {[
-              { key: 'today', label: 'Today' },
-              { key: 'yesterday', label: 'Yesterday' },
-              { key: 'last_7_days', label: '7 Days' },
-              { key: 'last_30_days', label: '30 Days' },
+              { key: 'daily', label: 'Daily' },
+              { key: 'weekly', label: 'Weekly' },
+              { key: 'monthly', label: 'Monthly' },
+              { key: 'custom', label: 'Custom' },
             ].map((p) => (
-              <button key={p.key} onClick={() => { setPeriod(p.key); setPage(0); }}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${period === p.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
+              <button key={p.key} onClick={() => { setMode(p.key as ReportDateMode); setPage(0); }}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${mode === p.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
                 {p.label}
               </button>
             ))}
           </div>
+          {mode === 'daily' && (
+            <input type="date" value={anchorDate} onChange={(e) => { setAnchorDate(e.target.value); setPage(0); }} className="input max-w-xs" />
+          )}
+          {mode === 'custom' && (
+            <>
+              <input type="date" value={fromDate} onChange={(e) => { setFromDate(e.target.value); setPage(0); }} className="input max-w-xs" />
+              <input type="date" value={toDate} onChange={(e) => { setToDate(e.target.value); setPage(0); }} className="input max-w-xs" />
+            </>
+          )}
+          <span className="text-xs text-slate-500 dark:text-slate-400">{effectiveRange.label}</span>
           <input type="text" placeholder="Search SKU or product name..." className="input flex-1"
             value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
         </div>
