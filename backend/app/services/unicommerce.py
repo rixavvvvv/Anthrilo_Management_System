@@ -1488,32 +1488,43 @@ class UnicommerceService:
         display_start: int = 0,
         display_length: int = 100
     ) -> Dict[str, Any]:
-        """Backward compatible search method"""
+        """Backward compatible search method — uses export job API."""
         now = datetime.now(timezone.utc)
         if to_date is None:
             to_date = now
         if from_date is None:
             from_date = now - timedelta(hours=24)
 
-        async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
-            headers = await self._get_headers()
-            success, orders, total, error = await self._fetch_single_page(
-                client, headers, from_date, to_date, display_start, display_length
-            )
+        try:
+            fetch_result = await self.fetch_orders_via_export(from_date, to_date)
 
-            if success:
-                return {
-                    "successful": True,
-                    "elements": orders,
-                    "totalRecords": total,
-                }
-            else:
+            if not fetch_result.get("successful", False):
                 return {
                     "successful": False,
-                    "error": error,
+                    "error": fetch_result.get("error", "Failed to fetch orders"),
                     "elements": [],
                     "totalRecords": 0,
                 }
+
+            all_orders = fetch_result.get("orders", [])
+            total = len(all_orders)
+
+            # Apply pagination via in-memory slicing
+            page_orders = all_orders[display_start:display_start + display_length]
+
+            return {
+                "successful": True,
+                "elements": page_orders,
+                "totalRecords": total,
+            }
+        except Exception as e:
+            logger.error(f"search_sale_orders failed: {e}", exc_info=True)
+            return {
+                "successful": False,
+                "error": str(e),
+                "elements": [],
+                "totalRecords": 0,
+            }
 
     async def get_order_details(self, order_code: str) -> Dict[str, Any]:
         """Get full order details including payment info."""
@@ -2592,18 +2603,91 @@ class UnicommerceService:
             logger.error(f"Return Export: Download/parse failed: {e}", exc_info=True)
             return []
 
+    # Maximum days per return export chunk — UC returns empty for very large ranges
+    RETURN_EXPORT_MAX_CHUNK_DAYS = 30
+
     async def fetch_returns_via_export(
         self, from_date: datetime, to_date: datetime
     ) -> Dict[str, Any]:
         """
         Fetch returns via the Export Job API (Tally Return GST Report 3.0).
-        Serialized with _export_lock since UC allows only one export at a time.
+
+        For date ranges > RETURN_EXPORT_MAX_CHUNK_DAYS, automatically splits
+        into smaller chunks and merges results. Each chunk acquires _export_lock
+        since UC allows only one export at a time.
 
         Returns dict with: successful, items (list of return item records),
         total_items, total_time, method.
         """
-        async with self._export_lock:
-            return await self._fetch_returns_via_export_inner(from_date, to_date)
+        total_days = (to_date - from_date).total_seconds() / 86400
+
+        if total_days <= self.RETURN_EXPORT_MAX_CHUNK_DAYS:
+            # Small range — single export job
+            async with self._export_lock:
+                return await self._fetch_returns_via_export_inner(from_date, to_date)
+
+        # Large range — split into chunks
+        logger.info(
+            f"Return Export: Range is {total_days:.0f} days, "
+            f"splitting into {self.RETURN_EXPORT_MAX_CHUNK_DAYS}-day chunks"
+        )
+
+        all_items = []
+        chunk_start = from_date
+        chunk_num = 0
+        total_start = time_module.time()
+
+        while chunk_start < to_date:
+            chunk_num += 1
+            chunk_end = min(
+                chunk_start + timedelta(days=self.RETURN_EXPORT_MAX_CHUNK_DAYS),
+                to_date,
+            )
+
+            logger.info(
+                f"Return Export: Chunk {chunk_num} — "
+                f"{chunk_start.isoformat()} → {chunk_end.isoformat()}"
+            )
+
+            try:
+                async with self._export_lock:
+                    result = await self._fetch_returns_via_export_inner(
+                        chunk_start, chunk_end
+                    )
+
+                if result.get("successful"):
+                    chunk_items = result.get("items", [])
+                    all_items.extend(chunk_items)
+                    logger.info(
+                        f"Return Export: Chunk {chunk_num} returned {len(chunk_items)} items"
+                    )
+                else:
+                    logger.warning(
+                        f"Return Export: Chunk {chunk_num} failed: "
+                        f"{result.get('error', 'unknown')}"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Return Export: Chunk {chunk_num} exception: {e}",
+                    exc_info=True,
+                )
+
+            chunk_start = chunk_end
+
+        total_time = time_module.time() - total_start
+        logger.info(
+            f"Return Export: All {chunk_num} chunks done — "
+            f"{len(all_items)} total items in {total_time:.1f}s"
+        )
+
+        return {
+            "successful": True,
+            "items": all_items,
+            "total_items": len(all_items),
+            "total_time": round(total_time, 2),
+            "method": "export_job_tally_return",
+            "chunks": chunk_num,
+        }
 
     async def _fetch_returns_via_export_inner(
         self, from_date: datetime, to_date: datetime
