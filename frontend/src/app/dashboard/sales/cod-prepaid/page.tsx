@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ucSales } from '@/lib/api/uc';
 import { ProgressLoader } from '@/components/ui/Common';
+import { ReportDateMode, resolveReportDateRange } from '@/lib/report-date-range';
 
 const fmt = (v: number) =>
   v >= 10_000_000 ? `₹${(v / 10_000_000).toFixed(2)}Cr`
@@ -14,17 +15,57 @@ const fmt = (v: number) =>
 const channelLabel = (c: string) =>
   c.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()).replace(/ New$/, '').replace(/ Api$/, '').replace(/ 26$/, '');
 
-const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
 export default function CodVsPrepaidPage() {
-  const now = new Date();
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear] = useState(now.getFullYear());
+  const [dateMode, setDateMode] = useState<ReportDateMode>('monthly');
+  const [anchorDate, setAnchorDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [fromDate, setFromDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  });
+  const [toDate, setToDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  });
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['cod-vs-prepaid', month, year],
-    queryFn: async () => (await ucSales.getCodVsPrepaid({ month, year })).data,
+  const effectiveRange = useMemo(() => resolveReportDateRange({
+    mode: dateMode,
+    anchorDate,
+    fromDate,
+    toDate,
+  }), [dateMode, anchorDate, fromDate, toDate]);
+
+  const queryParams = useMemo(() => {
+    if (dateMode === 'custom') {
+      return {
+        period: 'custom' as const,
+        from_date: effectiveRange.fromDate,
+        to_date: effectiveRange.toDate,
+      };
+    }
+    if (dateMode === 'daily') {
+      return {
+        period: 'daily' as const,
+        date: anchorDate,
+      };
+    }
+    return {
+      period: dateMode,
+    };
+  }, [dateMode, anchorDate, effectiveRange.fromDate, effectiveRange.toDate]);
+
+  const canLoad = dateMode !== 'custom' || (!!effectiveRange.fromDate && !!effectiveRange.toDate);
+
+  const { data, isLoading, isFetching, error } = useQuery({
+    queryKey: ['cod-vs-prepaid', dateMode, anchorDate, effectiveRange.fromDate, effectiveRange.toDate],
+    queryFn: async () => (await ucSales.getCodVsPrepaid(queryParams)).data,
     staleTime: 5 * 60_000,
+    enabled: canLoad,
   });
 
   const cod = data?.cod || {} as any;
@@ -50,18 +91,53 @@ export default function CodVsPrepaidPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">COD vs Prepaid</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            {isLoading ? 'Loading…' : `${monthNames[month - 1]} ${year} · ${totalOrders.toLocaleString()} orders · ${fmt(totalRevenue)}`}
+            {isLoading || isFetching ? 'Loading…' : `${effectiveRange.label} · ${totalOrders.toLocaleString()} orders · ${fmt(totalRevenue)}`}
           </p>
         </div>
-        <div className="flex gap-2 self-start">
-          <select value={month} onChange={(e) => setMonth(Number(e.target.value))}
-            className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            {monthNames.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-          </select>
-          <select value={year} onChange={(e) => setYear(Number(e.target.value))}
-            className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            {[2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
+        <div className="flex flex-wrap gap-2 self-start items-center">
+          {([
+            { id: 'daily', label: 'Daily' },
+            { id: 'weekly', label: 'Weekly' },
+            { id: 'monthly', label: 'Monthly' },
+            { id: 'custom', label: 'Custom' },
+          ] as const).map((opt) => (
+            <button
+              key={opt.id}
+              onClick={() => setDateMode(opt.id)}
+              className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${dateMode === opt.id
+                ? 'bg-primary-600 text-white'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+          {dateMode === 'daily' && (
+            <input
+              type="date"
+              value={anchorDate}
+              onChange={(e) => setAnchorDate(e.target.value)}
+              className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          )}
+          {dateMode === 'custom' && (
+            <>
+              <input
+                type="date"
+                value={fromDate}
+                max={toDate || undefined}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="date"
+                value={toDate}
+                min={fromDate || undefined}
+                onChange={(e) => setToDate(e.target.value)}
+                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </>
+          )}
         </div>
       </div>
 
@@ -73,7 +149,7 @@ export default function CodVsPrepaidPage() {
       )}
 
       {/* Loading */}
-      <ProgressLoader loading={isLoading} stages={[
+      <ProgressLoader loading={isLoading || isFetching} stages={[
         { at: 0, label: 'Initializing export job…' },
         { at: 15, label: 'Fetching orders…' },
         { at: 40, label: 'Classifying COD vs Prepaid…' },
@@ -103,7 +179,7 @@ export default function CodVsPrepaidPage() {
 
           {/* Distribution bars */}
           <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5 space-y-5">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">{monthNames[month - 1]} {year} — Distribution</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">{effectiveRange.label} — Distribution</h2>
 
             {/* Orders bar */}
             <div>

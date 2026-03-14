@@ -10,6 +10,12 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend,
 } from 'recharts';
+import {
+  ReportDateMode,
+  getTodayYmd,
+  getYesterdayYmd,
+  resolveReportDateRange,
+} from '@/lib/report-date-range';
 
 /* ── Constants ── */
 const COLORS = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#ec4899', '#14b8a6', '#a855f7', '#ef4444'];
@@ -78,32 +84,44 @@ function PieTooltip({ active, payload }: any) {
   );
 }
 
-/* ── Period buttons ── */
-const PERIODS = [
-  { key: 'today', label: 'Today' },
-  { key: 'yesterday', label: 'Yesterday' },
-  { key: 'last_7_days', label: '7 Days' },
-  { key: 'last_30_days', label: '30 Days' },
-  { key: 'custom', label: 'Custom' },
-] as const;
-
 /* ══════════════════════════════════════════════════════════════ */
 
 export default function BundleSalesAnalysisPage() {
-  const [period, setPeriod] = useState('last_30_days');
+  const [dateMode, setDateMode] = useState<ReportDateMode>('monthly');
+  const [anchorDate, setAnchorDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
+    return date.toISOString().split('T')[0];
+  });
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
 
+  const effectiveRange = useMemo(() => resolveReportDateRange({
+    mode: dateMode,
+    anchorDate,
+    fromDate,
+    toDate,
+  }), [dateMode, anchorDate, fromDate, toDate]);
+
+  const apiPeriod = useMemo(() => {
+    const today = getTodayYmd();
+    const yesterday = getYesterdayYmd();
+
+    if (dateMode === 'daily' && effectiveRange.fromDate === today) return 'today';
+    if (dateMode === 'daily' && effectiveRange.fromDate === yesterday) return 'yesterday';
+    return 'custom';
+  }, [dateMode, effectiveRange.fromDate]);
+
   const queryParams = useMemo(() => {
-    const p: any = { period };
-    if (period === 'custom' && fromDate && toDate) {
-      p.from_date = fromDate;
-      p.to_date = toDate;
+    const p: any = { period: apiPeriod };
+    if (apiPeriod === 'custom') {
+      p.from_date = effectiveRange.fromDate;
+      p.to_date = effectiveRange.toDate;
     }
     return p;
-  }, [period, fromDate, toDate]);
+  }, [apiPeriod, effectiveRange.fromDate, effectiveRange.toDate]);
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['bundle-sales-analysis', queryParams],
@@ -112,7 +130,7 @@ export default function BundleSalesAnalysisPage() {
       return res.data;
     },
     staleTime: 120_000,
-    enabled: period !== 'custom' || (!!fromDate && !!toDate),
+    enabled: dateMode !== 'custom' || (!!fromDate && !!toDate),
   });
 
   const summary = data?.summary || {};
@@ -165,8 +183,8 @@ export default function BundleSalesAnalysisPage() {
   }, [trendData]);
 
   /* Period change */
-  const handlePeriod = useCallback((p: string) => {
-    setPeriod(p);
+  const handleDateMode = useCallback((mode: ReportDateMode) => {
+    setDateMode(mode);
     setPage(0);
   }, []);
 
@@ -234,13 +252,18 @@ export default function BundleSalesAnalysisPage() {
         description="Revenue, quantity & performance insights — derived by reverse-mapping component SKUs to bundle definitions"
       />
 
-      {/* ── Period Selector ── */}
+      {/* ── Global Date Range ── */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
-        {PERIODS.map((p) => (
+        {([
+          { key: 'daily' as ReportDateMode, label: 'Daily' },
+          { key: 'weekly' as ReportDateMode, label: 'Weekly' },
+          { key: 'monthly' as ReportDateMode, label: 'Monthly' },
+          { key: 'custom' as ReportDateMode, label: 'Custom' },
+        ]).map((p) => (
           <button
             key={p.key}
-            onClick={() => handlePeriod(p.key)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${period === p.key
+            onClick={() => handleDateMode(p.key)}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${dateMode === p.key
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-900/40'
                 : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600'
               }`}
@@ -249,7 +272,15 @@ export default function BundleSalesAnalysisPage() {
           </button>
         ))}
 
-        {period === 'custom' && (
+        {dateMode === 'daily' && (
+          <div className="flex items-center gap-2 ml-2">
+            <span className="text-sm text-slate-500 dark:text-slate-400">Report Date</span>
+            <input type="date" value={anchorDate} onChange={e => setAnchorDate(e.target.value)}
+              className="input text-sm px-3 py-1.5" />
+          </div>
+        )}
+
+        {dateMode === 'custom' && (
           <div className="flex items-center gap-2 ml-2">
             <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
               className="input text-sm px-3 py-1.5" />
@@ -258,6 +289,8 @@ export default function BundleSalesAnalysisPage() {
               className="input text-sm px-3 py-1.5" />
           </div>
         )}
+
+        <div className="text-xs text-slate-500 dark:text-slate-400 ml-2">{effectiveRange.label}</div>
 
         <button
           onClick={() => refetch()}

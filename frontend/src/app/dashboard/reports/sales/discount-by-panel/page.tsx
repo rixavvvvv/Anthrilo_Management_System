@@ -9,23 +9,43 @@ import { motion } from 'framer-motion';
 import {
   Percent, Tag, TrendingDown, Store, Download,
 } from 'lucide-react';
+import { ReportDateMode, resolveReportDateRange } from '@/lib/report-date-range';
 
 const fmt = (v: number) =>
   v >= 100000 ? `₹${(v / 100000).toFixed(1)}L` : `₹${v.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 
-const PERIODS = [
-  { key: 'today', label: 'Today' },
-  { key: 'yesterday', label: 'Yesterday' },
-  { key: 'last_7_days', label: '7 Days' },
-  { key: 'last_30_days', label: '30 Days' },
-];
-
 export default function DiscountByChannelPage() {
-  const [period, setPeriod] = useState('last_7_days');
+  const [mode, setMode] = useState<ReportDateMode>('weekly');
+  const [anchorDate, setAnchorDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
+    return date.toISOString().split('T')[0];
+  });
+  const [fromDate, setFromDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 7);
+    return date.toISOString().split('T')[0];
+  });
+  const [toDate, setToDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
+    return date.toISOString().split('T')[0];
+  });
+
+  const effectiveRange = useMemo(() => resolveReportDateRange({
+    mode,
+    anchorDate,
+    fromDate,
+    toDate,
+  }), [mode, anchorDate, fromDate, toDate]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['uc-discount-by-channel', period],
-    queryFn: async () => (await ucSales.getSalesBySku({ period })).data,
+    queryKey: ['uc-discount-by-channel', mode, effectiveRange.fromDate, effectiveRange.toDate],
+    queryFn: async () => (await ucSales.getSalesBySku({
+      period: 'custom',
+      from_date: effectiveRange.fromDate,
+      to_date: effectiveRange.toDate,
+    })).data,
     staleTime: 120_000,
   });
 
@@ -78,7 +98,7 @@ export default function DiscountByChannelPage() {
     const blob = new Blob([headers.join(',') + '\n' + rows.join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `discount-by-channel-${period}.csv`; a.click();
+    a.href = url; a.download = `discount-by-channel-${effectiveRange.fromDate}-to-${effectiveRange.toDate}.csv`; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -142,10 +162,15 @@ export default function DiscountByChannelPage() {
       {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         <div className="flex gap-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
-          {PERIODS.map(p => (
-            <button key={p.key} onClick={() => setPeriod(p.key)}
+          {[
+            { key: 'daily', label: 'Daily' },
+            { key: 'weekly', label: 'Weekly' },
+            { key: 'monthly', label: 'Monthly' },
+            { key: 'custom', label: 'Custom' },
+          ].map(p => (
+            <button key={p.key} onClick={() => setMode(p.key as ReportDateMode)}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                period === p.key
+                mode === p.key
                   ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
               }`}>
@@ -153,6 +178,16 @@ export default function DiscountByChannelPage() {
             </button>
           ))}
         </div>
+        {mode === 'daily' && (
+          <input type="date" className="input" value={anchorDate} onChange={e => setAnchorDate(e.target.value)} />
+        )}
+        {mode === 'custom' && (
+          <div className="flex gap-2">
+            <input type="date" className="input" value={fromDate} onChange={e => setFromDate(e.target.value)} />
+            <input type="date" className="input" value={toDate} onChange={e => setToDate(e.target.value)} />
+          </div>
+        )}
+        <div className="text-xs text-slate-500 dark:text-slate-400">{effectiveRange.label}</div>
         <div className="flex-1" />
         <button onClick={handleExport} disabled={!channelDiscounts.length}
           className="btn btn-secondary flex items-center gap-2 text-xs disabled:opacity-40">

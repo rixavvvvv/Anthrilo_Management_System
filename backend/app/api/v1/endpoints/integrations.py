@@ -466,7 +466,7 @@ async def get_daily_sales_report(
                 "all_orders": total_all_orders,
             },
             "currency": "INR",
-            "data_source": "saleorder/get API",
+            "data_source": "export_job_api",
             "cached": result.get("fetch_info", {}).get("cached", False),
             "note": f"Report shows {total_quantity} items from revenue-generating orders. {excluded_items} items excluded from cancelled/returned orders.",
         }
@@ -511,6 +511,16 @@ async def get_sales_activity_report(
 
         # ── Build item-level rows from ALL orders (including cancelled/returned) ──
         # Track sold / cancelled / returned quantities per (sku, size, channel)
+        def _norm_sku(v: str) -> str:
+            return (v or "").strip().upper()
+
+        def _norm_channel(v: str) -> str:
+            ch = (v or "UNKNOWN").strip().upper()
+            ch = ch.replace("-", "_").replace(" ", "_")
+            while "__" in ch:
+                ch = ch.replace("__", "_")
+            return ch
+
         from collections import defaultdict
         detail_map = defaultdict(lambda: {
             "item_sku_code": "",
@@ -546,52 +556,125 @@ async def get_sales_activity_report(
                 else:
                     row["total_sale_qty"] += qty
 
-        # ── Merge real return events (RTO/CIR) from return stream by SKU+Channel ──
+        # Build normalized lookups once for fast matching.
+        # 1) (SKU, channel) for fallback matching.
+        # 2) (saleOrderCode, SKU) for precise return mapping.
+        norm_key_to_detail_keys = defaultdict(list)
+        order_sku_to_detail_keys = defaultdict(list)
+        for k in detail_map.keys():
+            sku_key, _, channel_key = k
+            nkey = (_norm_sku(sku_key), _norm_channel(channel_key))
+            norm_key_to_detail_keys[nkey].append(k)
+
+        for order in raw_orders:
+            order_code = (order.get("code") or "").strip()
+            if not order_code:
+                continue
+            order_code_norm = order_code.upper()
+            order_channel = order.get("channel", "UNKNOWN")
+
+            for item in order.get("saleOrderItems", []):
+                sku = item.get("itemSku", "") or ""
+                size = item.get("size", "") or ""
+                key = (sku, size, order_channel)
+                if key in detail_map:
+                    order_sku_to_detail_keys[(order_code_norm, _norm_sku(sku))].append(key)
+
+        # ── Merge real return events (RTO/CIR) from export-based return report ──
         # Sale order status rarely carries returns; Unicommerce emits returns separately.
-        return_map = defaultdict(int)  # (sku, channel) -> qty
+        return_map = defaultdict(int)  # (sku, channel) -> qty fallback bucket
         try:
-            day = from_dt.date()
-            end_day = to_dt.date()
-            while day <= end_day:
-                day_str = day.strftime("%Y-%m-%d")
-                return_report = await get_daily_return_report(date=day_str, return_type="ALL")
-                if return_report.get("success"):
-                    for ret in return_report.get("returns", []):
-                        ret_channel = (ret.get("channel") or "UNKNOWN").upper()
-                        for it in ret.get("items", []):
-                            sku = (it.get("sku") or "").strip()
-                            try:
-                                rqty = int(float(it.get("quantity", 0) or 0))
-                            except (TypeError, ValueError):
-                                rqty = 0
-                            if sku and rqty > 0:
-                                return_map[(sku, ret_channel)] += rqty
-                day += timedelta(days=1)
+            # One custom-range call is significantly faster than per-day calls.
+            return_report = await get_return_report(
+                from_date=from_date,
+                to_date=to_date,
+                period="custom",
+                return_type="ALL",
+            )
+            if return_report.get("success"):
+                for ret in return_report.get("returns", []):
+                    so_code_norm = (ret.get("saleOrderCode") or "").strip().upper()
+                    ret_channel = _norm_channel(ret.get("channel") or "UNKNOWN")
+                    for it in ret.get("items", []):
+                        sku = _norm_sku(it.get("sku") or "")
+                        try:
+                            rqty = int(float(it.get("quantity", 0) or 0))
+                        except (TypeError, ValueError):
+                            rqty = 0
+                        if not sku or rqty <= 0:
+                            continue
+
+                        # Primary (real, precise): saleOrderCode + SKU
+                        direct_keys = order_sku_to_detail_keys.get((so_code_norm, sku), []) if so_code_norm else []
+                        if len(direct_keys) == 1:
+                            detail_map[direct_keys[0]]["return_qty"] += rqty
+                            continue
+
+                        if len(direct_keys) > 1:
+                            # Ambiguous size within same order+sku; keep in UNKNOWN-size row.
+                            sample_row = detail_map[direct_keys[0]]
+                            unknown_key = (
+                                sample_row.get("item_sku_code") or sku,
+                                "UNKNOWN",
+                                sample_row.get("channel") or ret_channel,
+                            )
+                            unknown_row = detail_map[unknown_key]
+                            unknown_row["item_sku_code"] = sample_row.get("item_sku_code") or sku
+                            unknown_row["item_type_name"] = sample_row.get("item_type_name", "") or ""
+                            unknown_row["size"] = "UNKNOWN"
+                            unknown_row["channel"] = sample_row.get("channel") or ret_channel
+                            unknown_row["return_qty"] += rqty
+                            continue
+
+                        # Fallback: SKU + channel bucket (still real data, lower precision).
+                        return_map[(sku, ret_channel)] += rqty
+            else:
+                logger.warning(
+                    "Sales activity: return-report custom range failed: "
+                    f"{return_report.get('error', 'unknown error')}"
+                )
         except Exception as ret_err:
             logger.warning(f"Sales activity: return merge failed: {ret_err}")
 
-        # Apply return qty to existing rows, distributing across sizes for same SKU+Channel.
+        # Apply return qty using only real data.
+        # If a SKU+channel maps to multiple sizes, we cannot know exact size split from return export,
+        # so place it into an explicit UNKNOWN-size row instead of proportional allocation.
         if return_map:
+            matched_buckets = 0
+            unmatched_buckets = 0
             for (sku, channel), qty in return_map.items():
-                matching_keys = [k for k in detail_map.keys() if k[0] == sku and (k[2] or "").upper() == channel]
+                matching_keys = norm_key_to_detail_keys.get((sku, channel), [])
                 if not matching_keys:
+                    unmatched_buckets += 1
+                    unknown_key = (sku, "UNKNOWN", channel)
+                    unknown_row = detail_map[unknown_key]
+                    unknown_row["item_sku_code"] = sku
+                    unknown_row["item_type_name"] = unknown_row.get("item_type_name", "") or ""
+                    unknown_row["size"] = "UNKNOWN"
+                    unknown_row["channel"] = channel
+                    unknown_row["return_qty"] += qty
                     continue
 
-                basis = []
-                basis_total = 0
-                for k in matching_keys:
-                    b = max(int(detail_map[k].get("total_sale_qty", 0)), 1)
-                    basis.append((k, b))
-                    basis_total += b
+                matched_buckets += 1
 
-                allocated = 0
-                for idx, (k, b) in enumerate(basis):
-                    if idx == len(basis) - 1:
-                        add_qty = max(qty - allocated, 0)
-                    else:
-                        add_qty = int(round((qty * b) / basis_total)) if basis_total > 0 else 0
-                    detail_map[k]["return_qty"] += add_qty
-                    allocated += add_qty
+                if len(matching_keys) == 1:
+                    detail_map[matching_keys[0]]["return_qty"] += qty
+                    continue
+
+                # Ambiguous size mapping: keep returns in UNKNOWN-size row.
+                sample_row = detail_map[matching_keys[0]]
+                unknown_key = (sample_row.get("item_sku_code") or sku, "UNKNOWN", sample_row.get("channel") or channel)
+                unknown_row = detail_map[unknown_key]
+                unknown_row["item_sku_code"] = sample_row.get("item_sku_code") or sku
+                unknown_row["item_type_name"] = sample_row.get("item_type_name", "") or ""
+                unknown_row["size"] = "UNKNOWN"
+                unknown_row["channel"] = sample_row.get("channel") or channel
+                unknown_row["return_qty"] += qty
+
+            logger.info(
+                f"Sales activity: return buckets matched={matched_buckets}, "
+                f"unmatched={unmatched_buckets}, total_buckets={len(return_map)}"
+            )
 
         items = list(detail_map.values())
 
@@ -1135,358 +1218,161 @@ async def get_sales_by_sku(
         return {"success": False, "error": str(e), "skus": []}
 
 
-# DAILY RETURN REPORT (Three-Phase: return/search + return/get + saleorder/get)
+# RETURN REPORT (Export Job: Tally Return GST Report 3.0)
 
-@router.get("/unicommerce/daily-return-report")
-async def get_daily_return_report(
-    date: str = Query(..., description="Date for report (YYYY-MM-DD)"),
+@router.get("/unicommerce/return-report")
+async def get_return_report(
+    date: str | None = Query(None, description="Date for report (YYYY-MM-DD)"),
+    from_date: str | None = Query(None, description="Start date for custom report (YYYY-MM-DD)"),
+    to_date: str | None = Query(None, description="End date for custom report (YYYY-MM-DD)"),
+    period: str = Query("daily", description="daily, weekly, monthly, custom"),
     return_type: str = Query("ALL", description="RTO, CIR, or ALL"),
 ):
     """
-    Daily Return Report with channel-wise + SKU breakdown.
-    Uses Unicommerce return/search then return/get then saleorder/get APIs.
-    Supports RTO, CIR, or ALL return types.
+    Return Report with channel-wise + SKU breakdown.
+    Uses Unicommerce Export Job API (Tally Return GST Report 3.0)
+    for bulk CSV download — 3 API calls regardless of data volume.
 
-    Phase 1: return/search → get return codes (returnOrders[].code)
-    Phase 2: return/get   → get items per return (returnSaleOrderItems)
-    Phase 3: saleorder/get → get channel + sellingPrice for each sale order
+    Supports RTO, CIR, or ALL return types and daily/weekly/monthly/custom ranges.
     """
-    import httpx
-
     try:
-        token_manager = get_token_manager()
-        tenant = token_manager.tenant
-        base_url = f"https://{tenant}.unicommerce.com/services/rest/v1"
-        headers = await token_manager.get_headers()
-        headers["Facility"] = "anthrilo"
-        timeout = httpx.Timeout(90.0, connect=15.0)
+        service = get_unicommerce_service()
 
-        # Unicommerce return/search date format: ISO with T separator
-        created_from = f"{date}T00:00:00"
-        created_to = f"{date}T23:59:59"
+        period_norm = (period or "daily").strip().lower()
+        today_ist = datetime.now(IST).date()
 
-        # Determine which return types to fetch
-        types_to_fetch = []
-        if return_type == "ALL":
-            types_to_fetch = ["RTO", "CIR"]
-        else:
-            types_to_fetch = [return_type.upper()]
-
-        all_return_codes = []
-        search_results = {}
-
-        # Phase 1: search returns for each type
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            for rtype in types_to_fetch:
-                search_url = f"{base_url}/oms/return/search"
-
-                # Try with createdFrom/To first
-                search_payload = {
-                    "returnType": rtype,
-                    "createdFrom": created_from,
-                    "createdTo": created_to,
+        if period_norm == "custom" or (from_date and to_date):
+            if not from_date or not to_date:
+                return {
+                    "success": False,
+                    "error": "Both from_date and to_date are required for custom range",
+                    "period": "custom",
+                    "return_type": return_type,
                 }
-                logger.info(
-                    f"Return search {rtype}: POST {search_url} payload={search_payload}")
+            start_date = datetime.strptime(from_date, "%Y-%m-%d").date()
+            end_date = datetime.strptime(to_date, "%Y-%m-%d").date()
+            period_norm = "custom"
+        elif period_norm == "weekly":
+            # Last completed Monday-Sunday week
+            current_week_start = today_ist - timedelta(days=today_ist.weekday())
+            start_date = current_week_start - timedelta(days=7)
+            end_date = current_week_start - timedelta(days=1)
+        elif period_norm == "monthly":
+            # Last completed calendar month
+            first_of_current_month = today_ist.replace(day=1)
+            end_date = first_of_current_month - timedelta(days=1)
+            start_date = end_date.replace(day=1)
+        else:
+            base_date = datetime.strptime(date, "%Y-%m-%d").date() if date else (today_ist - timedelta(days=1))
+            start_date = base_date
+            end_date = base_date
+            period_norm = "daily"
 
-                found_returns = []
-                try:
-                    resp = await client.post(search_url, json=search_payload, headers=headers)
-                    if resp.status_code == 401:
-                        token = await token_manager.get_valid_token()
-                        if token:
-                            headers = await token_manager.get_headers()
-                            headers["Facility"] = "anthrilo"
-                            resp = await client.post(search_url, json=search_payload, headers=headers)
-                    logger.info(
-                        f"Return search {rtype} response status: {resp.status_code}")
-                    resp.raise_for_status()
-                    data = resp.json()
-                    logger.info(
-                        f"Return search {rtype} response keys: {list(data.keys())}")
-                    if data.get("successful"):
-                        # UC return/search returns "returnOrders" list of
-                        # {code, created, updated} — NOT "reversePickupCodes"
-                        return_orders = data.get("returnOrders", [])
-                        logger.info(
-                            f"Return search {rtype}: found {len(return_orders)} returns (createdFrom/To)")
-                        if return_orders:
-                            logger.info(
-                                f"Return search {rtype}: sample codes = {[r.get('code') for r in return_orders[:3]]}")
-                        found_returns = return_orders
-                    else:
-                        errors = data.get("errors", [])
-                        msg = data.get("message", "")
-                        logger.warning(
-                            f"Return search {rtype} not successful: message={msg}, errors={errors}")
-                except Exception as e:
-                    logger.error(
-                        f"Return search {rtype} error (createdFrom/To): {e}")
-
-                # Fallback: try updatedFrom/To if createdFrom/To returned empty
-                if not found_returns:
-                    try:
-                        fallback_payload = {
-                            "returnType": rtype,
-                            "updatedFrom": created_from,
-                            "updatedTo": created_to,
-                        }
-                        logger.info(
-                            f"Return search {rtype}: fallback with updatedFrom/To")
-                        resp = await client.post(search_url, json=fallback_payload, headers=headers)
-                        if resp.status_code == 401:
-                            token = await token_manager.get_valid_token()
-                            if token:
-                                headers = await token_manager.get_headers()
-                                headers["Facility"] = "anthrilo"
-                                resp = await client.post(search_url, json=fallback_payload, headers=headers)
-                        resp.raise_for_status()
-                        data = resp.json()
-                        if data.get("successful"):
-                            found_returns = data.get("returnOrders", [])
-                            logger.info(
-                                f"Return search {rtype}: fallback found {len(found_returns)} returns (updatedFrom/To)")
-                            if found_returns:
-                                logger.info(
-                                    f"Return search {rtype}: fallback sample codes = {[r.get('code') for r in found_returns[:3]]}")
-                    except Exception as e:
-                        logger.error(
-                            f"Return search {rtype} fallback error: {e}")
-
-                for ro in found_returns:
-                    code = ro.get("code", "") if isinstance(ro, dict) else ro
-                    if code:
-                        all_return_codes.append(
-                            {"code": code, "type": rtype})
-                search_results[rtype] = len(found_returns)
-                logger.info(
-                    f"Return search {rtype}: total codes collected = {len(all_return_codes)}")
-
-        if not all_return_codes:
+        if start_date > end_date:
             return {
-                "success": True,
-                "date": date,
+                "success": False,
+                "error": "from_date cannot be greater than to_date",
+                "period": period_norm,
+                "from_date": start_date.isoformat(),
+                "to_date": end_date.isoformat(),
                 "return_type": return_type,
-                "returns": [],
-                "by_channel": [],
-                "by_sku": [],
-                "totals": {
-                    "total_returns": 0, "total_items": 0,
-                    "total_value": 0, "rto_count": 0, "cir_count": 0,
-                },
-                "search_results": search_results,
-                "debug_info": {
-                    "failed_rto_codes": [],
-                    "failed_cir_codes": [],
-                    "total_failed_rto": 0,
-                    "total_failed_cir": 0,
-                },
             }
 
-        # Phase 2: get details for each return
-        return_details = []
-        sale_order_codes = set()
-        failed_rto_codes = []
-        failed_cir_codes = []
+        # Build IST date range
+        from_dt = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=IST)
+        to_dt = datetime.combine(end_date, datetime.max.time().replace(microsecond=0)).replace(tzinfo=IST)
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            for entry in all_return_codes:
-                get_url = f"{base_url}/oms/return/get"
+        # Fetch returns via export job
+        result = await service.fetch_returns_via_export(from_dt, to_dt)
 
-                # RTOs use shipmentCode, CIRs use reversePickupCode
-                if entry["type"] == "RTO":
-                    get_payload = {
-                        "reversePickupCode": None,
-                        "shipmentCode": entry["code"],
-                    }
-                else:
-                    get_payload = {
-                        "reversePickupCode": entry["code"],
-                        "shipmentCode": None,
-                    }
+        if not result.get("successful"):
+            return {
+                "success": False,
+                "error": result.get("error", "Failed to fetch return data"),
+                "period": period_norm,
+                "date": start_date.isoformat(),
+                "from_date": start_date.isoformat(),
+                "to_date": end_date.isoformat(),
+                "return_type": return_type,
+            }
 
-                try:
-                    resp = await client.post(get_url, json=get_payload, headers=headers)
-                    if resp.status_code == 401:
-                        token = await token_manager.get_valid_token()
-                        if token:
-                            headers = await token_manager.get_headers()
-                            headers["Facility"] = "anthrilo"
-                            resp = await client.post(get_url, json=get_payload, headers=headers)
-                    resp.raise_for_status()
-                    data = resp.json()
-                    if data.get("successful"):
-                        # Parse the correct response structure
-                        items = data.get("returnSaleOrderItems", [])
-                        value_info = data.get("returnSaleOrderValue", {})
-                        logger.info(
-                            f"Return get {entry['code']} ({entry['type']}): "
-                            f"{len(items)} items, "
-                            f"saleOrderCode={value_info.get('saleOrderCode', '')}, "
-                            f"status={value_info.get('returnStatus', '')}"
-                        )
+        all_items = result.get("items", [])
 
-                        detail = {
-                            "_return_type": entry["type"],
-                            "_code": entry["code"],
-                            "status": value_info.get("returnStatus", ""),
-                            "created": value_info.get("returnCreatedDate", ""),
-                            "saleOrderCode": value_info.get("saleOrderCode", ""),
-                            "reversePickupCode": value_info.get("reversePickupCode", entry["code"]),
-                            "items": items,
-                        }
-                        return_details.append(detail)
+        # Filter by return type if needed
+        if return_type != "ALL":
+            target_type = return_type.upper()
+            all_items = [
+                item for item in all_items
+                if item.get("returnType") == target_type
+            ]
 
-                        # Collect unique sale order codes for Phase 3
-                        for item in items:
-                            so_code = item.get("saleOrderCode", "")
-                            if so_code:
-                                sale_order_codes.add(so_code)
-                        # Also from value_info
-                        so_code_top = value_info.get("saleOrderCode", "")
-                        if so_code_top:
-                            sale_order_codes.add(so_code_top)
-                    else:
-                        # Track failed returns
-                        errors = data.get("errors", [])
-                        msg = data.get("message", "Unknown error")
-                        logger.warning(
-                            f"Return get {entry['code']} ({entry['type']}) unsuccessful: {msg} | errors={errors}"
-                        )
-                        if entry["type"] == "RTO":
-                            failed_rto_codes.append(entry["code"])
-                        else:
-                            failed_cir_codes.append(entry["code"])
-
-                except Exception as e:
-                    logger.error(
-                        f"Return get {entry['code']} ({entry['type']}) error: {e}")
-                    if entry["type"] == "RTO":
-                        failed_rto_codes.append(entry["code"])
-                    else:
-                        failed_cir_codes.append(entry["code"])
-
-        # Log summary of failures
-        if failed_rto_codes:
-            logger.warning(
-                f"Failed to get details for {len(failed_rto_codes)} RTO returns: {failed_rto_codes[:5]}")
-        if failed_cir_codes:
-            logger.warning(
-                f"Failed to get details for {len(failed_cir_codes)} CIR returns: {failed_cir_codes[:5]}")
-
-        # Phase 3: fetch sale order details for channel + pricing
-        so_details = {}  # saleOrderCode -> {channel, items: {saleOrderItemCode -> {sellingPrice, itemSku}}}
-
-        if sale_order_codes:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                for so_code in sale_order_codes:
-                    so_url = f"{base_url}/oms/saleorder/get"
-                    so_payload = {"code": so_code}
-                    try:
-                        resp = await client.post(so_url, json=so_payload, headers=headers)
-                        if resp.status_code == 401:
-                            token = await token_manager.get_valid_token()
-                            if token:
-                                headers = await token_manager.get_headers()
-                                headers["Facility"] = "anthrilo"
-                                resp = await client.post(so_url, json=so_payload, headers=headers)
-                        resp.raise_for_status()
-                        data = resp.json()
-                        if data.get("successful"):
-                            so_dto = data.get("saleOrderDTO", {})
-                            channel = so_dto.get("channel", "UNKNOWN")
-
-                            # Map saleOrderItemCode -> pricing info
-                            items_map = {}
-                            for so_item in so_dto.get("saleOrderItems", []):
-                                item_code = so_item.get("code", "")
-                                items_map[item_code] = {
-                                    "sellingPrice": float(so_item.get("sellingPrice", 0) or 0),
-                                    "itemSku": so_item.get("itemSku", ""),
-                                    "itemName": so_item.get("itemName", ""),
-                                    "quantity": so_item.get("quantity", 1) or 1,
-                                }
-                            so_details[so_code] = {
-                                "channel": channel, "items": items_map}
-                    except Exception as e:
-                        logger.error(f"SaleOrder get {so_code} error: {e}")
-
-        # Aggregate return details with sale order info
+        # Aggregate into channel-wise and SKU-wise breakdowns
         channel_map = {}
         sku_map = {}
         returns_list = []
         rto_count = 0
         cir_count = 0
         total_value = 0.0
-        total_items = 0
+        total_items_count = 0
 
-        for rp in return_details:
-            rtype = rp.get("_return_type", "UNKNOWN")
-            code = rp.get("_code", "")
-            items = rp.get("items", [])
+        # Group items by saleOrderCode to form return entries
+        from collections import defaultdict
+        order_groups = defaultdict(list)
+        for item in all_items:
+            so_code = item.get("saleOrderCode", "UNKNOWN")
+            order_groups[so_code].append(item)
+
+        for so_code, items in order_groups.items():
+            if not items:
+                continue
+
+            # Use the first item for return-level info
+            first = items[0]
+            rtype = first.get("returnType", "UNKNOWN")
+            channel = first.get("channel", "UNKNOWN")
 
             if rtype == "RTO":
                 rto_count += 1
             elif rtype == "CIR":
                 cir_count += 1
 
-            # Determine channel from sale order details
-            so_code = rp.get("saleOrderCode", "")
-            so_info = so_details.get(so_code, {})
-            channel = so_info.get("channel", "UNKNOWN")
-
             return_entry = {
-                "code": code,
+                "code": first.get("invoiceCode", so_code),
                 "type": rtype,
                 "channel": channel,
-                "status": rp.get("status", ""),
-                "created": rp.get("created", ""),
+                "status": "RETURNED",
+                "created": "",
                 "saleOrderCode": so_code,
                 "items": [],
                 "total_value": 0.0,
             }
 
             for item in items:
-                sku = item.get("skuCode", item.get("itemSku", "UNKNOWN"))
+                sku = item.get("sku", "UNKNOWN")
                 item_name = item.get("itemName", "")
-                so_item_code = item.get("saleOrderItemCode", "")
-                item_so_code = item.get("saleOrderCode", so_code)
+                qty = item.get("quantity", 1)
+                # Use salesValue first (pre-tax selling price), fallback to total
+                price = item.get("salesValue", 0.0) or item.get("total", 0.0)
 
-                # Each returnSaleOrderItem represents 1 item
-                qty = 1
-
-                # Look up sellingPrice from Phase 3 sale order data
-                price = 0.0
-                item_so_info = so_details.get(item_so_code, so_info)
-                if item_so_info:
-                    so_items = item_so_info.get("items", {})
-                    if so_item_code and so_item_code in so_items:
-                        price = so_items[so_item_code].get("sellingPrice", 0.0)
-                    else:
-                        # Fallback: match by SKU code across all items
-                        for _, si in so_items.items():
-                            if si.get("itemSku") == sku:
-                                price = si.get("sellingPrice", 0.0)
-                                break
-
-                    # Use channel from item's sale order if different
-                    if channel == "UNKNOWN":
-                        channel = item_so_info.get("channel", "UNKNOWN")
-
-                total_items += qty
+                total_items_count += qty
                 total_value += price
                 return_entry["total_value"] += price
                 return_entry["items"].append({
-                    "sku": sku, "name": item_name, "quantity": qty, "price": price,
+                    "sku": sku,
+                    "name": item_name,
+                    "quantity": qty,
+                    "price": price,
                 })
-
-                # Channel aggregation (per return, not per item — avoid double-counting)
-                # We aggregate channel at the return level below
 
                 # SKU aggregation
                 if sku not in sku_map:
-                    sku_map[sku] = {"sku": sku, "name": item_name,
-                                    "quantity": 0, "value": 0.0, "return_count": 0}
+                    sku_map[sku] = {
+                        "sku": sku,
+                        "name": item_name,
+                        "quantity": 0,
+                        "value": 0.0,
+                        "return_count": 0,
+                    }
                 sku_map[sku]["quantity"] += qty
                 sku_map[sku]["value"] += price
                 sku_map[sku]["return_count"] += 1
@@ -1494,8 +1380,13 @@ async def get_daily_return_report(
             # Channel aggregation at the return level
             if channel not in channel_map:
                 channel_map[channel] = {
-                    "channel": channel, "returns": 0, "items": 0,
-                    "value": 0.0, "rto": 0, "cir": 0}
+                    "channel": channel,
+                    "returns": 0,
+                    "items": 0,
+                    "value": 0.0,
+                    "rto": 0,
+                    "cir": 0,
+                }
             channel_map[channel]["returns"] += 1
             channel_map[channel]["items"] += len(items)
             channel_map[channel]["value"] += return_entry["total_value"]
@@ -1506,10 +1397,12 @@ async def get_daily_return_report(
 
             returns_list.append(return_entry)
 
-        by_channel = sorted(channel_map.values(),
-                            key=lambda x: x["value"], reverse=True)
-        by_sku = sorted(sku_map.values(),
-                        key=lambda x: x["quantity"], reverse=True)
+        by_channel = sorted(
+            channel_map.values(), key=lambda x: x["value"], reverse=True
+        )
+        by_sku = sorted(
+            sku_map.values(), key=lambda x: x["quantity"], reverse=True
+        )
 
         for ch in by_channel:
             ch["value"] = round(ch["value"], 2)
@@ -1518,29 +1411,36 @@ async def get_daily_return_report(
 
         return {
             "success": True,
-            "date": date,
+            "period": period_norm,
+            "date": start_date.isoformat(),
+            "from_date": start_date.isoformat(),
+            "to_date": end_date.isoformat(),
             "return_type": return_type,
             "returns": returns_list,
             "by_channel": by_channel,
             "by_sku": by_sku,
             "totals": {
-                "total_returns": len(return_details),
-                "total_items": total_items,
+                "total_returns": len(returns_list),
+                "total_items": total_items_count,
                 "total_value": round(total_value, 2),
                 "rto_count": rto_count,
                 "cir_count": cir_count,
             },
-            "search_results": search_results,
+            "search_results": {
+                "export_items": len(all_items),
+                "method": "export_job_tally_return",
+                "total_time": result.get("total_time", 0),
+            },
             "debug_info": {
-                "failed_rto_codes": failed_rto_codes[:10],
-                "failed_cir_codes": failed_cir_codes[:10],
-                "total_failed_rto": len(failed_rto_codes),
-                "total_failed_cir": len(failed_cir_codes),
+                "failed_rto_codes": [],
+                "failed_cir_codes": [],
+                "total_failed_rto": 0,
+                "total_failed_cir": 0,
             },
         }
 
     except Exception as e:
-        logger.error(f"Error in daily return report: {e}", exc_info=True)
+        logger.error(f"Error in return report: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -2013,31 +1913,73 @@ async def get_sku_velocity(
 
 @router.get("/unicommerce/cod-vs-prepaid")
 async def get_cod_vs_prepaid(
+    period: str = Query("monthly", description="daily, weekly, monthly, custom"),
+    date: str = Query(None, description="Anchor date for daily/weekly/monthly (YYYY-MM-DD)"),
+    from_date: str = Query(None, description="Custom start date (YYYY-MM-DD)"),
+    to_date: str = Query(None, description="Custom end date (YYYY-MM-DD)"),
     month: int = Query(None, description="Month (1-12), defaults to current"),
     year: int = Query(None, description="Year, defaults to current"),
 ):
-    """Get COD vs Prepaid breakdown for a given month with Redis caching."""
+    """Get COD vs Prepaid breakdown for a date range with Redis caching."""
     try:
         service = get_unicommerce_service()
         now = datetime.now(IST)
-        m = month or now.month
-        y = year or now.year
+
+        period_norm = (period or "monthly").strip().lower()
+
+        if from_date and to_date:
+            start_date = datetime.strptime(from_date, "%Y-%m-%d").date()
+            end_date = datetime.strptime(to_date, "%Y-%m-%d").date()
+            period_norm = "custom"
+        elif period_norm == "custom":
+            if not from_date or not to_date:
+                return {
+                    "success": False,
+                    "error": "Both from_date and to_date are required for custom period",
+                }
+            start_date = datetime.strptime(from_date, "%Y-%m-%d").date()
+            end_date = datetime.strptime(to_date, "%Y-%m-%d").date()
+        elif period_norm in {"daily", "weekly", "monthly"}:
+            anchor = datetime.strptime(date, "%Y-%m-%d").date() if date else now.date()
+            if period_norm == "daily":
+                start_date = anchor
+                end_date = anchor
+            elif period_norm == "weekly":
+                # Last completed Monday-Sunday week
+                current_week_start = now.date() - timedelta(days=now.date().weekday())
+                start_date = current_week_start - timedelta(days=7)
+                end_date = current_week_start - timedelta(days=1)
+            else:
+                # Last completed calendar month
+                first_of_current_month = now.date().replace(day=1)
+                end_date = first_of_current_month - timedelta(days=1)
+                start_date = end_date.replace(day=1)
+        else:
+            # Backward compatibility: month/year selectors map to monthly range.
+            m = month or now.month
+            y = year or now.year
+            start_date = datetime(y, m, 1).date()
+            if m == 12:
+                end_date = datetime(y, 12, 31).date()
+            else:
+                end_date = (datetime(y, m + 1, 1) - timedelta(days=1)).date()
+            period_norm = "monthly"
+
+        if start_date > end_date:
+            return {"success": False, "error": "from_date cannot be greater than to_date"}
 
         # Check Redis cache (persistent across workers/restarts)
-        cache_key = f"uc:cod_prepaid:{y}:{m}"
+        cache_key = f"uc:cod_prepaid:{period_norm}:{start_date.isoformat()}:{end_date.isoformat()}"
         cached = CacheService.get(cache_key)
         if cached:
-            logger.info(f"COD vs Prepaid {y}-{m:02d}: Redis cache hit")
+            logger.info(
+                f"COD vs Prepaid {start_date.isoformat()} to {end_date.isoformat()}: Redis cache hit"
+            )
             cached["_cached"] = True
             return cached
 
-        from_dt = datetime(y, m, 1, 0, 0, 0, tzinfo=timezone.utc)
-        if m == 12:
-            to_dt = datetime(y + 1, 1, 1, 0, 0, 0,
-                             tzinfo=timezone.utc) - timedelta(seconds=1)
-        else:
-            to_dt = datetime(y, m + 1, 1, 0, 0, 0,
-                             tzinfo=timezone.utc) - timedelta(seconds=1)
+        from_dt = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=IST).astimezone(timezone.utc)
+        to_dt = datetime.combine(end_date, datetime.max.time().replace(microsecond=0)).replace(tzinfo=IST).astimezone(timezone.utc)
 
         if to_dt > now.replace(tzinfo=timezone.utc):
             to_dt = now.replace(tzinfo=timezone.utc)
@@ -2103,7 +2045,8 @@ async def get_cod_vs_prepaid(
         total_revenue = cod_revenue + prepaid_revenue
 
         logger.info(
-            f"COD vs Prepaid: processed {total_orders} orders ({cod_orders} COD, {prepaid_orders} Prepaid) for {y}-{m:02d}")
+            f"COD vs Prepaid: processed {total_orders} orders ({cod_orders} COD, {prepaid_orders} Prepaid) "
+            f"for {start_date.isoformat()} to {end_date.isoformat()}")
 
         for ch in channel_breakdown.values():
             ch["cod_revenue"] = round(ch["cod_revenue"], 2)
@@ -2116,8 +2059,9 @@ async def get_cod_vs_prepaid(
 
         result = {
             "success": True,
-            "month": m, "year": y,
-            "period": f"{y}-{m:02d}",
+            "period": period_norm,
+            "from_date": start_date.isoformat(),
+            "to_date": end_date.isoformat(),
             "cod": {
                 "orders": cod_orders, "revenue": round(cod_revenue, 2), "items": cod_items,
                 "percentage": round(cod_orders / total_orders * 100, 1) if total_orders > 0 else 0,
@@ -2133,12 +2077,16 @@ async def get_cod_vs_prepaid(
             "channels": channels,
         }
 
+        # Preserve legacy fields for consumers still expecting month/year.
+        result["month"] = start_date.month
+        result["year"] = start_date.year
+
         # Redis cache: current month 4hr, historical 24hr
-        is_current = (y == now.year and m == now.month)
+        is_current = (start_date.year == now.year and start_date.month == now.month and end_date >= now.date())
         ttl = 14400 if is_current else 86400
         CacheService.set(cache_key, result, ttl)
         logger.info(
-            f"COD vs Prepaid: cached result for {y}-{m:02d} (TTL={ttl}s)")
+            f"COD vs Prepaid: cached result for {start_date.isoformat()} to {end_date.isoformat()} (TTL={ttl}s)")
 
         return result
 

@@ -2,11 +2,24 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { ReportDateMode, resolveReportDateRange } from '@/lib/report-date-range';
 
 export default function ProductionReportsPage() {
   const [reportType, setReportType] = useState<'plan' | 'variance'>('plan');
-  const [varianceDate, setVarianceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [dateMode, setDateMode] = useState<ReportDateMode>('daily');
+  const [anchorDate, setAnchorDate] = useState(new Date().toISOString().split('T')[0]);
+  const [fromDate, setFromDate] = useState(new Date().toISOString().split('T')[0]);
+  const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0]);
+
+  const effectiveRange = useMemo(() => resolveReportDateRange({
+    mode: dateMode,
+    anchorDate,
+    fromDate,
+    toDate,
+  }), [dateMode, anchorDate, fromDate, toDate]);
+
+  const varianceDate = effectiveRange.toDate;
 
   const { data: planReport, isLoading: loadingPlan } = useQuery({
     queryKey: ['productionReport', 'plan'],
@@ -65,13 +78,53 @@ export default function ProductionReportsPage() {
 
         {reportType === 'variance' && (
           <div className="mt-4">
-            <label className="block text-sm font-medium mb-2">Report Date</label>
-            <input
-              type="date"
-              value={varianceDate}
-              onChange={(e) => setVarianceDate(e.target.value)}
-              className="input max-w-xs"
-            />
+            <label className="block text-sm font-medium mb-3">Report Range</label>
+            <div className="flex flex-wrap items-center gap-2">
+              {([
+                { id: 'daily', label: 'Daily' },
+                { id: 'weekly', label: 'Weekly' },
+                { id: 'monthly', label: 'Monthly' },
+                { id: 'custom', label: 'Custom' },
+              ] as const).map((mode) => (
+                <button
+                  key={mode.id}
+                  onClick={() => setDateMode(mode.id)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${dateMode === mode.id
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                    }`}
+                >
+                  {mode.label}
+                </button>
+              ))}
+
+              {dateMode === 'daily' && (
+                <input
+                  type="date"
+                  value={anchorDate}
+                  onChange={(e) => setAnchorDate(e.target.value)}
+                  className="input max-w-xs"
+                />
+              )}
+
+              {dateMode === 'custom' && (
+                <>
+                  <input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="input max-w-xs"
+                  />
+                  <input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="input max-w-xs"
+                  />
+                </>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mt-2">{effectiveRange.label} (variance uses end date)</p>
           </div>
         )}
       </div>

@@ -10,16 +10,10 @@ import {
   Percent, Package, Tag, TrendingDown,
   Search, ChevronLeft, ChevronRight, Download,
 } from 'lucide-react';
+import { ReportDateMode, resolveReportDateRange } from '@/lib/report-date-range';
 
 const PAGE_SIZE = 15;
 const fmt = (v: number) => `₹${v.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-
-const PERIODS = [
-  { key: 'today', label: 'Today' },
-  { key: 'yesterday', label: 'Yesterday' },
-  { key: 'last_7_days', label: '7 Days' },
-  { key: 'last_30_days', label: '30 Days' },
-];
 
 const BUCKETS = [
   { label: '0%', filter: (v: number) => v === 0, color: 'bg-emerald-500', ring: 'ring-emerald-500/20' },
@@ -30,13 +24,39 @@ const BUCKETS = [
 ];
 
 export default function DiscountAnalysisPage() {
-  const [period, setPeriod] = useState('last_7_days');
+  const [mode, setMode] = useState<ReportDateMode>('weekly');
+  const [anchorDate, setAnchorDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
+    return date.toISOString().split('T')[0];
+  });
+  const [fromDate, setFromDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 7);
+    return date.toISOString().split('T')[0];
+  });
+  const [toDate, setToDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
+    return date.toISOString().split('T')[0];
+  });
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
 
+  const effectiveRange = useMemo(() => resolveReportDateRange({
+    mode,
+    anchorDate,
+    fromDate,
+    toDate,
+  }), [mode, anchorDate, fromDate, toDate]);
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['uc-discount-analysis', period],
-    queryFn: async () => (await ucSales.getSalesBySku({ period })).data,
+    queryKey: ['uc-discount-analysis', mode, effectiveRange.fromDate, effectiveRange.toDate],
+    queryFn: async () => (await ucSales.getSalesBySku({
+      period: 'custom',
+      from_date: effectiveRange.fromDate,
+      to_date: effectiveRange.toDate,
+    })).data,
     staleTime: 120_000,
   });
 
@@ -69,7 +89,7 @@ export default function DiscountAnalysisPage() {
     const blob = new Blob([headers.join(',') + '\n' + rows.join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `discount-analysis-${period}.csv`; a.click();
+    a.href = url; a.download = `discount-analysis-${effectiveRange.fromDate}-to-${effectiveRange.toDate}.csv`; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -123,10 +143,15 @@ export default function DiscountAnalysisPage() {
       {/* Controls bar */}
       <div className="flex flex-col md:flex-row gap-3">
         <div className="flex gap-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
-          {PERIODS.map(p => (
-            <button key={p.key} onClick={() => { setPeriod(p.key); setPage(0); }}
+          {[
+            { key: 'daily', label: 'Daily' },
+            { key: 'weekly', label: 'Weekly' },
+            { key: 'monthly', label: 'Monthly' },
+            { key: 'custom', label: 'Custom' },
+          ].map(p => (
+            <button key={p.key} onClick={() => { setMode(p.key as ReportDateMode); setPage(0); }}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                period === p.key
+                mode === p.key
                   ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
               }`}>
@@ -134,6 +159,16 @@ export default function DiscountAnalysisPage() {
             </button>
           ))}
         </div>
+        {mode === 'daily' && (
+          <input type="date" className="input" value={anchorDate} onChange={e => { setAnchorDate(e.target.value); setPage(0); }} />
+        )}
+        {mode === 'custom' && (
+          <div className="flex gap-2">
+            <input type="date" className="input" value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(0); }} />
+            <input type="date" className="input" value={toDate} onChange={e => { setToDate(e.target.value); setPage(0); }} />
+          </div>
+        )}
+        <div className="text-xs text-slate-500 dark:text-slate-400 self-center">{effectiveRange.label}</div>
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input type="text" placeholder="Search SKU or product name..."

@@ -92,9 +92,14 @@ export const unicommerceApi = {
   getDailySalesReport: (params: { date?: string; from_date?: string; to_date?: string }) =>
     apiClient.get('/integrations/unicommerce/daily-sales-report', { params }),
 
-  // Daily Return Report - Channel + SKU breakdown (Two-Phase API)
-  getDailyReturnReport: (date: string, returnType: string = 'ALL') =>
-    apiClient.get('/integrations/unicommerce/daily-return-report', { params: { date, return_type: returnType } }),
+  // Return Report - Channel + SKU breakdown
+  getReturnReport: (params: {
+    date?: string;
+    from_date?: string;
+    to_date?: string;
+    period?: 'daily' | 'weekly' | 'monthly' | 'custom';
+    return_type?: string;
+  }) => apiClient.get('/integrations/unicommerce/return-report', { params }),
 
   // Best performing SKUs monthly
   getBestSkusMonthly: (params?: { month?: number; year?: number; limit?: number; force_refresh?: boolean; b2c_only?: boolean }) =>
@@ -104,8 +109,15 @@ export const unicommerceApi = {
   getSkuVelocity: (params?: { month?: number; year?: number; limit?: number; min_qty?: number; b2c_only?: boolean; force_refresh?: boolean }) =>
     apiClient.get('/integrations/unicommerce/sku-velocity', { params }),
 
-  // COD vs Prepaid monthly
-  getCodVsPrepaid: (params?: { month?: number; year?: number }) =>
+  // COD vs Prepaid date-range report
+  getCodVsPrepaid: (params?: {
+    period?: 'daily' | 'weekly' | 'monthly' | 'custom';
+    date?: string;
+    from_date?: string;
+    to_date?: string;
+    month?: number;
+    year?: number;
+  }) =>
     apiClient.get('/integrations/unicommerce/cod-vs-prepaid', { params }),
 
   // Channel revenue breakdown

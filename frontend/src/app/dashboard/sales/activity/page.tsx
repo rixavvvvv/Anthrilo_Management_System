@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { FileBarChart, AlertCircle, BarChart3, Search } from 'lucide-react';
-import SalesActivitySelector, { type ReportType } from '@/components/reports/SalesActivitySelector';
+import SalesActivitySelector, { type DateRangeMode, type ReportType } from '@/components/reports/SalesActivitySelector';
 import SizeWiseReportTable, { type SalesActivityRow } from '@/components/reports/SizeWiseReportTable';
 import ItemWiseReportTable from '@/components/reports/ItemWiseReportTable';
 import ChannelWiseReportTable from '@/components/reports/ChannelWiseReportTable';
 import ChannelSummaryTable from '@/components/reports/ChannelSummaryTable';
 import { unicommerceApi } from '@/lib/api';
+import { resolveReportDateRange } from '@/lib/report-date-range';
 import { generateSalesActivityExcel } from '@/utils/exportSalesActivityExcel';
 
 function formatDate(d: Date): string {
@@ -17,6 +18,8 @@ function formatDate(d: Date): string {
 
 export default function SalesActivityPage() {
   const today = formatDate(new Date());
+  const [dateMode, setDateMode] = useState<DateRangeMode>('daily');
+  const [anchorDate, setAnchorDate] = useState(today);
   const [fromDate, setFromDate] = useState(today);
   const [toDate, setToDate] = useState(today);
   const [reportType, setReportType] = useState<ReportType>('size-wise');
@@ -59,13 +62,30 @@ export default function SalesActivityPage() {
   ];
   const progressLabel = PROGRESS_STAGES.slice().reverse().find(s => progress >= s.at)?.label ?? '';
 
+  const effectiveRange = useMemo(() => {
+    const resolved = resolveReportDateRange({
+      mode: dateMode,
+      anchorDate: anchorDate || today,
+      fromDate,
+      toDate,
+    });
+    return {
+      from: resolved.fromDate,
+      to: resolved.toDate,
+      label: resolved.label,
+    };
+  }, [dateMode, anchorDate, fromDate, toDate, today]);
+
   const handleGenerate = useCallback(async () => {
-    if (!fromDate || !toDate) return;
+    if (!effectiveRange.from || !effectiveRange.to) return;
     setLoading(true);
     setError(null);
     setData([]);
     try {
-      const res = await unicommerceApi.getSalesActivity({ from_date: fromDate, to_date: toDate });
+      const res = await unicommerceApi.getSalesActivity({
+        from_date: effectiveRange.from,
+        to_date: effectiveRange.to,
+      });
       const items: SalesActivityRow[] = res.data?.items ?? [];
       if (items.length === 0) {
         setError('No data found for the selected date range.');
@@ -77,16 +97,16 @@ export default function SalesActivityPage() {
     } finally {
       setLoading(false);
     }
-  }, [fromDate, toDate]);
+  }, [effectiveRange.from, effectiveRange.to]);
 
   const handleExport = useCallback(async () => {
     if (data.length === 0) return;
     try {
-      await generateSalesActivityExcel(data, fromDate, toDate, reportType);
+      await generateSalesActivityExcel(data, effectiveRange.from, effectiveRange.to, reportType);
     } catch {
       setError('Failed to generate Excel file.');
     }
-  }, [data, fromDate, toDate, reportType]);
+  }, [data, effectiveRange.from, effectiveRange.to, reportType]);
 
   const filteredData = data.filter(row => {
     if (!search.trim()) return true;
@@ -130,10 +150,15 @@ export default function SalesActivityPage() {
 
       {/* Selector */}
       <SalesActivitySelector
+        dateMode={dateMode}
+        anchorDate={anchorDate}
         fromDate={fromDate}
         toDate={toDate}
+        rangeLabel={effectiveRange.label}
         reportType={reportType}
         loading={loading}
+        onDateModeChange={setDateMode}
+        onAnchorDateChange={setAnchorDate}
         onFromDateChange={setFromDate}
         onToDateChange={setToDate}
         onReportTypeChange={setReportType}
