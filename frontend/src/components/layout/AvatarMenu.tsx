@@ -10,7 +10,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { RoleBadge } from '@/components/auth/RoleBadge';
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
+// Helpers
 function timeAgo(dateStr: string | null | undefined): string {
   if (!dateStr) return '';
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -23,7 +23,7 @@ function timeAgo(dateStr: string | null | undefined): string {
   return `${days}d ago`;
 }
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+// Types
 type MenuItem = {
   label: string;
   icon: typeof User;
@@ -41,7 +41,7 @@ const ADMIN_ITEMS: MenuItem[] = [
   { label: 'Login History', icon: History, href: '/dashboard/admin/history' },
 ];
 
-// ─── Shared item class ─────────────────────────────────────────────────────
+// Shared item class
 const menuItemClass = [
   'flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px]',
   'text-slate-600 dark:text-slate-400',
@@ -51,7 +51,7 @@ const menuItemClass = [
   'transition-all duration-150',
 ].join(' ');
 
-// ─── Component ─────────────────────────────────────────────────────────────
+// Component
 export const AvatarMenu = memo(function AvatarMenu() {
   const [open, setOpen] = useState(false);
   const [focusIdx, setFocusIdx] = useState(-1);
@@ -119,7 +119,7 @@ export const AvatarMenu = memo(function AvatarMenu() {
 
   return (
     <div ref={ref} className="relative">
-      {/* ── Trigger ── */}
+      {/* Trigger */}
       <button
         onClick={handleOpen}
         aria-haspopup="true"
@@ -151,7 +151,7 @@ export const AvatarMenu = memo(function AvatarMenu() {
         />
       </button>
 
-      {/* ── Dropdown ── */}
+      {/* Dropdown */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -169,7 +169,7 @@ export const AvatarMenu = memo(function AvatarMenu() {
                        backdrop-blur-2xl backdrop-saturate-[1.8]
                        shadow-[0_20px_60px_-15px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)]"
           >
-            {/* ── Gradient header ── */}
+            {/* Gradient header */}
             <div className="relative px-4 py-4 border-b border-slate-100/80 dark:border-slate-800/60
                             bg-gradient-to-br from-primary-50/60 via-white/0 to-violet-50/40
                             dark:from-primary-950/30 dark:via-transparent dark:to-violet-950/20">
@@ -210,7 +210,7 @@ export const AvatarMenu = memo(function AvatarMenu() {
               </div>
             </div>
 
-            {/* ── Personal section ── */}
+            {/* Personal section */}
             <div className="p-1.5">
               <div className="px-3 pt-1.5 pb-1">
                 <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400/80 dark:text-slate-500/80">
@@ -232,7 +232,7 @@ export const AvatarMenu = memo(function AvatarMenu() {
               ))}
             </div>
 
-            {/* ── Admin section ── */}
+            {/* Admin section */}
             {adminItems.length > 0 && (
               <div className="p-1.5 border-t border-slate-100/80 dark:border-slate-800/60">
                 <div className="px-3 pt-1.5 pb-1">
@@ -256,7 +256,7 @@ export const AvatarMenu = memo(function AvatarMenu() {
               </div>
             )}
 
-            {/* ── Preferences section ── */}
+            {/* Preferences section */}
             <div className="p-1.5 border-t border-slate-100/80 dark:border-slate-800/60">
               <div className="px-3 pt-1.5 pb-1">
                 <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400/80 dark:text-slate-500/80">

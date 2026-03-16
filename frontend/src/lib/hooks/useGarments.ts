@@ -1,9 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api-client";
 
-/**
- * Hook for fetching garments list
- */
+// Fetches paginated garments list
 export function useGarments(skip: number = 0, limit: number = 100) {
     return useQuery({
         queryKey: ["garments", "list", skip, limit],
@@ -17,9 +15,7 @@ export function useGarments(skip: number = 0, limit: number = 100) {
     });
 }
 
-/**
- * Hook for fetching single garment
- */
+// Fetches a single garment by ID
 export function useGarment(id: number) {
     return useQuery({
         queryKey: ["garments", "item", id],
@@ -32,9 +28,7 @@ export function useGarment(id: number) {
     });
 }
 
-/**
- * Hook for creating garment
- */
+// Creates a new garment and refreshes the garments list
 export function useCreateGarment() {
     const queryClient = useQueryClient();
 
@@ -49,9 +43,7 @@ export function useCreateGarment() {
     });
 }
 
-/**
- * Hook for updating garment
- */
+// Updates a garment and refreshes its detail + list caches
 export function useUpdateGarment() {
     const queryClient = useQueryClient();
 

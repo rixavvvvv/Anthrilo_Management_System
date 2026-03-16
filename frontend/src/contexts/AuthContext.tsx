@@ -11,7 +11,7 @@ import {
   clearAuth,
 } from '@/lib/auth';
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+// Types
 interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
@@ -23,7 +23,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// ─── Provider ──────────────────────────────────────────────────────────────
+// Provider
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // ─── Password Login ────────────────────────────────────────────────────
+  // Password login
   const loginWithPassword = useCallback(async (username: string, password: string) => {
     setIsLoading(true);
     try {
@@ -88,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [router]);
 
-  // ─── Logout ─────────────────────────────────────────────────────────────
+  // Logout
   const logout = useCallback(() => {
     clearAuth();
     setUser(null);
@@ -113,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// ─── Hook ──────────────────────────────────────────────────────────────────
+// Hook
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within <AuthProvider>');

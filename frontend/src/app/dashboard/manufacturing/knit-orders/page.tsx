@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { knittingApi, supplierApi } from '@/lib/api';
-import type { KnitOrder, Supplier } from '@/types';
+import { knittingApi, supplierApi } from '@/features/manufacturing';
+import type { KnitOrder, Supplier } from '@/features/manufacturing';
 import { PageHeader, ProgressLoader, EmptyState, ErrorPanel } from '@/components/ui';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { FormModal } from '@/components/ui/FormModal';

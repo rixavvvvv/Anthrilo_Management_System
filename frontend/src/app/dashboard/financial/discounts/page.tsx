@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ucSales } from '@/lib/api/uc';
+import { ucSales } from '@/features/financial';
 import { PageHeader, ProgressLoader, ErrorPanel } from '@/components/ui/Common';
 import Link from 'next/link';
 import { motion } from 'framer-motion';

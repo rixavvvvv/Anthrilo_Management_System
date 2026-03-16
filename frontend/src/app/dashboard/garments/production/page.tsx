@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ucSales } from '@/lib/api/uc';
+import { ucSales } from '@/features/sales';
 
 const PAGE_SIZE = 15;
 
@@ -40,7 +40,7 @@ export default function OrdersPage() {
   const [page, setPage] = useState(1);
   const [channelFilter, setChannelFilter] = useState<string | null>(null);
 
-  /* ── Summary data (includes channel_breakdown, status_breakdown) ─── */
+  /* Summary data (includes channel_breakdown, status_breakdown) */
   const { data: summaryRaw, isLoading: summaryLoading } = useQuery({
     queryKey: ['uc-orders-summary', period],
     queryFn: async () => {
@@ -74,7 +74,7 @@ export default function OrdersPage() {
       .sort((a, b) => b.count - a.count);
   }, [summary]);
 
-  /* ── Paginated Orders ───────────────────────────────────────── */
+  /* Paginated Orders */
   const { data: ordersData, isLoading, error, isFetching } = useQuery({
     queryKey: ['uc-orders-page', period, page],
     queryFn: async () => (await ucSales.getOrders({ period, page, page_size: PAGE_SIZE })).data,
@@ -114,10 +114,10 @@ export default function OrdersPage() {
     return nums;
   }, [page, totalPages]);
 
-  /* ══════════════════════════════════════════════════════════════ */
+  /*  */
   return (
     <div className="space-y-6">
-      {/* ── Header + period toggle ───────────────────────────── */}
+      {/* Header + period toggle */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Orders &amp; Channels</h1>
@@ -146,7 +146,7 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* ── KPI cards ────────────────────────────────────────── */}
+      {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {([
           { label: 'Total Orders', value: summary.total_orders, icon: '🛒', gradient: 'from-blue-500 to-blue-600', suffix: '' },
@@ -165,7 +165,7 @@ export default function OrdersPage() {
         ))}
       </div>
 
-      {/* ── Channel breakdown ────────────────────────────────── */}
+      {/* Channel breakdown */}
       {channels.length > 0 && (
         <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
@@ -208,7 +208,7 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {/* ── Status breakdown (horizontal bar) ────────────────── */}
+      {/* Status breakdown (horizontal bar) */}
       {statuses.length > 0 && (
         <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-3">Order Status</h2>
@@ -232,7 +232,7 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {/* ── Error ────────────────────────────────────────────── */}
+      {/* Error */}
       {error && (
         <div className="rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4">
           <p className="text-sm text-rose-600 dark:text-rose-400">
@@ -241,7 +241,7 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {/* ── Orders table ─────────────────────────────────────── */}
+      {/* Orders table */}
       <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">
@@ -334,7 +334,7 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {/* ── Pagination ───────────────────────────────────────── */}
+      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex justify-between items-center">
           <button disabled={page <= 1} onClick={() => setPage(page - 1)}

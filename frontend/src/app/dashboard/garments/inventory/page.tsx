@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ucInventory } from '@/lib/api/uc';
+import { ucInventory } from '@/features/sales';
 
 const PAGE_SIZE = 25;
 const fmt = (n?: number) => (n ?? 0).toLocaleString('en-IN');
@@ -22,7 +22,7 @@ export default function GarmentInventoryPage() {
 
   useEffect(() => { setPage(1); }, [selectedCategory, stockFilter]);
 
-  /* ── Summary (totals + category breakdown) ── */
+  /* Summary (totals + category breakdown) */
   const { data: summaryData, isLoading: summaryLoading } = useQuery({
     queryKey: ['uc-inventory-summary-page'],
     queryFn: async () => (await ucInventory.getSummary()).data,
@@ -31,7 +31,7 @@ export default function GarmentInventoryPage() {
     refetchOnWindowFocus: false,
   });
 
-  /* ── Inventory snapshot (paginated / search) ── */
+  /* Inventory snapshot (paginated / search) */
   const isSearch = debouncedSearch.length > 0;
   const { data, isLoading, error, isFetching } = useQuery({
     queryKey: isSearch
@@ -53,7 +53,7 @@ export default function GarmentInventoryPage() {
     placeholderData: (prev: any) => prev,
   });
 
-  /* ── Derived ── */
+  /* Derived */
   const items = useMemo(() => {
     const raw = data?.inventorySnapshots ?? data?.items ?? [];
     if (stockFilter === 'out_of_stock') return raw.filter((i: any) => (i.inventory ?? i.openSale ?? 0) <= 0);
@@ -77,7 +77,7 @@ export default function GarmentInventoryPage() {
 
   const categories = stats?.categories ?? [];
 
-  /* ── Render ── */
+  /* Render */
   return (
     <div className="space-y-5">
       {/* Header */}

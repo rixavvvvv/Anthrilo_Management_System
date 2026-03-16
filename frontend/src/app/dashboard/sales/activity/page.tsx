@@ -8,7 +8,7 @@ import SizeWiseReportTable, { type SalesActivityRow } from '@/components/reports
 import ItemWiseReportTable from '@/components/reports/ItemWiseReportTable';
 import ChannelWiseReportTable from '@/components/reports/ChannelWiseReportTable';
 import ChannelSummaryTable from '@/components/reports/ChannelSummaryTable';
-import { unicommerceApi } from '@/lib/api';
+import { unicommerceApi } from '@/features/sales';
 import { resolveReportDateRange } from '@/lib/report-date-range';
 import { generateSalesActivityExcel } from '@/utils/exportSalesActivityExcel';
 

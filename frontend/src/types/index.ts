@@ -225,7 +225,7 @@ export interface AdsImportResult {
   column_mapping: Record<string, string>;
 }
 
-// ─── Procurement & Manufacturing Types ──────────────────────────
+// Procurement & Manufacturing
 
 export interface Supplier {
   id: number;

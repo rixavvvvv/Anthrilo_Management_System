@@ -12,7 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { RoleBadge } from '@/components/auth/RoleBadge';
 import type { UserRole } from '@/lib/auth';
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+// Types
 interface UserProfile {
   id: number;
   email: string;
@@ -28,7 +28,7 @@ interface UserProfile {
   updated_at: string;
 }
 
-// ─── Toast ─────────────────────────────────────────────────────────────────
+// Toast
 function Toast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
   useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t); }, [onClose]);
   return (
@@ -47,7 +47,7 @@ function Toast({ message, type, onClose }: { message: string; type: 'success' | 
   );
 }
 
-// ─── Page ──────────────────────────────────────────────────────────────────
+// Page
 export default function ProfilePage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();

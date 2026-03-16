@@ -1,9 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api-client";
 
-/**
- * Hook for fetching inventory list
- */
+// Fetches paginated inventory list
 export function useInventory(skip: number = 0, limit: number = 100) {
     return useQuery({
         queryKey: ["inventory", "list", skip, limit],
@@ -17,9 +15,7 @@ export function useInventory(skip: number = 0, limit: number = 100) {
     });
 }
 
-/**
- * Hook for fetching single inventory item
- */
+// Fetches a single inventory item by ID
 export function useInventoryItem(id: number) {
     return useQuery({
         queryKey: ["inventory", "item", id],
@@ -32,9 +28,7 @@ export function useInventoryItem(id: number) {
     });
 }
 
-/**
- * Hook for creating inventory item
- */
+// Creates a new inventory item and refreshes the list
 export function useCreateInventory() {
     const queryClient = useQueryClient();
 
@@ -44,15 +38,13 @@ export function useCreateInventory() {
             return response.data;
         },
         onSuccess: () => {
-            // Invalidate inventory list cache
+            // Refresh inventory list after adding
             queryClient.invalidateQueries({ queryKey: ["inventory", "list"] });
         },
     });
 }
 
-/**
- * Hook for updating inventory item
- */
+// Updates an inventory item and refreshes its detail + list caches
 export function useUpdateInventory() {
     const queryClient = useQueryClient();
 
@@ -62,7 +54,7 @@ export function useUpdateInventory() {
             return response.data;
         },
         onSuccess: (_, variables) => {
-            // Invalidate specific item and list
+            // Refresh this item's detail + the list
             queryClient.invalidateQueries({ queryKey: ["inventory", "item", variables.id] });
             queryClient.invalidateQueries({ queryKey: ["inventory", "list"] });
         },

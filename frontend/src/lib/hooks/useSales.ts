@@ -1,9 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api-client";
 
-/**
- * Hook for fetching sales list
- */
+// Fetches paginated sales list with optional date/panel filters
 export function useSales({
     skip = 0,
     limit = 100,
@@ -35,9 +33,7 @@ export function useSales({
     });
 }
 
-/**
- * Hook for creating a sale
- */
+// Creates a new sale and refreshes the sales + daily report caches
 export function useCreateSale() {
     const queryClient = useQueryClient();
 
@@ -47,10 +43,10 @@ export function useCreateSale() {
             return response.data;
         },
         onSuccess: (data) => {
-            // Invalidate sales list
+            // Refresh sales list cache
             queryClient.invalidateQueries({ queryKey: ["sales", "list"] });
 
-            // Invalidate daily sales report for the sale date
+            // Also refresh the daily report for the sale's date
             const saleDate = data.transaction_date || data.sale_date;
             if (saleDate) {
                 queryClient.invalidateQueries({

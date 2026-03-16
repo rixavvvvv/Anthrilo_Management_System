@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { mrnApi, supplierApi, purchaseOrderApi, gateEntryApi } from '@/lib/api';
-import type { MRN, Supplier, PurchaseOrder, GateEntry } from '@/types';
+import { mrnApi, supplierApi, purchaseOrderApi, gateEntryApi } from '@/features/procurement';
+import type { MRN, Supplier, PurchaseOrder, GateEntry } from '@/features/procurement';
 import { PageHeader, ProgressLoader, EmptyState, ErrorPanel } from '@/components/ui';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { FormModal } from '@/components/ui/FormModal';

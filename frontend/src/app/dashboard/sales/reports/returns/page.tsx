@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ucSales } from '@/lib/api/uc';
+import { ucSales } from '@/features/sales';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ProgressLoader } from '@/components/ui/Common';
 import {
@@ -18,7 +18,7 @@ import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import { format, parse } from 'date-fns';
 
-/* ── helpers ─────────────────────────────────────────────────────── */
+/* helpers */
 const fmtCurr = (v: number) => `₹${v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtShort = (v: number) =>
   v >= 10_000_000 ? `₹${(v / 10_000_000).toFixed(2)}Cr`
@@ -43,7 +43,7 @@ const riskBadge = (pct: number) =>
     : pct >= 20 ? { label: 'Medium', cls: 'bg-violet-50 dark:bg-violet-900/20 text-violet-500 dark:text-violet-400', dot: 'bg-violet-500' }
       : { label: 'Low Risk', cls: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 dark:text-emerald-400', dot: 'bg-emerald-500' };
 
-/* ── animated counter ────────────────────────────────────────────── */
+/* animated counter */
 function AnimatedNum({ value, prefix = '' }: { value: number; prefix?: string }) {
   const [display, setDisplay] = useState(0);
   const prev = useRef(0);
@@ -60,7 +60,7 @@ function AnimatedNum({ value, prefix = '' }: { value: number; prefix?: string })
   return <>{prefix}{display.toLocaleString('en-IN')}</>;
 }
 
-/* ── sort types ──────────────────────────────────────────────────── */
+/* sort types */
 type ChSortKey = 'channel' | 'returns' | 'items' | 'value' | 'rto' | 'cir' | 'pct' | 'valuePct';
 type SkuSortKey = 'sku' | 'name' | 'quantity' | 'value' | 'return_count';
 type Dir = 'asc' | 'desc';
@@ -74,7 +74,7 @@ const PERIOD_OPTIONS: { value: ReportPeriod; label: string }[] = [
   { value: 'custom', label: 'Custom' },
 ];
 
-/* ═══════════════════════════════════════════════════════════════════ */
+/*  */
 export default function ReturnReportPage() {
   const [reportDate, setReportDate] = useState<string>(() => {
     const d = new Date(); d.setDate(d.getDate() - 1);
@@ -133,7 +133,7 @@ export default function ReturnReportPage() {
 
   const handleGenerate = useCallback(() => { setShowReport(true); refetch(); }, [refetch]);
 
-  /* ── CSV download ──────────────────────────────────────────────── */
+  /* CSV download */
   const handleCSV = useCallback(() => {
     if (!raw?.by_channel) return;
     const hdr = ['Channel', 'Returns', 'Items', 'Value (₹)', 'Return %', 'Value %', 'RTO', 'CIR'];
@@ -154,7 +154,7 @@ export default function ReturnReportPage() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   }, [raw, reportDate]);
 
-  /* ── derived data ──────────────────────────────────────────────── */
+  /* derived data */
   const totals = raw?.totals;
   const totalRet = totals?.total_returns || 1;
   const totalVal = totals?.total_value || 1;
@@ -211,7 +211,7 @@ export default function ReturnReportPage() {
     }).slice(0, 25);
   }, [skus, skuSearch, skuSort, skuDir]);
 
-  /* ── chart data ────────────────────────────────────────────────── */
+  /* chart data */
   const pieData = useMemo(
     () => channels.map((ch: any) => ({ name: ch.label, value: ch.value, color: ch.color })),
     [channels],
@@ -225,7 +225,7 @@ export default function ReturnReportPage() {
     [skus],
   );
 
-  /* ── insights ──────────────────────────────────────────────────── */
+  /* insights */
   const insights = useMemo(() => {
     if (!channels.length) return [];
     const ins: { icon: any; color: string; title: string; desc: string }[] = [];
@@ -259,16 +259,16 @@ export default function ReturnReportPage() {
     return `${format(parse(from, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')} - ${format(parse(to, 'yyyy-MM-dd', new Date()), 'dd MMM yyyy')}`;
   }, [raw, period, fromDate, toDate, reportDate]);
 
-  /* ═══════════════════════════════════════════════════════════════ */
+  /*  */
   return (
     <div className="space-y-8">
-      {/* ─── Header ──────────────────────────────────────────────── */}
+      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Return Report</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">RTO & Customer-Initiated Returns · Risk analytics</p>
       </div>
 
-      {/* ─── Filters ─────────────────────────────────────────────── */}
+      {/* Filters */}
       <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5">
         <div className="flex flex-wrap items-end gap-3">
           {/* Period */}
@@ -364,7 +364,7 @@ export default function ReturnReportPage() {
         </div>
       </div>
 
-      {/* ─── Loading ─────────────────────────────────────────────── */}
+      {/* Loading */}
       <ProgressLoader loading={queryLoading} stages={[
         { at: 0, label: 'Initializing export job…' },
         { at: 15, label: 'Fetching return orders…' },
@@ -373,19 +373,19 @@ export default function ReturnReportPage() {
         { at: 90, label: 'Finalizing…' },
       ]} />
 
-      {/* ─── Error ───────────────────────────────────────────────── */}
+      {/* Error */}
       {showReport && raw && !raw.success && !queryLoading && (
         <div className="rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4">
           <p className="text-sm text-rose-600 dark:text-rose-400">{raw.error || 'Failed to generate report'}</p>
         </div>
       )}
 
-      {/* ─── Report content ──────────────────────────────────────── */}
+      {/* Report content */}
       <AnimatePresence>
         {showReport && raw?.success && totals && !queryLoading && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="space-y-8">
 
-            {/* ── Hero summary ────────────────────────────────────── */}
+            {/* Hero summary */}
             <div className="rounded-2xl bg-gradient-to-br from-slate-800 via-slate-900 to-violet-950 p-6 sm:p-8 shadow-lg text-white relative overflow-hidden">
               <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImciIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg2MHY2MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjMwIiBjeT0iMzAiIHI9IjEuNSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjA2KSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3QgZmlsbD0idXJsKCNnKSIgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIvPjwvc3ZnPg==')] opacity-50" />
               <div className="relative z-10">
@@ -421,7 +421,7 @@ export default function ReturnReportPage() {
               </div>
             </div>
 
-            {/* ── No returns case ─────────────────────────────────── */}
+            {/* No returns case */}
             {totals.total_returns === 0 && (
               <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-8 text-center">
                 <p className="text-2xl mb-2">✅</p>
@@ -431,7 +431,7 @@ export default function ReturnReportPage() {
 
             {totals.total_returns > 0 && (
               <>
-                {/* ── Charts ─────────────────────────────────────── */}
+                {/* Charts */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Donut */}
                   <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5">
@@ -502,7 +502,7 @@ export default function ReturnReportPage() {
                   </div>
                 </div>
 
-                {/* ── Top 5 SKUs bar chart ────────────────────────── */}
+                {/* Top 5 SKUs bar chart */}
                 {topSkuBarData.length > 0 && (
                   <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5">
                     <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-4">Top 5 SKUs by Return Value</h2>
@@ -530,7 +530,7 @@ export default function ReturnReportPage() {
                   </div>
                 )}
 
-                {/* ── Insights ────────────────────────────────────── */}
+                {/* Insights */}
                 {insights.length > 0 && (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {insights.map((ins, i) => (
@@ -548,7 +548,7 @@ export default function ReturnReportPage() {
                   </div>
                 )}
 
-                {/* ── Channel Table ───────────────────────────────── */}
+                {/* Channel Table */}
                 <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
                   <div className="p-4 border-b border-slate-100 dark:border-slate-700">
                     <h2 className="text-base font-semibold text-slate-900 dark:text-white">Channel Breakdown</h2>
@@ -632,7 +632,7 @@ export default function ReturnReportPage() {
                   </div>
                 </div>
 
-                {/* ── SKU Table ───────────────────────────────────── */}
+                {/* SKU Table */}
                 {skus.length > 0 && (
                   <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
                     <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
@@ -698,7 +698,7 @@ export default function ReturnReportPage() {
                   </div>
                 )}
 
-                {/* ── Debug / API info (collapsible) ──────────────── */}
+                {/* Debug / API info (collapsible) */}
                 {raw.search_results && (
                   <details className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 overflow-hidden group">
                     <summary className="px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 cursor-pointer select-none flex items-center gap-2 hover:text-slate-700 dark:hover:text-slate-300">
@@ -727,7 +727,7 @@ export default function ReturnReportPage() {
                   </details>
                 )}
 
-                {/* ── Footer ──────────────────────────────────────── */}
+                {/* Footer */}
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px] text-slate-400 dark:text-slate-500 px-1">
                   <span>Source: Export Job API (Tally Return GST Report 3.0)</span>
                   <span>Scope: All Returns (RTO + CIR)</span>

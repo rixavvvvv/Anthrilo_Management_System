@@ -10,7 +10,7 @@ import {
 import { apiClient } from '@/lib/api-client';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+// Types
 interface LoginEntry {
   id: number;
   user_id: number;
@@ -33,7 +33,7 @@ interface ActivityEntry {
 
 type Tab = 'logins' | 'activity';
 
-// ─── Action color mapping ──────────────────────────────────────────────────
+// Action color mapping
 const actionColors: Record<string, string> = {
   login: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
   change_password: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
@@ -46,7 +46,7 @@ function getActionColor(action: string) {
   return actionColors[action] || 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
+// Helpers
 function fmtDateTime(s: string) {
   return new Date(s).toLocaleString('en-IN', {
     day: '2-digit', month: 'short', year: 'numeric',
@@ -64,7 +64,7 @@ function parseUA(ua: string | null) {
   return ua.slice(0, 30);
 }
 
-// ─── Page ──────────────────────────────────────────────────────────────────
+// Page
 function HistoryContent() {
   const [tab, setTab] = useState<Tab>('logins');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -154,7 +154,7 @@ function HistoryContent() {
             <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
           </div>
         ) : tab === 'logins' ? (
-          /* ── Login History Table ── */
+          /* Login History Table */
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -218,7 +218,7 @@ function HistoryContent() {
             </table>
           </div>
         ) : (
-          /* ── Activity Logs ── */
+          /* Activity Logs */
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {(activityQuery.data || []).map((entry) => (
               <div key={entry.id} className="flex items-start gap-3.5 px-4 py-3.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
@@ -262,7 +262,7 @@ function HistoryContent() {
   );
 }
 
-// ─── Export ─────────────────────────────────────────────────────────────────
+// Export
 export default function HistoryPage() {
   return (
     <ProtectedRoute ownerOnly>

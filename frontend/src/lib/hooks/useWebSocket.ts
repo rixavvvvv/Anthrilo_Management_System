@@ -20,16 +20,8 @@ interface OrderNotification {
     orders?: any[]
 }
 
-/**
- * WebSocket hook for real-time dashboard updates.
- * Automatically reconnects and updates React Query cache when new data arrives.
- *
- * Usage:
- *   const { isConnected, lastUpdate, newOrderNotification, dismissNotification } = useWebSocket()
- *
- * When the server pushes today_sales data, the React Query cache
- * for 'unicommerce-today' is automatically updated — no polling needed.
- */
+// Real-time dashboard updates via WebSocket.
+// Auto-reconnects and pushes new data into the React Query cache.
 export function useWebSocket() {
     const wsRef = useRef<WebSocket | null>(null)
     const reconnectAttemptsRef = useRef(0)

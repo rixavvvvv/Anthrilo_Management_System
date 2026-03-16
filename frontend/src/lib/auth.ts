@@ -1,7 +1,4 @@
-/**
- * Authentication utilities
- * Handles token storage, user state, and auth helpers
- */
+// Auth utilities — token storage, user state, and helpers
 
 export type UserRole = 'admin' | 'manager' | 'staff';
 
@@ -15,7 +12,7 @@ export interface AuthUser {
   last_login?: string;
 }
 
-// ─── Token Storage ─────────────────────────────────────────────────────────
+// Token & user storage keys
 const TOKEN_KEY = 'access_token';
 const REFRESH_KEY = 'refresh_token';
 const USER_KEY = 'auth_user';

@@ -13,7 +13,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { RoleBadge } from '@/components/auth/RoleBadge';
 import type { UserRole } from '@/lib/auth';
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+// Types
 interface UserRecord {
   id: number;
   email: string;
@@ -50,13 +50,13 @@ const roleIcon: Record<UserRole, typeof Shield> = {
   staff: Shield,
 };
 
-// ─── API ───────────────────────────────────────────────────────────────────
+// API
 async function fetchUsers(): Promise<{ users: UserRecord[]; total: number }> {
   const res = await apiClient.get('/auth/users');
   return res.data;
 }
 
-// ─── Modal Wrapper ─────────────────────────────────────────────────────────
+// Modal Wrapper
 function Modal({ open, onClose, title, children }: {
   open: boolean; onClose: () => void; title: string; children: React.ReactNode;
 }) {
@@ -95,7 +95,7 @@ function Modal({ open, onClose, title, children }: {
   );
 }
 
-// ─── Page ──────────────────────────────────────────────────────────────────
+// Page
 function AdminUsersContent() {
   const { user: me } = useAuth();
   const queryClient = useQueryClient();
@@ -121,7 +121,7 @@ function AdminUsersContent() {
     setTimeout(() => setToast(null), 3500);
   }, []);
 
-  // ─── Queries ───────────────────────────────────────────────────────────
+  // Queries
   const { data, isLoading } = useQuery({
     queryKey: ['admin-users'],
     queryFn: fetchUsers,
@@ -139,7 +139,7 @@ function AdminUsersContent() {
     );
   }, [data, search]);
 
-  // ─── Mutations ─────────────────────────────────────────────────────────
+  // Mutations
   const createMutation = useMutation({
     mutationFn: async (form: CreateUserForm) => {
       const res = await apiClient.post('/auth/users', form);
@@ -186,7 +186,7 @@ function AdminUsersContent() {
     },
   });
 
-  // ─── Handlers ──────────────────────────────────────────────────────────
+  // Handlers
   const handleCreate = () => {
     if (!createForm.email || !createForm.username || !createForm.password) {
       flash('error', 'Email, username and password are required');
@@ -224,7 +224,7 @@ function AdminUsersContent() {
 
   return (
     <div className="space-y-6">
-      {/* ── Toast ── */}
+      {/* Toast */}
       <AnimatePresence>
         {toast && (
           <motion.div
@@ -243,7 +243,7 @@ function AdminUsersContent() {
         )}
       </AnimatePresence>
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2.5">
@@ -265,7 +265,7 @@ function AdminUsersContent() {
         </button>
       </div>
 
-      {/* ── Search ── */}
+      {/* Search */}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
         <input
@@ -280,7 +280,7 @@ function AdminUsersContent() {
         />
       </div>
 
-      {/* ── Table ── */}
+      {/* Table */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
@@ -378,7 +378,7 @@ function AdminUsersContent() {
         )}
       </div>
 
-      {/* ── Create User Modal ── */}
+      {/* Create User Modal */}
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Create New User">
         <div className="space-y-4">
           <div>
@@ -459,7 +459,7 @@ function AdminUsersContent() {
         </div>
       </Modal>
 
-      {/* ── Edit User Modal ── */}
+      {/* Edit User Modal */}
       <Modal open={!!editUser} onClose={() => setEditUser(null)} title={`Edit ${editUser?.username || 'User'}`}>
         <div className="space-y-4">
           <div>
@@ -532,7 +532,7 @@ function AdminUsersContent() {
         </div>
       </Modal>
 
-      {/* ── Delete Confirm Modal ── */}
+      {/* Delete Confirm Modal */}
       <Modal open={!!deleteUser} onClose={() => setDeleteUser(null)} title="Delete User">
         <div className="space-y-4">
           <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -561,7 +561,7 @@ function AdminUsersContent() {
   );
 }
 
-// ─── Export ─────────────────────────────────────────────────────────────────
+// Export
 export default function AdminUsersPage() {
   return (
     <ProtectedRoute allowedRoles={['admin']}>

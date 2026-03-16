@@ -1,9 +1,9 @@
 import { unicommerceApi } from './index';
 import { apiClient } from '@/lib/api-client';
 
-// Re-exports for backward compatibility
+// Unicommerce re-exports kept for backward compatibility
 
-// Sales-related APIs
+// Sales-related
 export const ucSales = {
     getToday: unicommerceApi.getToday,
     getYesterday: unicommerceApi.getYesterday,
@@ -24,11 +24,11 @@ export const ucSales = {
     getCodVsPrepaid: unicommerceApi.getCodVsPrepaid,
     getSkuVelocity: unicommerceApi.getSkuVelocity,
 
-    // Additional functions used by legacy pages
+    // Route the right endpoint based on period
     getOrders: async (params: { period: string; page: number; page_size: number; from_date?: string; to_date?: string }) => {
         const { period, page, page_size, from_date, to_date } = params;
 
-        // Map period to the appropriate endpoint
+        // Pick the right endpoint based on the chosen period
         if (period === 'custom' && from_date && to_date) {
             return unicommerceApi.getCustomOrders({ from_date, to_date, page, page_size });
         } else if (period === 'today') {
@@ -61,7 +61,7 @@ export const ucSales = {
     }) => apiClient.get('/integrations/unicommerce/bundle-sales-analysis', { params }),
 };
 
-// Catalog-related APIs
+// Catalog-related
 export const ucCatalog = {
     searchItems: (params: {
         displayStart: number;
@@ -70,7 +70,7 @@ export const ucCatalog = {
         getAggregates?: boolean;
         keyword?: string;
     }) => {
-        // Transform params to Unicommerce format
+        // Build the Unicommerce search payload
         const payload: any = {
             getInventorySnapshot: params.getInventorySnapshot ?? false,
             getAggregates: params.getAggregates ?? false,
@@ -87,13 +87,13 @@ export const ucCatalog = {
         return apiClient.post('/uc/catalog/item/search', payload);
     },
 
-    // Get inventory summary - aggregated totals independent of pagination
+    // Inventory totals (independent of pagination)
     getInventorySummary: () => {
         return apiClient.get('/uc/catalog/inventory/summary');
     },
 };
 
-// Inventory-related APIs (used by stock-analysis page)
+// Inventory (used by the stock-analysis page)
 export const ucInventory = {
     getSummary: () =>
         apiClient.get('/uc/catalog/inventory/summary').then((res) => {
