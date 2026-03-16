@@ -108,7 +108,7 @@ export default function SalesActivityPage() {
     }
   }, [data, effectiveRange.from, effectiveRange.to, reportType]);
 
-  const filteredData = data.filter(row => {
+  const filteredData = useMemo(() => data.filter(row => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (
@@ -117,7 +117,7 @@ export default function SalesActivityPage() {
       row.size.toLowerCase().includes(q) ||
       row.channel.toLowerCase().includes(q)
     );
-  });
+  }), [data, search]);
 
   const renderTable = () => {
     if (filteredData.length === 0) return null;

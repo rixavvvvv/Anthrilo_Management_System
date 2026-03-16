@@ -535,6 +535,44 @@ export interface StitchingOrder {
   stitcher?: Supplier;
 }
 
+// Product Master Types
+export interface ProductMasterItem {
+  id: number;
+  sku: string;
+  name: string;
+  size?: string;
+  collection?: string;
+  type?: string;
+  season?: string;
+  fabric_type?: string;
+  print?: string;
+  net_weight?: number;
+  production_time?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductMasterListResponse {
+  items: ProductMasterItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface ProductImportSummary {
+  inserted: number;
+  skipped: number;
+  errors: Array<{ row: number; error: string }>;
+}
+
+export interface ProductFilterOptions {
+  collections: string[];
+  seasons: string[];
+  fabric_types: string[];
+  types: string[];
+}
+
 export interface GarmentFinishing {
   id: number;
   stitching_order_id: number;
