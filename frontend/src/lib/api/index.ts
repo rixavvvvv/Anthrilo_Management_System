@@ -248,6 +248,29 @@ export const processingApi = {
     apiClient.get('/processing/fabric-ledger', { params }),
 };
 
+// ─── Product Master APIs ────────────────────────────────────────
+
+export const productMasterApi = {
+  getAll: (params?: {
+    skip?: number; limit?: number; search?: string;
+    sort_by?: string; sort_order?: string;
+    collection?: string; season?: string; fabric_type?: string; type?: string;
+  }) =>
+    apiClient.get('/products', { params }),
+  getById: (id: number) => apiClient.get(`/products/${id}`),
+  create: (data: Record<string, any>) => apiClient.post('/products', data),
+  update: (id: number, data: Record<string, any>) => apiClient.put(`/products/${id}`, data),
+  delete: (id: number) => apiClient.delete(`/products/${id}`),
+  import: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post('/products/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  getFilterOptions: () => apiClient.get('/products/meta/filter-options'),
+};
+
 // ─── Garment Production APIs ────────────────────────────────────
 
 export const garmentProductionApi = {

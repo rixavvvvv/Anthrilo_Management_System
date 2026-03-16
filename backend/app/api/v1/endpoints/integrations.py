@@ -494,6 +494,14 @@ async def get_sales_activity_report(
     and inventory snapshots (good + virtual).
     """
     try:
+        # ── Redis cache (10-min TTL) ──
+        cache_key = f"uc:sales_activity:{from_date}:{to_date}"
+        cached = CacheService.get(cache_key)
+        if cached:
+            logger.info(f"Sales activity {from_date}→{to_date}: Redis cache hit")
+            cached["_cached"] = True
+            return cached
+
         service = get_unicommerce_service()
 
         # Construct dates in IST and convert to UTC so the Unicommerce
@@ -738,13 +746,17 @@ async def get_sales_activity_report(
             f"date range {from_date} to {to_date}"
         )
 
-        return {
+        response = {
             "success": True,
             "from_date": from_date,
             "to_date": to_date,
             "items": items,
             "total_skus": len(unique_skus),
         }
+
+        # Cache for 10 min
+        CacheService.set(cache_key, response, CacheService.TTL_MEDIUM)
+        return response
 
     except ValueError as e:
         return {"success": False, "error": f"Invalid date format. Use YYYY-MM-DD: {e}"}

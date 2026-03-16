@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     suppliers, purchase_orders, gate_entry, mrns,
     yarn_store, knitting, processing, garment_production,
 )
+from app.api.v1.endpoints import product_master
 # Unicommerce API modules
 from app.api.v1.endpoints import (
     uc_vendors, uc_grn, uc_catalog, uc_inventory,
@@ -53,6 +54,8 @@ api_router.include_router(
     gate_entry.router, prefix="/gate-entries", tags=["Gate Entry"])
 api_router.include_router(
     mrns.router, prefix="/mrns", tags=["MRN"])
+api_router.include_router(
+    product_master.router, prefix="/products", tags=["Product Master"])
 
 # Manufacturing Module
 api_router.include_router(

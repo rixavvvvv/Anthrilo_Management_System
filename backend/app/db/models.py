@@ -615,6 +615,29 @@ class ProcessingOrder(Base):
     finished_fabric_receipts = relationship("FinishedFabricReceipt", back_populates="processing_order")
 
 
+# ═══════════════════════════════════════════════════════════════
+# PRODUCT MASTER — Central Product Catalog
+# ═══════════════════════════════════════════════════════════════
+
+class ProductMaster(Base):
+    """Central product/style master used across procurement, inventory, and sales."""
+    __tablename__ = "product_master"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sku = Column(String(100), unique=True, nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    size = Column(String(50))
+    collection = Column(String(100))
+    type = Column(String(100))
+    season = Column(String(50))
+    fabric_type = Column(String(100))
+    print = Column(String(100))
+    net_weight = Column(Numeric(10, 3))
+    production_time = Column(Integer)  # days
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class GreyFabricIssue(Base):
     __tablename__ = "grey_fabric_issues"
 

@@ -34,6 +34,7 @@ import {
   CheckCircle,
   QrCode,
   Factory,
+  BookOpen,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -106,6 +107,7 @@ const navigation: NavItem[] = [
     name: 'Procurement',
     icon: Truck,
     children: [
+      { name: 'Product Master', href: '/dashboard/procurement/product-master', icon: BookOpen },
       { name: 'Suppliers', href: '/dashboard/procurement/suppliers', icon: Building2 },
       { name: 'Purchase Orders', href: '/dashboard/procurement/purchase-orders', icon: ClipboardList },
       { name: 'Gate Entry', href: '/dashboard/procurement/gate-entry', icon: PackageCheck },

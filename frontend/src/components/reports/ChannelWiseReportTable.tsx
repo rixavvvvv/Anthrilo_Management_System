@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import type { SalesActivityRow } from './SizeWiseReportTable';
 
@@ -44,19 +44,23 @@ export default function ChannelWiseReportTable({ data }: Props) {
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const paged = useMemo(() => sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [sorted, page]);
-  useMemo(() => { setPage(1); }, [data, sortKey, sortDir]);
+  useEffect(() => { setPage(1); }, [data, sortKey, sortDir]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortKey(key); setSortDir('asc'); }
   };
 
-  const totals = useMemo(() => ({
-    total_sale_qty: data.reduce((s, r) => s + r.total_sale_qty, 0),
-    cancel_qty: data.reduce((s, r) => s + r.cancel_qty, 0),
-    return_qty: data.reduce((s, r) => s + r.return_qty, 0),
-    net_sale: data.reduce((s, r) => s + r.net_sale, 0),
-  }), [data]);
+  const totals = useMemo(() => {
+    let total_sale_qty = 0, cancel_qty = 0, return_qty = 0, net_sale = 0;
+    for (const r of data) {
+      total_sale_qty += r.total_sale_qty;
+      cancel_qty += r.cancel_qty;
+      return_qty += r.return_qty;
+      net_sale += r.net_sale;
+    }
+    return { total_sale_qty, cancel_qty, return_qty, net_sale };
+  }, [data]);
 
   if (!data.length) return null;
 
@@ -89,8 +93,8 @@ export default function ChannelWiseReportTable({ data }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {paged.map((row, i) => (
-              <tr key={i} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+            {paged.map((row) => (
+              <tr key={`${row.item_sku_code}||${row.size}||${row.channel}`} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
                 <td className="px-4 py-2.5 font-mono text-xs text-slate-700 dark:text-slate-300">{row.item_sku_code || '—'}</td>
                 <td className="px-4 py-2.5 text-slate-700 dark:text-slate-300">{row.item_type_name || '—'}</td>
                 <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400">{row.size || '—'}</td>
