@@ -17,26 +17,17 @@ function adapt(hook: { data: SalesData | null; loading: boolean; error: string |
     };
 }
 
-/**
- * Hook for fetching Today's sales summary
- * @param enabled - Only fetch data when true (default: true)
- */
+// Wraps useTodaySales with a React-Query-like interface shape
 export function useUnicommerceToday(enabled: boolean = true): SalesHookResult {
     return adapt(useTodaySales(enabled));
 }
 
-/**
- * Hook for fetching Yesterday's sales summary
- * @param enabled - Only fetch data when true (default: true)
- */
+// Wraps useYesterdaySales with a React-Query-like interface shape
 export function useUnicommerceYesterday(enabled: boolean = true): SalesHookResult {
     return adapt(useYesterdaySales(enabled));
 }
 
-/**
- * Hook for fetching Last 7 Days sales summary
- * @param enabled - Only fetch data when true (default: true)
- */
+// Wraps useLast7DaysSales with a React-Query-like interface shape
 export function useUnicommerceLast7Days(enabled: boolean = true): SalesHookResult {
     return adapt(useLast7DaysSales(enabled));
 }

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { unicommerceApi } from '@/lib/api';
+import { unicommerceApi } from '@/features/sales';
 import { PageHeader, ProgressLoader } from '@/components/ui/Common';
 import { DataTable, Column } from '@/components/ui/DataTable';
 

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ucSales } from '@/lib/api/uc';
+import { ucSales } from '@/features/sales';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { PageHeader, ProgressLoader, StatCard } from '@/components/ui/Common';
 import { ChartCard } from '@/components/dashboard';
@@ -17,11 +17,11 @@ import {
   resolveReportDateRange,
 } from '@/lib/report-date-range';
 
-/* ── Constants ── */
+/* Constants */
 const COLORS = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#ec4899', '#14b8a6', '#a855f7', '#ef4444'];
 const PAGE_SIZE = 15;
 
-/* ── Helpers ── */
+/* Helpers */
 function fmtINR(v: number) {
   return `₹${v.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 }
@@ -49,7 +49,7 @@ function fmtDate(d: string) {
   } catch { return d; }
 }
 
-/* ── Custom Tooltips ── */
+/* Custom Tooltips */
 function RevTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload;
@@ -84,7 +84,7 @@ function PieTooltip({ active, payload }: any) {
   );
 }
 
-/* ══════════════════════════════════════════════════════════════ */
+/*  */
 
 export default function BundleSalesAnalysisPage() {
   const [dateMode, setDateMode] = useState<ReportDateMode>('monthly');
@@ -188,7 +188,7 @@ export default function BundleSalesAnalysisPage() {
     setPage(0);
   }, []);
 
-  /* ── Column defs for top bundles table ── */
+  /* Column defs for top bundles table */
   const columns: Column<any>[] = [
     {
       key: 'skuCode', header: 'SKU', width: '10%',
@@ -252,7 +252,7 @@ export default function BundleSalesAnalysisPage() {
         description="Revenue, quantity & performance insights — derived by reverse-mapping component SKUs to bundle definitions"
       />
 
-      {/* ── Global Date Range ── */}
+      {/* Global Date Range */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
         {([
           { key: 'daily' as ReportDateMode, label: 'Daily' },
@@ -304,7 +304,7 @@ export default function BundleSalesAnalysisPage() {
         </button>
       </div>
 
-      {/* ── Loading / Error ── */}
+      {/* Loading / Error */}
       <ProgressLoader loading={isLoading || isFetching} stages={[
         { at: 0, label: 'Initializing export job…' },
         { at: 15, label: 'Fetching orders…' },
@@ -321,7 +321,7 @@ export default function BundleSalesAnalysisPage() {
         </div>
       )}
 
-      {/* ── Summary KPIs ── */}
+      {/* Summary KPIs */}
       {!isLoading && data && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-6">
@@ -351,7 +351,7 @@ export default function BundleSalesAnalysisPage() {
             />
           </div>
 
-          {/* ── Charts Row 1: Revenue Trend + Channel Breakdown ── */}
+          {/* Charts Row 1: Revenue Trend + Channel Breakdown */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Revenue Trend */}
             <ChartCard title="Bundle Revenue Trend" subtitle="Daily bundle revenue over time">
@@ -420,7 +420,7 @@ export default function BundleSalesAnalysisPage() {
             </ChartCard>
           </div>
 
-          {/* ── Charts Row 2: Units Trend + Category Breakdown ── */}
+          {/* Charts Row 2: Units Trend + Category Breakdown */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Units Sold Trend */}
             <ChartCard title="Bundle Units Trend" subtitle="Daily bundle quantity sold">
@@ -480,7 +480,7 @@ export default function BundleSalesAnalysisPage() {
             </ChartCard>
           </div>
 
-          {/* ── Comparison Cards Row ── */}
+          {/* Comparison Cards Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             {/* Top Channel */}
             <div className="card">
@@ -587,7 +587,7 @@ export default function BundleSalesAnalysisPage() {
             </div>
           </div>
 
-          {/* ── Top Bundles Table ── */}
+          {/* Top Bundles Table */}
           <div className="card">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-white">

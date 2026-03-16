@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ucSales } from '@/lib/api/uc';
+import { ucSales } from '@/features/sales';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Calendar, Download, BarChart3, TrendingUp, TrendingDown,
@@ -17,7 +17,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
 
-/* ── helpers ─────────────────────────────────────────────────────────── */
+/* helpers */
 const fmt = (v: number) =>
   v >= 10_000_000 ? `₹${(v / 10_000_000).toFixed(2)}Cr`
     : v >= 100_000 ? `₹${(v / 100_000).toFixed(1)}L`
@@ -57,7 +57,7 @@ type SortKey = 'channel_name' | 'quantity' | 'selling_price' | 'orders' | 'avg' 
 type ItemSortKey = 'item_sku_code' | 'item_type_name' | 'channel_name' | 'selling_price' | 'size' | 'good_inventory' | 'virtual_inventory';
 type SortDir = 'asc' | 'desc';
 
-/* ── animated counter ────────────────────────────────────────────────── */
+/* animated counter */
 function AnimatedNumber({ value, prefix = '', duration = 800 }: { value: number; prefix?: string; duration?: number }) {
   const [display, setDisplay] = useState(0);
   const prev = useRef(0);
@@ -80,7 +80,7 @@ function AnimatedNumber({ value, prefix = '', duration = 800 }: { value: number;
   return <>{prefix}{display.toLocaleString('en-IN')}</>;
 }
 
-/* ══════════════════════════════════════════════════════════════════════ */
+/*  */
 export default function DailySalesReportPage() {
   const [mode, setMode] = useState<ReportMode>('daily');
 
@@ -167,7 +167,7 @@ export default function DailySalesReportPage() {
   const handleGenerate = useCallback(() => { setShowReport(true); refetch(); }, [refetch]);
   const queryLoading = isLoading || isFetching;
 
-  /* ── Estimated loading progress ─────────────────────────────────── */
+  /* Estimated loading progress */
   const [loadProgress, setLoadProgress] = useState(0);
   useEffect(() => {
     if (!queryLoading) { setLoadProgress(0); return; }
@@ -199,7 +199,7 @@ export default function DailySalesReportPage() {
     return () => clearInterval(id);
   }, [queryLoading, mode, customFrom, customTo, queryParams]);
 
-  /* ── CSV download (item-level + channel summary + comparison on right side) */
+  /* CSV download (item-level + channel summary + comparison on right side) */
   const handleCSV = useCallback(() => {
     if (!raw) return;
     const items = raw.items || [];
@@ -311,7 +311,7 @@ export default function DailySalesReportPage() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   }, [raw, mode, reportDate, customFrom, customTo, queryParams]);
 
-  /* ── derived data ──────────────────────────────────────────────────── */
+  /* derived data */
   const totals = raw?.totals;
   const totalRev = totals?.total_revenue || 1;
   const items: any[] = raw?.items || [];
@@ -342,7 +342,7 @@ export default function DailySalesReportPage() {
     });
   }, [enriched, search, sortKey, sortDir]);
 
-  /* ── chart data ────────────────────────────────────────────────────── */
+  /* chart data */
   const pieData = useMemo(
     () => enriched.map((r: any, i: number) => ({ name: r.label, value: r.selling_price, color: PIE_COLORS[i % PIE_COLORS.length] })),
     [enriched],
@@ -352,7 +352,7 @@ export default function DailySalesReportPage() {
     [enriched],
   );
 
-  /* ── insights ──────────────────────────────────────────────────────── */
+  /* insights */
   const insights = useMemo(() => {
     if (!enriched.length) return [];
     const byRev = [...enriched].sort((a: any, b: any) => b.selling_price - a.selling_price);
@@ -373,7 +373,7 @@ export default function DailySalesReportPage() {
   const SortIcon = ({ k }: { k: SortKey }) =>
     sortKey === k ? (sortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 opacity-30" />;
 
-  /* ── item table: filtered, sorted, paginated ───────────────────────── */
+  /* item table: filtered, sorted, paginated */
   const sortedItems = useMemo(() => {
     let filtered = items;
     if (itemSearch) {
@@ -407,7 +407,7 @@ export default function DailySalesReportPage() {
   const ItemSortIcon = ({ k }: { k: ItemSortKey }) =>
     itemSortKey === k ? (itemSortDir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-30" />;
 
-  /* ── date labels ───────────────────────────────────────────────────── */
+  /* date labels */
   const dateLabel = mode === 'daily'
     ? format(parse(reportDate, 'yyyy-MM-dd', new Date()), 'EEEE, dd MMMM yyyy')
     : mode === 'weekly'
@@ -427,16 +427,16 @@ export default function DailySalesReportPage() {
     chevron: 'fill-slate-500 dark:fill-slate-400 w-4 h-4',
   };
 
-  /* ══════════════════════════════════════════════════════════════════ */
+  /*  */
   return (
     <div className="space-y-8">
-      {/* ─── Header ──────────────────────────────────────────────── */}
+      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Sales Report</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Sales breakdown · Revenue-generating orders only</p>
       </div>
 
-      {/* ─── Mode Selector ───────────────────────────────────────── */}
+      {/* Mode Selector */}
       <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5 space-y-5">
         <div className="flex gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-900 w-fit">
           {([
@@ -612,7 +612,7 @@ export default function DailySalesReportPage() {
         )}
       </div>
 
-      {/* ─── Loading ─────────────────────────────────────────────── */}
+      {/* Loading */}
       <AnimatePresence>
         {queryLoading && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
@@ -638,20 +638,20 @@ export default function DailySalesReportPage() {
         )}
       </AnimatePresence>
 
-      {/* ─── Error ───────────────────────────────────────────────── */}
+      {/* Error */}
       {showReport && raw && !raw.success && (
         <div className="rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4">
           <p className="text-sm text-rose-600 dark:text-rose-400">{raw.error || 'Failed to generate report'}</p>
         </div>
       )}
 
-      {/* ─── Report content ──────────────────────────────────────── */}
+      {/* Report content */}
       <AnimatePresence>
         {showReport && raw?.success && totals && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}
             className="space-y-8">
 
-            {/* ── Hero summary ────────────────────────────────────── */}
+            {/* Hero summary */}
             <div className="rounded-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 p-6 sm:p-8 shadow-lg text-white relative overflow-hidden">
               <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImciIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgMGg2MHY2MEgweiIgZmlsbD0ibm9uZSIvPjxjaXJjbGUgY3g9IjMwIiBjeT0iMzAiIHI9IjEuNSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjA2KSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3QgZmlsbD0idXJsKCNnKSIgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIvPjwvc3ZnPg==')] opacity-50" />
               <div className="relative z-10">
@@ -688,7 +688,7 @@ export default function DailySalesReportPage() {
               </div>
             </div>
 
-            {/* ── Charts (Donut + Bar) ────────────────────────────── */}
+            {/* Charts (Donut + Bar) */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Donut / Pie */}
               <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5">
@@ -768,7 +768,7 @@ export default function DailySalesReportPage() {
               </div>
             </div>
 
-            {/* ── Insights ────────────────────────────────────────── */}
+            {/* Insights */}
             {insights.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {insights.map((ins, i) => (
@@ -786,7 +786,7 @@ export default function DailySalesReportPage() {
               </div>
             )}
 
-            {/* ── Channel Breakdown Table ─────────────────────────── */}
+            {/* Channel Breakdown Table */}
             <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
               <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-base font-semibold text-slate-900 dark:text-white">Channel Breakdown</h2>
@@ -878,7 +878,7 @@ export default function DailySalesReportPage() {
               </div>
             </div>
 
-            {/* ── Item Details (Paginated) ────────────────────────── */}
+            {/* Item Details (Paginated) */}
             <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
               <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -985,7 +985,7 @@ export default function DailySalesReportPage() {
               )}
             </div>
 
-            {/* ── Footer ──────────────────────────────────────────── */}
+            {/* Footer */}
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px] text-slate-400 dark:text-slate-500 px-1">
               <span>Source: {raw.data_source}</span>
               {raw.cached && <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-medium">Cached</span>}

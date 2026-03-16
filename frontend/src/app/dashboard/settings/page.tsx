@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
-// ─── Constants ─────────────────────────────────────────────────────────────
+// Constants
 const TIMEZONES = [
   { value: 'Asia/Kolkata', label: 'India (IST) — Asia/Kolkata' },
   { value: 'America/New_York', label: 'Eastern (EST) — America/New_York' },
@@ -29,7 +29,7 @@ const LANGUAGES = [
   { value: 'hi', label: 'Hindi' },
 ];
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+// Types
 interface Preferences {
   full_name: string;
   timezone: string;
@@ -37,7 +37,7 @@ interface Preferences {
   email_notifications: boolean;
 }
 
-// ─── Toast ─────────────────────────────────────────────────────────────────
+// Toast
 function Toast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
   useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t); }, [onClose]);
   return (
@@ -56,7 +56,7 @@ function Toast({ message, type, onClose }: { message: string; type: 'success' | 
   );
 }
 
-// ─── Select Component ──────────────────────────────────────────────────────
+// Select Component
 function SelectField({ icon: Icon, label, value, onChange, options }: {
   icon: typeof Globe;
   label: string;
@@ -93,7 +93,7 @@ function SelectField({ icon: Icon, label, value, onChange, options }: {
   );
 }
 
-// ─── Page ──────────────────────────────────────────────────────────────────
+// Page
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<Preferences>({

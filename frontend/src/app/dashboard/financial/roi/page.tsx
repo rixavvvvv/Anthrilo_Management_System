@@ -2,8 +2,7 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ucSales } from '@/lib/api/uc';
-import { adsApi } from '@/lib/api/ads';
+import { ucSales, adsApi } from '@/features/financial';
 import { PageHeader, ProgressLoader, ErrorPanel, EmptyState } from '@/components/ui/Common';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { motion } from 'framer-motion';

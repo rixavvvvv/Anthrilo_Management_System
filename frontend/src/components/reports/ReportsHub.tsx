@@ -10,9 +10,9 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-/* ────────────────────────────────────────────────────────── */
+/*  */
 /*  Types                                                     */
-/* ────────────────────────────────────────────────────────── */
+/*  */
 
 type Category = 'Sales' | 'Returns' | 'Financial' | 'Inventory';
 type Frequency = 'Daily' | 'Weekly' | 'Monthly' | 'Real-time' | 'AI Forecast';
@@ -29,12 +29,12 @@ interface ReportDef {
   popular?: boolean;
 }
 
-/* ────────────────────────────────────────────────────────── */
+/*  */
 /*  Report Registry  (clean titles — no "Daily" prefix)       */
-/* ────────────────────────────────────────────────────────── */
+/*  */
 
 const REPORTS: ReportDef[] = [
-  // ── Sales ──────────────────────────────────
+  // Sales
   {
     id: 'daily-sales',
     title: 'Sales Report',
@@ -137,7 +137,7 @@ const REPORTS: ReportDef[] = [
     popular: true,
   },
 
-  // ── Returns ────────────────────────────────
+  // Returns
   {
     id: 'daily-returns',
     title: 'Return Report',
@@ -149,7 +149,7 @@ const REPORTS: ReportDef[] = [
     popular: true,
   },
 
-  // ── Financial ──────────────────────────────
+  // Financial
   {
     id: 'discount-general',
     title: 'Discount Report',
@@ -199,7 +199,7 @@ const REPORTS: ReportDef[] = [
     popular: true,
   },
 
-  // ── Inventory ──────────────────────────────
+  // Inventory
   {
 
     id: 'yarn-forecasting',
@@ -231,9 +231,9 @@ const REPORTS: ReportDef[] = [
   },
 ];
 
-/* ────────────────────────────────────────────────────────── */
+/*  */
 /*  Category Config                                           */
-/* ────────────────────────────────────────────────────────── */
+/*  */
 
 const CATEGORY_META: Record<Category, {
   color: string; bg: string; ring: string; dot: string; border: string;
@@ -283,9 +283,9 @@ const CATEGORY_META: Record<Category, {
 
 const ALL_CATEGORIES: Category[] = ['Sales', 'Returns', 'Financial', 'Inventory'];
 
-/* ────────────────────────────────────────────────────────── */
+/*  */
 /*  LocalStorage helpers                                      */
-/* ────────────────────────────────────────────────────────── */
+/*  */
 
 const LS_FAV = 'anthrilo_fav_reports';
 const LS_REC = 'anthrilo_recent_reports';
@@ -300,11 +300,11 @@ function writeLS<T>(key: string, val: T) {
   localStorage.setItem(key, JSON.stringify(val));
 }
 
-/* ────────────────────────────────────────────────────────── */
+/*  */
 /*  Sub-components                                            */
-/* ────────────────────────────────────────────────────────── */
+/*  */
 
-/* ── Frequency Badge ─────────────────────────── */
+/* Frequency Badge */
 const FREQ_STYLES: Record<Frequency, string> = {
   'Daily': 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400',
   'Weekly': 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
@@ -320,7 +320,7 @@ const FrequencyBadge = memo(({ frequency }: { frequency: Frequency }) => (
 ));
 FrequencyBadge.displayName = 'FrequencyBadge';
 
-/* ── Extra Badge (New / Popular / AI) ────────── */
+/* Extra Badge (New / Popular / AI) */
 const ExtraBadge = memo(({ text }: { text: string }) => {
   const cls =
     text === 'AI'
@@ -336,7 +336,7 @@ const ExtraBadge = memo(({ text }: { text: string }) => {
 });
 ExtraBadge.displayName = 'ExtraBadge';
 
-/* ── Category Section Header ─────────────────── */
+/* Category Section Header */
 const CategoryHeader = memo(({ category }: { category: Category }) => {
   const m = CATEGORY_META[category];
   const Icon = m.icon;
@@ -356,7 +356,7 @@ const CategoryHeader = memo(({ category }: { category: Category }) => {
 });
 CategoryHeader.displayName = 'CategoryHeader';
 
-/* ── Report Card ─────────────────────────────── */
+/* Report Card */
 const ReportCard = memo(({
   report, isFav, onToggleFav, onOpen,
 }: {
@@ -430,7 +430,7 @@ const ReportCard = memo(({
 });
 ReportCard.displayName = 'ReportCard';
 
-/* ── Mini Card (sidebar) ─────────────────────── */
+/* Mini Card (sidebar) */
 const MiniCard = memo(({
   report, icon: Icon, onOpen,
 }: {
@@ -460,7 +460,7 @@ const MiniCard = memo(({
 });
 MiniCard.displayName = 'MiniCard';
 
-/* ── Empty State ─────────────────────────────── */
+/* Empty State */
 const EmptyState = memo(({ query }: { query: string }) => (
   <motion.div
     initial={{ opacity: 0, y: 12 }}
@@ -478,7 +478,7 @@ const EmptyState = memo(({ query }: { query: string }) => (
 ));
 EmptyState.displayName = 'EmptyState';
 
-/* ── Reports Section (one category group) ────── */
+/* Reports Section (one category group) */
 const ReportsSection = memo(({
   category, reports, favorites, onToggleFav, onOpen,
 }: {
@@ -508,7 +508,7 @@ const ReportsSection = memo(({
 });
 ReportsSection.displayName = 'ReportsSection';
 
-/* ── Sidebar helpers ─────────────────────────── */
+/* Sidebar helpers */
 function SidebarPanel({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-2xl bg-white dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/50 shadow-sm overflow-hidden">
@@ -525,9 +525,9 @@ function SidebarEmpty({ children }: { children: React.ReactNode }) {
   return <p className="px-3 py-4 text-center text-xs text-slate-400 dark:text-slate-500">{children}</p>;
 }
 
-/* ────────────────────────────────────────────────────────── */
+/*  */
 /*  Main Reports Hub                                          */
-/* ────────────────────────────────────────────────────────── */
+/*  */
 
 export default function ReportsHub() {
   const [search, setSearch] = useState('');
@@ -586,7 +586,7 @@ export default function ReportsHub() {
 
   return (
     <div className="min-h-screen">
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
           Reports & Analytics
@@ -596,7 +596,7 @@ export default function ReportsHub() {
         </p>
       </div>
 
-      {/* ── Category Stat Cards ── */}
+      {/* Category Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {ALL_CATEGORIES.map(cat => {
           const m = CATEGORY_META[cat];
@@ -633,7 +633,7 @@ export default function ReportsHub() {
         })}
       </div>
 
-      {/* ── Search Bar ── */}
+      {/* Search Bar */}
       <div className="mb-8">
         <div className="relative max-w-xl">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" strokeWidth={2} />
@@ -673,7 +673,7 @@ export default function ReportsHub() {
         )}
       </div>
 
-      {/* ── Content ── */}
+      {/* Content */}
       <div className="flex flex-col xl:flex-row gap-10">
         {/* Main: grouped category sections */}
         <div className="flex-1 min-w-0 space-y-10">

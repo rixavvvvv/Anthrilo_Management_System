@@ -2,7 +2,7 @@
  
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { rawMaterialsReports } from '@/lib/api/reports';
+import { rawMaterialsReports } from '@/features/reports';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { PageHeader, ProgressLoader, StatCard, ErrorPanel } from '@/components/ui/Common';
  

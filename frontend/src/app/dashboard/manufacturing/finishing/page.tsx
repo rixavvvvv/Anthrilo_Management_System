@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { garmentProductionApi } from '@/lib/api';
-import type { GarmentFinishing } from '@/types';
+import { garmentProductionApi } from '@/features/manufacturing';
+import type { GarmentFinishing } from '@/features/manufacturing';
 import { PageHeader, ProgressLoader, EmptyState, ErrorPanel } from '@/components/ui';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { FormModal } from '@/components/ui/FormModal';

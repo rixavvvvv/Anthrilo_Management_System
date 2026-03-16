@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ucSales } from '@/lib/api/uc';
+import { ucSales } from '@/features/sales';
 import Link from 'next/link';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
 import { useEffect, useRef, useState, useMemo, lazy, Suspense } from 'react';

@@ -11,13 +11,13 @@ export interface ReportFilters {
   panel_type?: string;
 }
 
-// Raw Materials & Processing Reports
+// Raw materials & processing reports
 export const rawMaterialsReports = {
-  // Stock Analysis Report
+  // Stock analysis
   getStockAnalysis: (params?: { category?: string }) =>
     apiClient.get('/reports/raw-materials/stock-analysis', { params }),
 
-  // Yarn Forecasting Report
+  // Yarn forecasting
   getYarnForecasting: (params?: { forecast_days?: number }) =>
     apiClient.get('/reports/yarn/forecasting', { params }),
 
@@ -26,20 +26,20 @@ export const rawMaterialsReports = {
     apiClient.get('/reports/yarn/purchase-raise', { params }),
 };
 
-// Garment Production Reports
+// Garment production reports
 export const productionReports = {
-  // Garment Production Tracking
+  // Production tracking
   getProductionTracking: (params?: { status?: string; start_date?: string; end_date?: string }) =>
     apiClient.get('/reports/production/tracking', { params }),
 
-  // Quality Control Metrics
+  // Quality control metrics
   getQualityMetrics: (params?: { start_date?: string; end_date?: string }) =>
     apiClient.get('/reports/quality/metrics', { params }),
 };
 
-// Sales Reports
+// Sales reports
 export const salesReports = {
-  // Sales Analytics
+  // Sales analytics
   getSalesAnalytics: (params?: ReportFilters) =>
     apiClient.get('/reports/sales/analytics', { params }),
 
@@ -56,56 +56,56 @@ export const salesReports = {
     apiClient.get('/reports/discounts/by-panel', { params }),
 };
 
-// Panel Reports
+// Panel reports
 export const panelReports = {
-  // Panel Performance Tracking
+  // Panel performance tracking
   getPerformanceTracking: (params?: { panel_id?: number; start_date?: string; end_date?: string }) =>
     apiClient.get('/reports/panels/performance', { params }),
 
-  // Top Performing Panels
+  // Top performing panels
   getTopPerforming: (params?: { limit?: number; start_date?: string; end_date?: string }) =>
     apiClient.get('/reports/panels/top-performing', { params }),
 
-  // Panel settlement
+  // Panel settlement report
   getPanelSettlement: (params?: { panel_id?: number; start_date?: string; end_date?: string }) =>
     apiClient.get('/reports/settlements/panel-settlement', { params }),
 };
 
-// Labour Reports
+// Labour reports
 export const labourReports = {
-  // Attendance Reports
+  // Attendance report
   getAttendanceReport: (params?: { start_date?: string; end_date?: string; department?: string }) =>
     apiClient.get('/reports/labour/attendance', { params }),
 
-  // Productivity Analysis
+  // Productivity analysis
   getProductivityAnalysis: (params?: { start_date?: string; end_date?: string }) =>
     apiClient.get('/reports/labour/productivity', { params }),
 
-  // Labour Cost Reports
+  // Labour cost report
   getCostReport: (params?: { start_date?: string; end_date?: string; department?: string }) =>
     apiClient.get('/reports/labour/cost', { params }),
 };
 
-// Financial Reports
+// Financial reports
 export const financialReports = {
-  // Raw Material Purchase Analysis
+  // Raw material purchase analysis
   getRawMaterialPurchase: (params?: { start_date?: string; end_date?: string; category?: string }) =>
     apiClient.get('/reports/financial/raw-material-purchase', { params }),
 
-  // Finished Goods Sales Analysis
+  // Finished goods sales analysis
   getFinishedGoodsSales: (params?: { start_date?: string; end_date?: string }) =>
     apiClient.get('/reports/financial/finished-goods-sales', { params }),
 
-  // Profit Margin Analysis
+  // Profit margin analysis
   getProfitMargin: (params?: { start_date?: string; end_date?: string; category?: string }) =>
     apiClient.get('/reports/financial/profit-margin', { params }),
 
-  // Expense Tracking
+  // Expense tracking
   getExpenseTracking: (params?: { start_date?: string; end_date?: string; expense_type?: string }) =>
     apiClient.get('/reports/financial/expense-tracking', { params }),
 };
 
-// All reports combined for easy access
+// All reports combined for convenience
 export const reportsApi = {
   rawMaterials: rawMaterialsReports,
   production: productionReports,

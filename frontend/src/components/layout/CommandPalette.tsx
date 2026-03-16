@@ -13,7 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+// Types
 interface SearchItem {
   id: string;
   title: string;
@@ -24,7 +24,7 @@ interface SearchItem {
   keywords?: string[];
 }
 
-// ─── Search Catalogue ──────────────────────────────────────────────────────
+// Search Catalogue
 const SEARCH_ITEMS: SearchItem[] = [
   // Dashboard
   {
@@ -243,7 +243,7 @@ const SEARCH_ITEMS: SearchItem[] = [
   },
 ];
 
-// ─── Recent search persistence ─────────────────────────────────────────────
+// Recent search persistence
 const RECENT_KEY = 'cmd_recent';
 const MAX_RECENT = 5;
 
@@ -261,13 +261,13 @@ function saveRecentId(id: string) {
   localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...prev].slice(0, MAX_RECENT)));
 }
 
-// ─── Props ─────────────────────────────────────────────────────────────────
+// Props
 interface CommandPaletteProps {
   open: boolean;
   onClose: () => void;
 }
 
-// ─── Component ─────────────────────────────────────────────────────────────
+// Component
 export const CommandPalette = memo(function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
@@ -369,7 +369,7 @@ export const CommandPalette = memo(function CommandPalette({ open, onClose }: Co
     <AnimatePresence>
       {open && (
         <>
-          {/* ── Backdrop ── */}
+          {/* Backdrop */}
           <motion.div
             key="cp-backdrop"
             initial={{ opacity: 0 }}
@@ -381,7 +381,7 @@ export const CommandPalette = memo(function CommandPalette({ open, onClose }: Co
             aria-hidden
           />
 
-          {/* ── Panel ── */}
+          {/* Panel */}
           <motion.div
             key="cp-panel"
             role="dialog"
@@ -398,7 +398,7 @@ export const CommandPalette = memo(function CommandPalette({ open, onClose }: Co
                          bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl
                          shadow-2xl shadow-black/25 overflow-hidden"
             >
-              {/* ── Search input ── */}
+              {/* Search input */}
               <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100 dark:border-slate-800">
                 <Search className="w-5 h-5 flex-shrink-0 text-slate-400" />
                 <input
@@ -427,7 +427,7 @@ export const CommandPalette = memo(function CommandPalette({ open, onClose }: Co
                 </kbd>
               </div>
 
-              {/* ── Results ── */}
+              {/* Results */}
               <div ref={listRef} className="max-h-[420px] overflow-y-auto overscroll-contain py-2">
                 {displayItems.length === 0 ? (
                   /* Empty state */
@@ -518,7 +518,7 @@ export const CommandPalette = memo(function CommandPalette({ open, onClose }: Co
                 )}
               </div>
 
-              {/* ── Footer hints ── */}
+              {/* Footer hints */}
               <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/20">
                 <div className="flex items-center gap-3 text-[11px] text-slate-400 select-none">
                   <span className="flex items-center gap-1">

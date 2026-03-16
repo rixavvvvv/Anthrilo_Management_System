@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ucSales } from '@/lib/api/uc';
+import { ucSales } from '@/features/sales';
 
 const PAGE_SIZE = 15;
 const fmt = (v: number) => v >= 100_000 ? `₹${(v / 100_000).toFixed(1)}L` : v >= 1_000 ? `₹${(v / 1_000).toFixed(1)}K` : `₹${v.toLocaleString('en-IN')}`;
@@ -37,7 +37,7 @@ export default function SalesTransactionsPage() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
-  /* ── Summary (today + 7 days) ──────────────────────────────── */
+  /* Summary (today + 7 days) */
   const { data: summaryData, isLoading: loadingSummary } = useQuery({
     queryKey: ['unicommerce-today'],
     queryFn: async () => (await ucSales.getToday()).data,
@@ -49,7 +49,7 @@ export default function SalesTransactionsPage() {
     staleTime: 5 * 60_000,
   });
 
-  /* ── Orders (paginated) ────────────────────────────────────── */
+  /* Orders (paginated) */
   const { data: ordersData, isLoading, error, isFetching } = useQuery({
     queryKey: ['uc-transactions', period, page, customFrom, customTo],
     queryFn: async () => {

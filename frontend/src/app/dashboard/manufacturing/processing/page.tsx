@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { processingApi, supplierApi } from '@/lib/api';
-import type { ProcessingOrder, Supplier } from '@/types';
+import { processingApi, supplierApi } from '@/features/manufacturing';
+import type { ProcessingOrder, Supplier } from '@/features/manufacturing';
 import { PageHeader, ProgressLoader, EmptyState, ErrorPanel } from '@/components/ui';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { FormModal } from '@/components/ui/FormModal';

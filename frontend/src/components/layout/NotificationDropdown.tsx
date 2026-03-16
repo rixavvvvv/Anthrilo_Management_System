@@ -6,7 +6,7 @@ import {
   Bell, CheckCheck, Info, AlertTriangle, CheckCircle, X,
 } from 'lucide-react';
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+// Types
 type NotifType = 'info' | 'alert' | 'success';
 
 interface Notification {
@@ -18,7 +18,7 @@ interface Notification {
   read: boolean;
 }
 
-// ─── Config ────────────────────────────────────────────────────────────────
+// Config
 const TYPE_CONFIG: Record<
   NotifType,
   { icon: typeof Info; color: string; bg: string; label: string; dot: string }
@@ -82,7 +82,7 @@ const INITIAL_NOTIFICATIONS: Notification[] = [
   },
 ];
 
-// ─── Component ─────────────────────────────────────────────────────────────
+// Component
 export const NotificationDropdown = memo(function NotificationDropdown() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
@@ -124,7 +124,7 @@ export const NotificationDropdown = memo(function NotificationDropdown() {
 
   return (
     <div ref={ref} className="relative">
-      {/* ── Bell Button ── */}
+      {/* Bell Button */}
       <button
         onClick={() => setOpen((v) => !v)}
         aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
@@ -144,7 +144,7 @@ export const NotificationDropdown = memo(function NotificationDropdown() {
         )}
       </button>
 
-      {/* ── Dropdown ── */}
+      {/* Dropdown */}
       <AnimatePresence>
         {open && (
           <motion.div

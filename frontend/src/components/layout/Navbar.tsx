@@ -7,7 +7,7 @@ import { NotificationDropdown } from './NotificationDropdown';
 import { AvatarMenu } from './AvatarMenu';
 import CommandPalette from './CommandPalette';
 
-// ─── Theme Toggle ──────────────────────────────────────────────────────────
+// Theme Toggle
 const ThemeToggle = memo(function ThemeToggle() {
   const [darkMode, setDarkMode] = useState(false);
 
@@ -42,7 +42,7 @@ const ThemeToggle = memo(function ThemeToggle() {
   );
 });
 
-// ─── Navbar ────────────────────────────────────────────────────────────────
+// Navbar
 export function Navbar() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -83,10 +83,10 @@ export function Navbar() {
                       : 'shadow-none'
                     }`}
       >
-        {/* ── Left: Breadcrumbs ── */}
+        {/* Left: Breadcrumbs */}
         <Breadcrumbs />
 
-        {/* ── Right: Actions ── */}
+        {/* Right: Actions */}
         <div className="flex items-center gap-0.5 flex-shrink-0">
 
           {/* Search / Command Palette trigger */}

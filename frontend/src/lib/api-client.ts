@@ -7,10 +7,10 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 720000, // 12 min timeout for large date range exports
+  timeout: 720000, // 12 min — generous for heavy date-range exports
 });
 
-// Request interceptor to add auth token
+// Attach the auth token to every outgoing request
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('access_token');
@@ -24,16 +24,16 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// Global error handling (auto-logout on 401, friendly timeout message)
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Handle unauthorized access
+      // Kick the user back to login on 401
       localStorage.removeItem('access_token');
       window.location.href = '/login';
     } else if (error.code === 'ECONNABORTED') {
-      // Handle timeout errors with a more user-friendly message
+      // Make timeout errors more readable
       error.message = 'Request timed out. The server is taking too long to respond. Please try again.';
     }
     return Promise.reject(error);

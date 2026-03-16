@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { memo } from 'react';
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
+// Helpers
 const ACRONYMS: Record<string, string> = {
   sku: 'SKU',
   cod: 'COD',
@@ -24,7 +24,7 @@ function toTitleCase(segment: string): string {
 // Segments that are internal routing artefacts — skip from display
 const SKIP_SEGMENTS = new Set(['reports-index', 'v1']);
 
-// ─── Component ─────────────────────────────────────────────────────────────
+// Component
 export const Breadcrumbs = memo(function Breadcrumbs() {
   const pathname = usePathname();
 

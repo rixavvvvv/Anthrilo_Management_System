@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ucCatalog } from '@/lib/api/uc';
+import { ucCatalog } from '@/features/sales';
 
 const PAGE_SIZE = 25;
 
-/* ── tiny helpers ──────────────────────────────────────────────── */
+/* tiny helpers */
 const fmt = (n?: number) => (n ?? 0).toLocaleString('en-IN');
 const inr = (n?: number) => `₹${(n ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 
@@ -29,7 +29,7 @@ export default function GarmentMasterPage() {
   useEffect(() => { setPage(0); }, [selectedCategory]);
   useEffect(() => { setPage(0); }, [stockFilter]);
 
-  /* ── 1a) Accurate inventory summary from dedicated API (all SKUs) ── */
+  /* 1a) Accurate inventory summary from dedicated API (all SKUs) */
   const { data: summaryData, isLoading: summaryLoading } = useQuery({
     queryKey: ['uc-inventory-summary'],
     queryFn: async () => {
@@ -41,7 +41,7 @@ export default function GarmentMasterPage() {
     refetchOnWindowFocus: false,
   });
 
-  /* ── 2) Paginated catalog ──────────────────────────────────── */
+  /* 2) Paginated catalog */
   const needsInventory = stockFilter !== 'all';
   const { data, isLoading, error, isFetching } = useQuery({
     queryKey: ['uc-catalog', page, debouncedSearch, selectedCategory, stockFilter],
@@ -58,7 +58,7 @@ export default function GarmentMasterPage() {
     placeholderData: (prev: any) => prev,
   });
 
-  /* ── derived data ────────────────────────────────────────────── */
+  /* derived data */
   const items = useMemo(() => {
     const mapped = (data?.elements || []).map((item: any) => {
       const snap = item.inventorySnapshots?.[0];
@@ -89,7 +89,7 @@ export default function GarmentMasterPage() {
   const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
   const currentPage = page + 1;
 
-  /* ── accurate stats from inventory summary API ──────────────── */
+  /* accurate stats from inventory summary API */
   const accurateStats = useMemo(() => {
     if (!summaryData?.successful) return null;
     return {
@@ -108,10 +108,10 @@ export default function GarmentMasterPage() {
 
   const categories = accurateStats?.categories ?? [];
 
-  /* ── RENDER ──────────────────────────────────────────────────── */
+  /* RENDER */
   return (
     <div className="space-y-5">
-      {/* ── Header ──────────────────────────────────────────────── */}
+      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
           Product Master Data
@@ -124,7 +124,7 @@ export default function GarmentMasterPage() {
         </p>
       </div>
 
-      {/* ── Stats Row ───────────────────────────────────────────── */}
+      {/* Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
         {[
           { label: 'Total Catalog', value: accurateStats ? fmt(accurateStats.totalCatalog) : (summaryLoading ? '…' : fmt(totalRecords)), icon: '📦', bg: 'bg-blue-50 dark:bg-blue-950/30', ring: 'ring-blue-200/50 dark:ring-blue-800/30' },
@@ -154,7 +154,7 @@ export default function GarmentMasterPage() {
         ))}
       </div>
 
-      {/* ── Search & Category Bar ───────────────────────────────── */}
+      {/* Search & Category Bar */}
       <div className="rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
         <div className="flex gap-3 items-center flex-wrap">
           {/* Stock filter pills */}
@@ -270,7 +270,7 @@ export default function GarmentMasterPage() {
         )}
       </div>
 
-      {/* ── Error ───────────────────────────────────────────────── */}
+      {/* Error */}
       {error && (
         <div className="rounded-2xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-900/20 p-4">
           <p className="text-sm text-rose-600 dark:text-rose-400">
@@ -279,7 +279,7 @@ export default function GarmentMasterPage() {
         </div>
       )}
 
-      {/* ── Product Table ───────────────────────────────────────── */}
+      {/* Product Table */}
       <div className="rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
         {/* Table header bar */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-800">
@@ -405,7 +405,7 @@ export default function GarmentMasterPage() {
         )}
       </div>
 
-      {/* ── Pagination ──────────────────────────────────────────── */}
+      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <button disabled={page <= 0} onClick={() => setPage(page - 1)}
@@ -460,7 +460,7 @@ export default function GarmentMasterPage() {
         </div>
       )}
 
-      {/* ── Category Distribution Grid ──────────────────────────── */}
+      {/* Category Distribution Grid */}
       {categories.length > 0 && (
         <div className="rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
           <div className="flex items-center justify-between mb-4">

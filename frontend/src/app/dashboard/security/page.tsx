@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+// Types
 interface SessionItem {
   id: number;
   ip_address: string | null;
@@ -20,7 +20,7 @@ interface SessionItem {
   expires_at: string;
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
+// Helpers
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -54,7 +54,7 @@ function passwordStrength(pw: string): { score: number; label: string; color: st
   return { score, label: 'Very Strong', color: 'bg-emerald-600' };
 }
 
-// ─── Toast ─────────────────────────────────────────────────────────────────
+// Toast
 function Toast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
   useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t); }, [onClose]);
   return (
@@ -73,12 +73,12 @@ function Toast({ message, type, onClose }: { message: string; type: 'success' | 
   );
 }
 
-// ─── Page ──────────────────────────────────────────────────────────────────
+// Page
 export default function SecurityPage() {
   const queryClient = useQueryClient();
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // ─── Password form state ─────────────────────────────────────────────
+  // Password form state
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -90,7 +90,7 @@ export default function SecurityPage() {
   const passwordsMatch = newPassword === confirmPassword;
   const canChangePassword = oldPassword.length > 0 && newPassword.length >= 8 && passwordsMatch;
 
-  // ─── Change password mutation ────────────────────────────────────────
+  // Change password mutation
   const changePasswordMutation = useMutation({
     mutationFn: async () => {
       return (await apiClient.put('/auth/me/password', {
@@ -109,13 +109,13 @@ export default function SecurityPage() {
     },
   });
 
-  // ─── Sessions query ──────────────────────────────────────────────────
+  // Sessions query
   const { data: sessions = [], isLoading: sessionsLoading } = useQuery<SessionItem[]>({
     queryKey: ['sessions'],
     queryFn: async () => (await apiClient.get('/auth/sessions')).data,
   });
 
-  // ─── Revoke session mutation ─────────────────────────────────────────
+  // Revoke session mutation
   const revokeMutation = useMutation({
     mutationFn: async (sessionId: number) => {
       return (await apiClient.delete(`/auth/sessions/${sessionId}`)).data;
@@ -129,7 +129,7 @@ export default function SecurityPage() {
     },
   });
 
-  // ─── Logout others mutation ──────────────────────────────────────────
+  // Logout others mutation
   const logoutOthersMutation = useMutation({
     mutationFn: async () => {
       return (await apiClient.post('/auth/sessions/logout-others')).data;
@@ -164,7 +164,7 @@ export default function SecurityPage() {
         </div>
       </motion.div>
 
-      {/* ── Change Password ── */}
+      {/* Change Password */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -300,7 +300,7 @@ export default function SecurityPage() {
         </div>
       </motion.div>
 
-      {/* ── Active Sessions ── */}
+      {/* Active Sessions */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}

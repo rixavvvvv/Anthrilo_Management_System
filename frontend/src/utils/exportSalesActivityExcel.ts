@@ -1,7 +1,6 @@
 import type { SalesActivityRow } from '@/components/reports/SizeWiseReportTable';
 
-// ── Grouping helpers ──────────────────────────────────────────────
-
+// Grouping helpers
 export function generateSizeWiseReport(items: SalesActivityRow[]) {
   const map: Record<string, {
     item_sku_code: string; item_type_name: string; size: string;
@@ -88,8 +87,7 @@ export function generateChannelWiseSummary(items: SalesActivityRow[]) {
   return Object.values(map).sort((a, b) => a.item_type_name.localeCompare(b.item_type_name) || a.channel.localeCompare(b.channel));
 }
 
-// ── Excel export ──────────────────────────────────────────────
-
+// Excel export
 export type ReportType = 'size-wise' | 'item-wise' | 'channel-detailed' | 'channel-summary';
 
 export async function generateSalesActivityExcel(
@@ -112,7 +110,7 @@ export async function generateSalesActivityExcel(
 
   const ws = wb.addWorksheet(REPORT_LABELS[reportType]);
 
-  // ── Styles ──
+  // Styles
   const headerFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FF4472C4' } };
   const headerFont = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
   const sectionFont = { bold: true, size: 13, color: { argb: 'FF1F2937' } };
@@ -141,7 +139,7 @@ export async function generateSalesActivityExcel(
 
   let rowNum = 1;
 
-  // ── Selection In Reports ──
+  // Report header
   const titleRow = ws.getRow(rowNum);
   titleRow.getCell(1).value = 'Selection In Reports';
   titleRow.getCell(1).font = { bold: true, size: 14, color: { argb: 'FF111827' } };
@@ -161,10 +159,10 @@ export async function generateSalesActivityExcel(
   }
   rowNum += 2;
 
-  // ── Only generate the selected report type ──
+  // Only generate the selected report type
 
   if (reportType === 'size-wise') {
-  // ── SIZE WISE ──
+  // Size-wise report
   const sizeData = generateSizeWiseReport(items);
   const sizeRow = ws.getRow(rowNum);
   sizeRow.getCell(1).value = 'Size Wise →';
@@ -208,7 +206,7 @@ export async function generateSalesActivityExcel(
   } // end size-wise
 
   if (reportType === 'item-wise') {
-  // ── ITEM WISE ──
+  // Item-wise report
   const itemData = generateItemWiseReport(items);
   const itemSectionRow = ws.getRow(rowNum);
   itemSectionRow.getCell(1).value = 'Item Wise →';
@@ -249,7 +247,7 @@ export async function generateSalesActivityExcel(
   } // end item-wise
 
   if (reportType === 'channel-detailed') {
-  // ── CHANNEL WISE (DETAILED) ──
+  // Channel-wise detailed report
   const chData = generateChannelWiseDetailed(items);
   const chSectionRow = ws.getRow(rowNum);
   chSectionRow.getCell(1).value = 'Channel Wise →';
@@ -293,7 +291,7 @@ export async function generateSalesActivityExcel(
   } // end channel-detailed
 
   if (reportType === 'channel-summary') {
-  // ── CHANNEL WISE (SUMMARY) ──
+  // Channel-wise summary report
   const csData = generateChannelWiseSummary(items);
   const csSectionRow = ws.getRow(rowNum);
   csSectionRow.getCell(1).value = 'Channel Wise Summary →';
@@ -334,7 +332,7 @@ export async function generateSalesActivityExcel(
   for (let c = 3; c <= 8; c++) csTotalRow.getCell(c).alignment = { horizontal: 'right' };
   } // end channel-summary
 
-  // ── Auto-width columns ──
+  // Auto-size columns
   ws.columns.forEach((col) => {
     let maxLen = 12;
     col.eachCell?.({ includeEmpty: false }, (cell) => {
@@ -344,7 +342,7 @@ export async function generateSalesActivityExcel(
     col.width = Math.min(maxLen + 3, 35);
   });
 
-  // ── Download ──
+  // Download the file
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);

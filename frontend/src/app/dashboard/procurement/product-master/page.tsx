@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useRef, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { productMasterApi } from '@/lib/api';
+import { productMasterApi } from '@/features/procurement';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Upload, Search, X, ChevronLeft, ChevronRight,
@@ -13,9 +13,9 @@ import {
 import type {
   ProductMasterItem, ProductMasterListResponse,
   ProductImportSummary, ProductFilterOptions,
-} from '@/types';
+} from '@/features/procurement';
 
-/* ═══════════════════════════════════════════ helpers ═══ */
+/* helpers */
 
 const PAGE_SIZE = 25;
 
@@ -37,12 +37,12 @@ function Toast({ message, type, onClose }: { message: string; type: 'success' | 
   );
 }
 
-/* ═══════════════════════════════════════ main page ═══ */
+/* main page */
 
 export default function ProductMasterPage() {
   const qc = useQueryClient();
 
-  // ── State ──
+  // State
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -75,7 +75,7 @@ export default function ProductMasterPage() {
     }, 350);
   }, []);
 
-  // ── Queries ──
+  // Queries
   const skip = (page - 1) * PAGE_SIZE;
   const { data, isLoading, isFetching } = useQuery<ProductMasterListResponse>({
     queryKey: ['products', skip, PAGE_SIZE, debouncedSearch, sortBy, sortOrder, filters],
@@ -100,7 +100,7 @@ export default function ProductMasterPage() {
   const total = data?.total ?? 0;
   const loading = isLoading || isFetching;
 
-  // ── Mutations ──
+  // Mutations
   const deleteMut = useMutation({
     mutationFn: (id: number) => productMasterApi.delete(id),
     onSuccess: () => {
@@ -112,7 +112,7 @@ export default function ProductMasterPage() {
     onError: () => showToast('Failed to delete product', 'error'),
   });
 
-  // ── Sort handler ──
+  // Sort handler
   const toggleSort = (col: string) => {
     if (sortBy === col) {
       setSortOrder(o => o === 'asc' ? 'desc' : 'asc');
@@ -130,7 +130,7 @@ export default function ProductMasterPage() {
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
-  /* ═══════════════════════════════════════ RENDER ═══ */
+  /* RENDER */
   return (
     <div className="space-y-6">
       {/* Toast */}
@@ -398,7 +398,7 @@ export default function ProductMasterPage() {
         )}
       </div>
 
-      {/* ═══ Add / Edit Modal ═══ */}
+      {/* Add / Edit Modal */}
       <AnimatePresence>
         {showAddModal && (
           <ProductFormModal
@@ -414,7 +414,7 @@ export default function ProductMasterPage() {
         )}
       </AnimatePresence>
 
-      {/* ═══ Import Modal ═══ */}
+      {/* Import Modal */}
       <AnimatePresence>
         {showImportModal && (
           <ImportModal
@@ -429,7 +429,7 @@ export default function ProductMasterPage() {
         )}
       </AnimatePresence>
 
-      {/* ═══ Delete Confirmation ═══ */}
+      {/* Delete Confirmation */}
       <AnimatePresence>
         {deleteTarget && (
           <motion.div
@@ -471,9 +471,7 @@ export default function ProductMasterPage() {
 }
 
 
-/* ═══════════════════════════════════════════════════════════
-   ADD / EDIT PRODUCT MODAL
-   ═══════════════════════════════════════════════════════════ */
+/* ADD / EDIT PRODUCT MODAL */
 
 const FIELDS: Array<{
   key: string; label: string; type?: string;
@@ -628,9 +626,7 @@ function ProductFormModal({
 }
 
 
-/* ═══════════════════════════════════════════════════════════
-   IMPORT MODAL (CSV / XLSX)
-   ═══════════════════════════════════════════════════════════ */
+/* IMPORT MODAL (CSV / XLSX) */
 
 function ImportModal({
   onClose, onSuccess, onError,

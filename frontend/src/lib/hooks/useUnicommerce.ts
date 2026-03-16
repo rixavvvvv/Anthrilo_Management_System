@@ -99,10 +99,7 @@ export function useTodaySales(enabled: boolean = true) {
     return { data, loading, error, refetch };
 }
 
-/**
- * Hook for fetching Yesterday's sales summary
- * @param enabled - Only fetch data when true (default: true)
- */
+// Fetches yesterday's sales summary (skips fetch when disabled)
 export function useYesterdaySales(enabled: boolean = true) {
     const [data, setData] = useState<SalesData | null>(null);
     const [loading, setLoading] = useState(enabled);
@@ -132,10 +129,7 @@ export function useYesterdaySales(enabled: boolean = true) {
     return { data, loading, error, refetch };
 }
 
-/**
- * Hook for fetching Last 7 Days sales summary
- * @param enabled - Only fetch data when true (default: true)
- */
+// Fetches last 7 days' sales summary (skips fetch when disabled)
 export function useLast7DaysSales(enabled: boolean = true) {
     const [data, setData] = useState<SalesData | null>(null);
     const [loading, setLoading] = useState(enabled);
@@ -165,9 +159,7 @@ export function useLast7DaysSales(enabled: boolean = true) {
     return { data, loading, error, refetch };
 }
 
-/**
- * @deprecated Use Last 7 Days instead
- */
+// @deprecated Prefer useLast7DaysSales instead
 export function useLast30DaysSales(enabled: boolean = true) {
     const [data, setData] = useState<SalesData | null>(null);
     const [loading, setLoading] = useState(enabled);

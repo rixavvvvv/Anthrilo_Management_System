@@ -65,14 +65,14 @@ export const productionApi = {
 
 // Unicommerce integration API
 export const unicommerceApi = {
-  // Summary endpoints (for dashboard cards)
+// Summary endpoints (dashboard cards)
   getToday: () => apiClient.get('/integrations/unicommerce/today'),
   getYesterday: () => apiClient.get('/integrations/unicommerce/yesterday'),
   getLast7Days: () => apiClient.get('/integrations/unicommerce/last-7-days'),
   getLast30Days: () => apiClient.get('/integrations/unicommerce/last-30-days'),
   getLast24Hours: () => apiClient.get('/integrations/unicommerce/today'), // Alias
 
-  // Paginated order endpoints (12 per page)
+  // Paginated order lists (12 per page by default)
   getTodayOrders: (page: number = 1, pageSize: number = 12) =>
     apiClient.get('/integrations/unicommerce/orders/today', { params: { page, page_size: pageSize } }),
   getYesterdayOrders: (page: number = 1, pageSize: number = 12) =>
@@ -84,15 +84,15 @@ export const unicommerceApi = {
   getCustomOrders: (params: { from_date: string; to_date: string; page?: number; page_size?: number }) =>
     apiClient.get('/integrations/unicommerce/orders/custom', { params }),
 
-  // Sales report (for reports page)
+  // Sales reports
   getSalesReport: (params?: { from_date?: string; to_date?: string; period?: string }) =>
     apiClient.get('/integrations/unicommerce/sales-report', { params }),
 
-  // Daily Sales Report - Channel-wise breakdown (single date or range)
+  // Daily sales breakdown by channel (single date or range)
   getDailySalesReport: (params: { date?: string; from_date?: string; to_date?: string }) =>
     apiClient.get('/integrations/unicommerce/daily-sales-report', { params }),
 
-  // Return Report - Channel + SKU breakdown
+  // Returns report — channel + SKU breakdown
   getReturnReport: (params: {
     date?: string;
     from_date?: string;
@@ -101,15 +101,15 @@ export const unicommerceApi = {
     return_type?: string;
   }) => apiClient.get('/integrations/unicommerce/return-report', { params }),
 
-  // Best performing SKUs monthly
+  // Best performing SKUs for a given month
   getBestSkusMonthly: (params?: { month?: number; year?: number; limit?: number; force_refresh?: boolean; b2c_only?: boolean }) =>
     apiClient.get('/integrations/unicommerce/best-skus-monthly', { params }),
 
-  // SKU Velocity - fast & slow movers monthly
+  // SKU velocity — fast & slow movers for a given month
   getSkuVelocity: (params?: { month?: number; year?: number; limit?: number; min_qty?: number; b2c_only?: boolean; force_refresh?: boolean }) =>
     apiClient.get('/integrations/unicommerce/sku-velocity', { params }),
 
-  // COD vs Prepaid date-range report
+  // COD vs prepaid breakdown
   getCodVsPrepaid: (params?: {
     period?: 'daily' | 'weekly' | 'monthly' | 'custom';
     date?: string;
@@ -120,7 +120,7 @@ export const unicommerceApi = {
   }) =>
     apiClient.get('/integrations/unicommerce/cod-vs-prepaid', { params }),
 
-  // Channel revenue breakdown
+  // Channel revenue split
   getChannelRevenue: (period: string = 'last_30_days') =>
     apiClient.get('/integrations/unicommerce/channel-revenue', { params: { period } }),
 
@@ -128,22 +128,22 @@ export const unicommerceApi = {
   getSalesActivity: (params: { from_date: string; to_date: string }) =>
     apiClient.get('/integrations/unicommerce/sales-activity', { params }),
 
-  // Validation
+  // Revenue validation
   validateRevenue: () => apiClient.get('/integrations/unicommerce/validate'),
 
-  // Cache management
+  // Cache helpers
   clearCache: () => apiClient.post('/integrations/unicommerce/clear-cache'),
   getCacheStats: () => apiClient.get('/integrations/unicommerce/cache-stats'),
   checkCacheStatus: () => apiClient.get('/integrations/unicommerce/cache-check'),
 
-  // Legacy
+  // Legacy endpoints (kept for backward compat)
   searchOrders: (params: { from_date: string; to_date: string; display_start?: number; display_length?: number }) =>
     apiClient.get('/integrations/unicommerce/search-orders', { params }),
   getOrderItems: (orderCode: string) =>
     apiClient.get(`/integrations/unicommerce/order-items/${orderCode}`),
 };
 
-// ─── Procurement APIs ───────────────────────────────────────────
+// Procurement
 
 export const supplierApi = {
   getAll: (params?: { search?: string; supplier_type?: string; is_active?: boolean }) =>
@@ -186,7 +186,7 @@ export const mrnApi = {
   confirm: (id: number) => apiClient.post<MRN>(`/mrns/${id}/confirm`),
 };
 
-// ─── Yarn Store ─────────────────────────────────────────────────
+// Yarn Store
 
 export const yarnStoreApi = {
   getBalance: (params?: { yarn_id?: number }) =>
@@ -199,7 +199,7 @@ export const yarnStoreApi = {
     apiClient.post('/yarn-store/adjustment', data),
 };
 
-// ─── Knitting APIs ──────────────────────────────────────────────
+// Knitting
 
 export const knittingApi = {
   getOrders: (params?: { status?: string; knitter_supplier_id?: number; from_date?: string; to_date?: string; skip?: number; limit?: number }) =>
@@ -222,7 +222,7 @@ export const knittingApi = {
     apiClient.post(`/knitting/yarn-return/${issueId}`, data),
 };
 
-// ─── Processing / Dyeing APIs ───────────────────────────────────
+// Processing / Dyeing
 
 export const processingApi = {
   getOrders: (params?: { status?: string; process_type?: string; from_date?: string; to_date?: string; skip?: number; limit?: number }) =>
@@ -248,7 +248,7 @@ export const processingApi = {
     apiClient.get('/processing/fabric-ledger', { params }),
 };
 
-// ─── Product Master APIs ────────────────────────────────────────
+// Product Master
 
 export const productMasterApi = {
   getAll: (params?: {
@@ -271,7 +271,7 @@ export const productMasterApi = {
   getFilterOptions: () => apiClient.get('/products/meta/filter-options'),
 };
 
-// ─── Garment Production APIs ────────────────────────────────────
+// Garment Production
 
 export const garmentProductionApi = {
   // Cutting

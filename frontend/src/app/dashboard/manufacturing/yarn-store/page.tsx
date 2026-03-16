@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { yarnStoreApi } from '@/lib/api';
-import type { InventoryTransaction } from '@/types';
+import { yarnStoreApi } from '@/features/manufacturing';
+import type { InventoryTransaction } from '@/features/manufacturing';
 import { PageHeader, ProgressLoader, EmptyState, ErrorPanel } from '@/components/ui';
 import { FormModal } from '@/components/ui/FormModal';
 import { StatusBadge } from '@/components/ui/StatusBadge';

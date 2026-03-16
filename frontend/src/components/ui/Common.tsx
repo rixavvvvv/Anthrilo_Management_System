@@ -80,7 +80,7 @@ export function LoadingSpinner({ size = 'md', message }: LoadingSpinnerProps) {
   );
 }
 
-/* ── Progress Loader ───────────────────────────────────────── */
+// Progress Loader
 
 export interface ProgressStage { at: number; label: string; }
 
