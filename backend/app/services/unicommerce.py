@@ -1109,14 +1109,16 @@ class UnicommerceService:
         Uses 15-min cache to avoid repeated fetches.
         Auto-chunks ranges > 90 days (Unicommerce export limit).
         """
-        # Check cache
+        # Check cache (also cache custom ranges keyed by date)
         if period_name != "custom":
             cache_key = self._get_cache_key(period_name)
-            cached_data = self._get_from_cache(cache_key)
-            if cached_data is not None:
-                logger.info(
-                    f"Cache hit, returning {period_name} data instantly (no API calls)")
-                return cached_data
+        else:
+            cache_key = f"uc_sales_custom_{from_date.date()}_{to_date.date()}"
+        cached_data = self._get_from_cache(cache_key)
+        if cached_data is not None:
+            logger.info(
+                f"Cache hit, returning {period_name} data instantly (no API calls)")
+            return cached_data
         logger.info(f"Getting {period_name.upper()} SALES DATA")
         logger.info(f"  Date range: {from_date} to {to_date}")
         logger.info("  Method: Export Job API")
@@ -1266,10 +1268,8 @@ class UnicommerceService:
                 "_orders": orders,
             }
 
-            # Cache the result
-            if period_name != "custom":
-                cache_key = self._get_cache_key(period_name)
-                self._set_cache(cache_key, result)
+            # Cache the result (all periods including custom)
+            self._set_cache(cache_key, result)
 
             return result
 

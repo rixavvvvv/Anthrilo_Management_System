@@ -183,7 +183,13 @@ export function FileImporter({
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {previewRows.map((row, i) => (
-                    <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                    <tr
+                      key={i}
+                      className={cn(
+                        'hover:bg-slate-50/50 dark:hover:bg-slate-800/30',
+                        (row as Record<string, unknown>).__isValid === false && 'bg-rose-50/70 dark:bg-rose-950/20',
+                      )}
+                    >
                       {headers.map((h) => (
                         <td key={h} className="px-3 py-1.5 text-slate-700 dark:text-slate-300 whitespace-nowrap">
                           {row[h] != null ? String(row[h]) : '—'}

@@ -91,8 +91,6 @@ export default function DailySalesReportPage() {
   const [calOpen, setCalOpen] = useState(false);
   const calRef = useRef<HTMLDivElement>(null);
 
-  const now = new Date();
-
   const [customFrom, setCustomFrom] = useState<string>(() => {
     const d = new Date(); d.setDate(d.getDate() - 7);
     return d.toISOString().split('T')[0];
@@ -130,8 +128,9 @@ export default function DailySalesReportPage() {
     if (mode === 'daily') {
       return { date: reportDate };
     } else if (mode === 'weekly') {
-      const currentWeekStart = new Date(now);
-      currentWeekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+      const today = new Date();
+      const currentWeekStart = new Date(today);
+      currentWeekStart.setDate(today.getDate() - ((today.getDay() + 6) % 7));
       const weekStart = new Date(currentWeekStart);
       weekStart.setDate(currentWeekStart.getDate() - 7);
       const weekEnd = new Date(currentWeekStart);
@@ -140,14 +139,17 @@ export default function DailySalesReportPage() {
       const to = format(weekEnd, 'yyyy-MM-dd');
       return { from_date: from, to_date: to };
     } else if (mode === 'monthly') {
-      const firstOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const lastOfPreviousMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      const today = new Date();
+      const firstOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const lastOfPreviousMonth = new Date(today.getFullYear(), today.getMonth(), 0);
       const firstOfPreviousMonth = new Date(lastOfPreviousMonth.getFullYear(), lastOfPreviousMonth.getMonth(), 1);
       return { from_date: format(firstOfPreviousMonth, 'yyyy-MM-dd'), to_date: format(lastOfPreviousMonth, 'yyyy-MM-dd') };
     } else {
       return { from_date: customFrom, to_date: customTo };
     }
-  }, [mode, reportDate, customFrom, customTo, now]);
+  // weekly/monthly values only change once per day — safe to omit `now`
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, reportDate, customFrom, customTo]);
 
   const queryKey = useMemo(() => ['sales-report', mode, ...Object.values(queryParams)], [mode, queryParams]);
 
@@ -167,37 +169,14 @@ export default function DailySalesReportPage() {
   const handleGenerate = useCallback(() => { setShowReport(true); refetch(); }, [refetch]);
   const queryLoading = isLoading || isFetching;
 
-  /* Estimated loading progress */
-  const [loadProgress, setLoadProgress] = useState(0);
+  // Real elapsed-time counter while loading
+  const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
-    if (!queryLoading) { setLoadProgress(0); return; }
-    // Estimate total time based on date range
-    let totalDays = 1;
-    if (mode === 'weekly') {
-      totalDays = 7;
-    } else if (mode === 'monthly') {
-      const from = new Date(queryParams.from_date!);
-      const to = new Date(queryParams.to_date!);
-      totalDays = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / 86400000) + 1);
-    } else if (mode === 'custom') {
-      const d0 = new Date(customFrom);
-      const d1 = new Date(customTo);
-      totalDays = Math.max(1, Math.ceil((d1.getTime() - d0.getTime()) / 86400000) + 1);
-    }
-    const chunks = Math.ceil(totalDays / 15);
-    // ~10s per chunk, minimum 12s for single-day
-    const estimatedMs = Math.max(12000, chunks * 10000);
-    const startTime = Date.now();
-    const tick = () => {
-      const elapsed = Date.now() - startTime;
-      // Asymptotic curve: reaches ~95% at estimated time, never 100% until done
-      const pct = Math.min(95, (elapsed / estimatedMs) * 90 + (elapsed > estimatedMs ? 5 * (1 - Math.exp(-(elapsed - estimatedMs) / 30000)) : 0));
-      setLoadProgress(Math.round(pct));
-    };
-    tick();
-    const id = setInterval(tick, 500);
+    if (!queryLoading) { setElapsed(0); return; }
+    const start = Date.now();
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
     return () => clearInterval(id);
-  }, [queryLoading, mode, customFrom, customTo, queryParams]);
+  }, [queryLoading]);
 
   /* CSV download (item-level + channel summary + comparison on right side) */
   const handleCSV = useCallback(() => {
@@ -619,20 +598,9 @@ export default function DailySalesReportPage() {
             className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-10 flex flex-col items-center gap-4">
             <div className="h-10 w-10 rounded-full border-[3px] border-blue-500 border-t-transparent animate-spin" />
             <p className="text-sm text-slate-500 dark:text-slate-400">Fetching sales data for {dateLabel}…</p>
-            <div className="w-full max-w-xs">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-medium text-blue-600 dark:text-blue-400">{loadProgress}%</span>
-                <span className="text-[10px] text-slate-400 dark:text-slate-500">Estimated</span>
-              </div>
-              <div className="h-2 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                <motion.div
-                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${loadProgress}%` }}
-                  transition={{ duration: 0.4, ease: 'easeOut' }}
-                />
-              </div>
-            </div>
+            <p className="text-xs font-medium tabular-nums text-blue-600 dark:text-blue-400">
+              {elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`} elapsed
+            </p>
             <p className="text-[11px] text-slate-400 dark:text-slate-500">Large date ranges may take a few minutes</p>
           </motion.div>
         )}
