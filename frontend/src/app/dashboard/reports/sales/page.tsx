@@ -5,8 +5,6 @@ import { unicommerceApi } from '@/features/sales';
 import { useState, useMemo } from 'react';
 import {
     ReportDateMode,
-    getTodayYmd,
-    getYesterdayYmd,
     resolveReportDateRange,
 } from '@/lib/report-date-range';
 
@@ -198,37 +196,30 @@ export default function SalesReportsPage() {
         staleTime: 1 * 60 * 1000,
     });
 
-    // Fetch channel revenue
-    const { data: channelData } = useQuery({
-        queryKey: ['channelRevenue', dateMode, effectiveRange.fromDate, effectiveRange.toDate],
-        queryFn: async () => {
-            const today = getTodayYmd();
-            const yesterday = getYesterdayYmd();
+    // Extract data
+    const summary = report?.summary || {};
+    const orders = ordersData?.orders || [];
+    const pagination = ordersData?.pagination || { total_pages: 1, current_page: 1 };
 
-            const channelPeriod =
-                dateMode === 'daily' && effectiveRange.fromDate === today
-                    ? 'today'
-                    : dateMode === 'daily' && effectiveRange.fromDate === yesterday
-                        ? 'yesterday'
-                        : 'last_7_days';
-
-            const response = await unicommerceApi.getChannelRevenue(channelPeriod);
-            return response.data;
-        },
-        staleTime: 5 * 60 * 1000,
-    });
+    // Derive channel data from summary instead of a separate API call
+    const channels = useMemo(() => {
+        const breakdown = summary?.channel_breakdown || {};
+        const totalRevenue = summary?.total_revenue || 0;
+        return Object.entries(breakdown)
+            .map(([channel, data]: [string, any]) => ({
+                channel,
+                orders: data.orders || 0,
+                revenue: data.revenue || 0,
+                percentage: totalRevenue > 0 ? ((data.revenue || 0) / totalRevenue) * 100 : 0,
+            }))
+            .sort((a, b) => b.revenue - a.revenue);
+    }, [summary]);
 
     // Reset page when range mode changes
     const handleModeChange = (mode: ReportDateMode) => {
         setDateMode(mode);
         setCurrentPage(1);
     };
-
-    // Extract data
-    const summary = report?.summary || {};
-    const orders = ordersData?.orders || [];
-    const pagination = ordersData?.pagination || { total_pages: 1, current_page: 1 };
-    const channels = channelData?.channels || [];
 
     const isLoading = summaryLoading || ordersLoading;
 
@@ -320,18 +311,6 @@ export default function SalesReportsPage() {
 
                     <div className="text-xs text-gray-500 dark:text-gray-400 ml-4">{effectiveRange.label}</div>
                 </div>
-
-                {/* Fetch info */}
-                {report?.fetch_info && (
-                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
-                        ✅ {report.fetch_info.fetched_count?.toLocaleString()} orders fetched in {report.fetch_info.fetch_time_seconds?.toFixed(1)}s
-                        {report.revenue_method && (
-                            <span className="ml-2 text-green-600 dark:text-green-400 font-medium">
-                                • Revenue: {report.revenue_method}
-                            </span>
-                        )}
-                    </div>
-                )}
             </div>
 
             {/* Loading State */}
@@ -414,12 +393,6 @@ export default function SalesReportsPage() {
                                 📊 Revenue by Channel
                             </h3>
                             <ChannelChart channels={channels} />
-
-                            {channelData?.validation && !channelData.validation.passed && (
-                                <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm text-red-600 dark:text-red-400">
-                                    ⚠️ Validation failed: Channel sum doesn&apos;t match total
-                                </div>
-                            )}
                         </div>
 
                         {/* Status Breakdown */}
@@ -534,24 +507,6 @@ export default function SalesReportsPage() {
                                 Page revenue: {formatCurrency(ordersData.page_summary.page_revenue)} ({ordersData.page_summary.orders_on_page} orders)
                             </div>
                         )}
-                    </div>
-
-                    {/* Report Metadata */}
-                    <div className="card bg-gray-50 dark:bg-gray-800/50">
-                        <div className="flex flex-wrap items-center justify-between gap-4 text-sm text-gray-600 dark:text-gray-400">
-                            <div>
-                                <span className="font-medium">Period:</span>{' '}
-                                {report.from_date ? new Date(report.from_date).toLocaleDateString() : '-'} - {report.to_date ? new Date(report.to_date).toLocaleDateString() : '-'}
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <span className="text-green-600 dark:text-green-400 font-medium">
-                                    ✅ Revenue: sellingPrice only
-                                </span>
-                                <span>
-                                    <span className="font-medium">Source:</span> Anthrilo OMS
-                                </span>
-                            </div>
-                        </div>
                     </div>
                 </>
             )}

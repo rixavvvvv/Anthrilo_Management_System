@@ -294,6 +294,13 @@ async def get_daily_sales_report(
     Returns channel breakdown, item-level detail, and comparison data.
     """
     try:
+        # Redis cache check (10-min TTL)
+        cache_key = f"uc:daily_report:{date or 'na'}:{from_date or 'na'}:{to_date or 'na'}"
+        cached = CacheService.get(cache_key)
+        if cached:
+            cached["cached"] = True
+            return cached
+
         service = get_unicommerce_service()
 
         # Determine mode: range vs single date
@@ -449,7 +456,7 @@ async def get_daily_sales_report(
         except Exception as comp_err:
             logger.warning(f"Could not fetch comparison data: {comp_err}")
 
-        return {
+        response = {
             "success": True,
             "date": date_label,
             "from_date": from_date if is_range else date,
@@ -467,9 +474,13 @@ async def get_daily_sales_report(
             },
             "currency": "INR",
             "data_source": "export_job_api",
-            "cached": result.get("fetch_info", {}).get("cached", False),
+            "cached": False,
             "note": f"Report shows {total_quantity} items from revenue-generating orders. {excluded_items} items excluded from cancelled/returned orders.",
         }
+
+        # Cache for 10 minutes
+        CacheService.set(cache_key, response, CacheService.TTL_MEDIUM)
+        return response
 
     except ValueError as e:
         return {"success": False, "error": f"Invalid date format. Use YYYY-MM-DD: {e}"}

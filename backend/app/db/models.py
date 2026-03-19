@@ -638,6 +638,21 @@ class ProductMaster(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
+class FabricYarnMaster(Base):
+    """Fabric & yarn composition master used by procurement workflows."""
+    __tablename__ = "fabric_yarn_master"
+
+    id = Column(Integer, primary_key=True, index=True)
+    yarn = Column(String(120), nullable=False, index=True)
+    yarn_percentage = Column(Numeric(6, 2), nullable=False)
+    yarn_price = Column(Numeric(12, 2), nullable=False)
+    fabric_type = Column(String(120), nullable=False, index=True)
+    print = Column(String(120), nullable=False, index=True)
+    fabric_ready_time = Column(String(120), nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class GreyFabricIssue(Base):
     __tablename__ = "grey_fabric_issues"
 

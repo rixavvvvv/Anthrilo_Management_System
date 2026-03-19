@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     yarn_store, knitting, processing, garment_production,
 )
 from app.api.v1.endpoints import product_master
+from app.api.v1.endpoints import fabric_yarn_master
 # Unicommerce API modules
 from app.api.v1.endpoints import (
     uc_vendors, uc_grn, uc_catalog, uc_inventory,
@@ -56,6 +57,11 @@ api_router.include_router(
     mrns.router, prefix="/mrns", tags=["MRN"])
 api_router.include_router(
     product_master.router, prefix="/products", tags=["Product Master"])
+api_router.include_router(
+    fabric_yarn_master.router,
+    prefix="/procurement/fabric-yarn-master",
+    tags=["Fabric & Yarn Master"],
+)
 
 # Manufacturing Module
 api_router.include_router(

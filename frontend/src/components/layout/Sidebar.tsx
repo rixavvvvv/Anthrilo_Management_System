@@ -108,6 +108,7 @@ const navigation: NavItem[] = [
     icon: Truck,
     children: [
       { name: 'Product Master', href: '/dashboard/procurement/product-master', icon: BookOpen },
+      { name: 'Fabric & Yarn Master', href: '/dashboard/procurement/fabric-yarn-master', icon: Layers },
       { name: 'Suppliers', href: '/dashboard/procurement/suppliers', icon: Building2 },
       { name: 'Purchase Orders', href: '/dashboard/procurement/purchase-orders', icon: ClipboardList },
       { name: 'Gate Entry', href: '/dashboard/procurement/gate-entry', icon: PackageCheck },
