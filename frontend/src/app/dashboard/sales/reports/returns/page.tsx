@@ -36,7 +36,7 @@ const CHANNEL_COLORS: Record<string, string> = {
   AJIO_OMNI: '#3B82F6', MEESHO_26: '#14B8A6', FLIPKART: '#6366F1',
   TATACLIQ: '#8B5CF6', SNAPDEAL_NEW: '#EF4444',
 };
-const getColor = (ch: string, i: number) => CHANNEL_COLORS[ch] || ['#F97316','#EC4899','#A855F7','#3B82F6','#14B8A6','#F59E0B','#6366F1','#EF4444','#8B5CF6','#22C55E'][i % 10];
+const getColor = (ch: string, i: number) => CHANNEL_COLORS[ch] || ['#F97316', '#EC4899', '#A855F7', '#3B82F6', '#14B8A6', '#F59E0B', '#6366F1', '#EF4444', '#8B5CF6', '#22C55E'][i % 10];
 
 const riskBadge = (pct: number) =>
   pct >= 40 ? { label: 'High Risk', cls: 'bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-400', dot: 'bg-rose-500' }
@@ -74,6 +74,8 @@ const PERIOD_OPTIONS: { value: ReportPeriod; label: string }[] = [
   { value: 'custom', label: 'Custom' },
 ];
 
+const SKU_ROWS_PER_PAGE = 50;
+
 /*  */
 export default function ReturnReportPage() {
   const [reportDate, setReportDate] = useState<string>(() => {
@@ -101,6 +103,7 @@ export default function ReturnReportPage() {
   const [skuSort, setSkuSort] = useState<SkuSortKey>('value');
   const [skuDir, setSkuDir] = useState<Dir>('desc');
   const [skuSearch, setSkuSearch] = useState('');
+  const [skuPage, setSkuPage] = useState(1);
 
   // Close calendar on outside click
   useEffect(() => {
@@ -208,8 +211,23 @@ export default function ReturnReportPage() {
       const va = a[skuSort]; const vb = b[skuSort];
       if (typeof va === 'string') return skuDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
       return skuDir === 'asc' ? va - vb : vb - va;
-    }).slice(0, 25);
+    });
   }, [skus, skuSearch, skuSort, skuDir]);
+
+  const totalSkuPages = Math.max(1, Math.ceil(filteredSkus.length / SKU_ROWS_PER_PAGE));
+
+  const paginatedSkus = useMemo(() => {
+    const start = (skuPage - 1) * SKU_ROWS_PER_PAGE;
+    return filteredSkus.slice(start, start + SKU_ROWS_PER_PAGE);
+  }, [filteredSkus, skuPage]);
+
+  useEffect(() => {
+    setSkuPage(1);
+  }, [skuSearch, skuSort, skuDir, period, fromDate, toDate, reportDate]);
+
+  useEffect(() => {
+    if (skuPage > totalSkuPages) setSkuPage(totalSkuPages);
+  }, [skuPage, totalSkuPages]);
 
   /* chart data */
   const pieData = useMemo(
@@ -664,12 +682,13 @@ export default function ReturnReportPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                          {filteredSkus.map((s: any, idx: number) => {
-                            const isTop = idx === 0 && !skuSearch;
+                          {paginatedSkus.map((s: any, idx: number) => {
+                            const rank = (skuPage - 1) * SKU_ROWS_PER_PAGE + idx + 1;
+                            const isTop = rank === 1 && !skuSearch;
                             return (
                               <motion.tr key={s.sku} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.02 }}
                                 className="group transition hover:bg-slate-50/60 dark:hover:bg-slate-700/30">
-                                <td className="px-5 py-3.5 text-xs font-bold text-slate-400 dark:text-slate-500">{idx + 1}</td>
+                                <td className="px-5 py-3.5 text-xs font-bold text-slate-400 dark:text-slate-500">{rank}</td>
                                 <td className="px-5 py-3.5">
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm font-mono font-medium text-slate-900 dark:text-white">{s.sku}</span>
@@ -692,9 +711,56 @@ export default function ReturnReportPage() {
                               </motion.tr>
                             );
                           })}
+                          {paginatedSkus.length === 0 && (
+                            <tr>
+                              <td colSpan={6} className="px-5 py-8 text-center text-sm text-slate-400">
+                                {skuSearch ? 'No SKU matches your search' : 'No SKU data available'}
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </div>
+                    {filteredSkus.length > 0 && (
+                      <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 dark:border-slate-700">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Showing {((skuPage - 1) * SKU_ROWS_PER_PAGE) + 1}-{Math.min(skuPage * SKU_ROWS_PER_PAGE, filteredSkus.length)} of {filteredSkus.length}
+                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => setSkuPage(1)}
+                            disabled={skuPage === 1}
+                            className="px-2 py-1 rounded-md text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            First
+                          </button>
+                          <button
+                            onClick={() => setSkuPage((p) => Math.max(1, p - 1))}
+                            disabled={skuPage === 1}
+                            className="px-2 py-1 rounded-md text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Prev
+                          </button>
+                          <span className="px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+                            {skuPage} / {totalSkuPages}
+                          </span>
+                          <button
+                            onClick={() => setSkuPage((p) => Math.min(totalSkuPages, p + 1))}
+                            disabled={skuPage === totalSkuPages}
+                            className="px-2 py-1 rounded-md text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Next
+                          </button>
+                          <button
+                            onClick={() => setSkuPage(totalSkuPages)}
+                            disabled={skuPage === totalSkuPages}
+                            className="px-2 py-1 rounded-md text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Last
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
