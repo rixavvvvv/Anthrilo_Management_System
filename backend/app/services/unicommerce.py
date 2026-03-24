@@ -55,6 +55,7 @@ class UnicommerceService:
         "discount",
         "totalPrice",
         "channelProductId",
+        "bundleSkuCode",
         "itemDetails",
         "itemTypeName",
         "category",
@@ -539,6 +540,35 @@ class UnicommerceService:
                     or ""
                 ).strip()
 
+                bundle_sku_code_number = (
+                    row.get("Bundle SKU Code Number")
+                    or row.get("Bundle SKU Code Number ")
+                    or row.get("Bundle Sku Code Number")
+                    or row.get("bundle sku code number")
+                    or row.get("Bundle SKU Code")
+                    or row.get("bundleSkuCode")
+                    or row.get("bundleSkuCodeNumber")
+                    or ""
+                ).strip()
+
+                channel_product_id = (
+                    row.get("Channel Product Id")
+                    or row.get("Channel Product ID")
+                    or row.get("channelProductId")
+                    or ""
+                ).strip()
+
+                if not bundle_sku_code_number:
+                    for k, v in row.items():
+                        nk = str(k or "").strip().lower().replace(" ", "").replace("_", "").replace("-", "")
+                        if nk in {
+                            "bundleskucodenumber",
+                            "bundleskucode",
+                        }:
+                            bundle_sku_code_number = str(v or "").strip()
+                            if bundle_sku_code_number:
+                                break
+
                 # Parse size from item type name if not in a dedicated column
                 # Handles: "SET - AQUA - 12-14 YEARS", "DRESS - OFF WHITE - 6-12 MONTHS"
                 resolved_name = item_type_name or item_details or sku_code
@@ -557,6 +587,8 @@ class UnicommerceService:
                     "itemName": item_details or sku_code,
                     "itemTypeName": resolved_name,
                     "size": size,
+                    "bundleSkuCodeNumber": bundle_sku_code_number,
+                    "channelProductId": channel_product_id,
                     "sellingPrice": selling_price,
                     "maxRetailPrice": mrp,
                     "quantity": 1,  # Each CSV row = 1 unit
