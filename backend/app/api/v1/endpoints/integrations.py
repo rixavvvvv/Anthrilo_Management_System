@@ -374,6 +374,41 @@ async def get_daily_sales_report(
             "CANCELLED", "CANCELED", "RETURNED", "REFUNDED",
             "FAILED", "UNFULFILLABLE", "ERROR", "PENDING_VERIFICATION"
         }
+
+        def _format_order_date(raw_value) -> str:
+            raw = str(raw_value or "").strip()
+            if not raw:
+                return ""
+
+            try:
+                numeric = float(raw)
+                if numeric > 1e12:
+                    numeric = numeric / 1000.0
+                dt = datetime.fromtimestamp(numeric, tz=timezone.utc).astimezone(IST)
+                return dt.strftime("%d/%m/%Y %H:%M:%S")
+            except (ValueError, TypeError, OverflowError, OSError):
+                pass
+
+            try:
+                iso_raw = raw.replace("Z", "+00:00")
+                dt = datetime.fromisoformat(iso_raw)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=IST)
+                else:
+                    dt = dt.astimezone(IST)
+                return dt.strftime("%d/%m/%Y %H:%M:%S")
+            except ValueError:
+                pass
+
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%d %b %Y %H:%M:%S", "%d/%m/%Y %H:%M:%S"):
+                try:
+                    dt = datetime.strptime(raw, fmt).replace(tzinfo=IST)
+                    return dt.strftime("%d/%m/%Y %H:%M:%S")
+                except ValueError:
+                    continue
+
+            return raw
+
         items_detail = []
         raw_orders = result.get("_orders", [])
         for order in raw_orders:
@@ -381,6 +416,7 @@ async def get_daily_sales_report(
             if status in EXCLUDED_STATUSES:
                 continue
             channel = order.get("channel", "UNKNOWN")
+            order_date = _format_order_date(order.get("created"))
             for item in order.get("saleOrderItems", []):
                 selling_price = 0.0
                 try:
@@ -392,6 +428,8 @@ async def get_daily_sales_report(
                     "item_type_name": item.get("itemTypeName", ""),
                     "size": item.get("size", ""),
                     "channel_name": channel,
+                    "order_date": order_date,
+                    "bundle_sku_code_number": item.get("bundleSkuCodeNumber", ""),
                     "selling_price": round(selling_price, 2),
                 })
         # Sort items by channel then SKU

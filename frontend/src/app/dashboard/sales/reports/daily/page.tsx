@@ -54,7 +54,7 @@ const ITEMS_PER_PAGE = 50;
 
 type ReportMode = 'daily' | 'weekly' | 'monthly' | 'custom';
 type SortKey = 'channel_name' | 'quantity' | 'selling_price' | 'orders' | 'avg' | 'pct';
-type ItemSortKey = 'item_sku_code' | 'item_type_name' | 'channel_name' | 'selling_price' | 'size' | 'good_inventory' | 'virtual_inventory';
+type ItemSortKey = 'item_sku_code' | 'item_type_name' | 'channel_name' | 'order_date' | 'bundle_sku_code_number' | 'selling_price' | 'size' | 'good_inventory' | 'virtual_inventory';
 type SortDir = 'asc' | 'desc';
 
 /* animated counter */
@@ -147,8 +147,8 @@ export default function DailySalesReportPage() {
     } else {
       return { from_date: customFrom, to_date: customTo };
     }
-  // weekly/monthly values only change once per day — safe to omit `now`
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // weekly/monthly values only change once per day — safe to omit `now`
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, reportDate, customFrom, customTo]);
 
   const queryKey = useMemo(() => ['sales-report', mode, ...Object.values(queryParams)], [mode, queryParams]);
@@ -220,7 +220,7 @@ export default function DailySalesReportPage() {
     const lines: string[] = [];
 
     // Header row: item cols + spacer + summary headers are in chRows row 0/1
-    const hdrParts = ['Item SKU Code', 'Item Type Name', 'Size', 'Channel Name', 'Selling Price', 'Good Inventory', 'Virtual Inventory', ''];
+    const hdrParts = ['Item SKU Code', 'Item Type Name', 'Size', 'Channel Name', 'Order Date', 'Bundle SKU Code Number', 'Selling Price', 'Good Inventory', 'Virtual Inventory', ''];
     if (chRows.length > 0) hdrParts.push(...chRows[0]);
     else hdrParts.push('', '', '', '');
     if (comparison) {
@@ -249,9 +249,9 @@ export default function DailySalesReportPage() {
         const it = items[i];
         const name = (it.item_type_name || '').replace(/,/g, ' ');
         const size = (it.size || '').replace(/,/g, ' ');
-        parts.push(it.item_sku_code, name, size, it.channel_name, String(it.selling_price), it.good_inventory != null ? String(it.good_inventory) : 'N/A', it.virtual_inventory != null ? String(it.virtual_inventory) : 'N/A');
+        parts.push(it.item_sku_code, name, size, it.channel_name, it.order_date || '', it.bundle_sku_code_number || '', String(it.selling_price), it.good_inventory != null ? String(it.good_inventory) : 'N/A', it.virtual_inventory != null ? String(it.virtual_inventory) : 'N/A');
       } else {
-        parts.push('', '', '', '', '', '', '');
+        parts.push('', '', '', '', '', '', '', '', '');
       }
 
       // Spacer column
@@ -361,7 +361,9 @@ export default function DailySalesReportPage() {
         (it.item_sku_code || '').toLowerCase().includes(q) ||
         (it.item_type_name || '').toLowerCase().includes(q) ||
         (it.size || '').toLowerCase().includes(q) ||
-        (it.channel_name || '').toLowerCase().includes(q)
+        (it.channel_name || '').toLowerCase().includes(q) ||
+        (it.order_date || '').toLowerCase().includes(q) ||
+        (it.bundle_sku_code_number || '').toLowerCase().includes(q)
       );
     }
     return [...filtered].sort((a: any, b: any) => {
@@ -869,6 +871,8 @@ export default function DailySalesReportPage() {
                         { key: 'item_type_name' as ItemSortKey, label: 'Item Type Name', align: 'left' },
                         { key: 'size' as ItemSortKey, label: 'Size', align: 'left' },
                         { key: 'channel_name' as ItemSortKey, label: 'Channel Name', align: 'left' },
+                        { key: 'order_date' as ItemSortKey, label: 'Order Date', align: 'left' },
+                        { key: 'bundle_sku_code_number' as ItemSortKey, label: 'Bundle SKU Code Number', align: 'left' },
                         { key: 'selling_price' as ItemSortKey, label: 'Selling Price', align: 'right' },
                         { key: 'good_inventory' as ItemSortKey, label: 'Good Inventory', align: 'right' },
                         { key: 'virtual_inventory' as ItemSortKey, label: 'Virtual Inventory', align: 'right' },
@@ -889,6 +893,8 @@ export default function DailySalesReportPage() {
                         <td className="px-4 py-2 text-slate-800 dark:text-slate-200 max-w-[400px] truncate">{item.item_type_name}</td>
                         <td className="px-4 py-2 text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.size || '—'}</td>
                         <td className="px-4 py-2 text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.channel_name}</td>
+                        <td className="px-4 py-2 text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.order_date || '—'}</td>
+                        <td className="px-4 py-2 text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.bundle_sku_code_number || '—'}</td>
                         <td className="px-4 py-2 text-right tabular-nums font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">{item.selling_price}</td>
                         <td className="px-4 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300 whitespace-nowrap">{item.good_inventory != null ? item.good_inventory : <span className="text-slate-400">N/A</span>}</td>
                         <td className="px-4 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300 whitespace-nowrap">{item.virtual_inventory != null ? item.virtual_inventory : <span className="text-slate-400">N/A</span>}</td>
@@ -896,7 +902,7 @@ export default function DailySalesReportPage() {
                     ))}
                     {paginatedItems.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-400">
+                        <td colSpan={9} className="px-4 py-8 text-center text-sm text-slate-400">
                           {itemSearch ? 'No items match your search' : 'No item data available'}
                         </td>
                       </tr>
