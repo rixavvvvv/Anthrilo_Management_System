@@ -425,6 +425,7 @@ async def get_daily_sales_report(
                     pass
                 items_detail.append({
                     "item_sku_code": item.get("itemSku", ""),
+                    "sale_order_item_code": item.get("code", ""),
                     "item_type_name": item.get("itemTypeName", ""),
                     "size": item.get("size", ""),
                     "channel_name": channel,
@@ -1447,8 +1448,9 @@ async def get_return_report(
                 sku = item.get("sku", "UNKNOWN")
                 item_name = item.get("itemName", "")
                 qty = item.get("quantity", 1)
-                # Use salesValue first (pre-tax selling price), fallback to total
-                price = item.get("salesValue", 0.0) or item.get("total", 0.0)
+                # Keep return valuation aligned with sales: unit selling price x quantity.
+                unit_price = item.get("unitPrice", 0.0) or 0.0
+                price = unit_price * qty
 
                 total_items_count += qty
                 total_value += price
