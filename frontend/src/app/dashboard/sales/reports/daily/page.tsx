@@ -26,6 +26,15 @@ const fmt = (v: number) =>
 
 const fmtFull = (v: number) => `₹${v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+const toCsvCell = (value: unknown) => {
+  if (value === null || value === undefined) return '';
+  const text = String(value).replace(/\r\n|\n|\r/g, ' ');
+  if (/[",\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+};
+
 const channelLabel = (c: string) =>
   c.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
     .replace(/ New$/, '').replace(/ Api$/, '').replace(/ 26$/, '');
@@ -167,116 +176,120 @@ export default function DailySalesReportPage() {
   });
 
   const handleGenerate = useCallback(() => { setShowReport(true); refetch(); }, [refetch]);
-  const queryLoading = isLoading || isFetching;
+  const queryLoading = (isLoading || isFetching) && !raw;
 
-  // Real elapsed-time counter while loading
+  // Real elapsed-time counter + percentage progress while loading
   const [elapsed, setElapsed] = useState(0);
+  const [loadingPercent, setLoadingPercent] = useState(0);
   useEffect(() => {
-    if (!queryLoading) { setElapsed(0); return; }
+    if (!queryLoading) {
+      setElapsed(0);
+      setLoadingPercent(0);
+      return;
+    }
     const start = Date.now();
-    const id = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    setLoadingPercent(5);
+    const id = setInterval(() => {
+      const elapsedMs = Date.now() - start;
+      const elapsedSec = Math.floor(elapsedMs / 1000);
+      setElapsed(elapsedSec);
+
+      // Smooth asymptotic progress: quickly moves early, slows near completion.
+      const nextPct = Math.min(95, Math.floor(5 + (1 - Math.exp(-elapsedSec / 8)) * 90));
+      setLoadingPercent((prev) => (nextPct > prev ? nextPct : prev));
+    }, 500);
     return () => clearInterval(id);
   }, [queryLoading]);
 
-  /* CSV download (item-level + channel summary + comparison on right side) */
+  /* CSV download */
   const handleCSV = useCallback(() => {
     if (!raw) return;
     const items = raw.items || [];
     const report = raw.report || [];
     const comparison = raw.comparison;
 
-    // Build channel summary rows for current date
-    const chRows: string[][] = [];
-    chRows.push([`${raw.date || ''}`, '', '', '']);
-    chRows.push(['Channel', 'N QTY', 'Selling Price', 'AVG']);
+    const spacer2 = ['', ''];
+    const summaryRows: string[][] = [];
+    const comparisonRows: string[][] = [];
+
+    summaryRows.push([`Channel Summary (${raw.date || ''})`, '', '', '']);
+    summaryRows.push(['Channel', 'N QTY', 'Selling Price', 'AVG']);
     for (const r of report) {
       const avg = r.quantity > 0 ? (r.selling_price / r.quantity).toFixed(2) : '0';
-      chRows.push([r.channel_name, String(r.quantity), r.selling_price.toFixed(2), avg]);
+      summaryRows.push([r.channel_name, String(r.quantity), r.selling_price.toFixed(2), avg]);
     }
     if (raw.totals) {
       const t = raw.totals;
       const avgT = t.total_quantity > 0 ? (t.total_revenue / t.total_quantity).toFixed(2) : '0';
-      chRows.push([`TOTAL`, String(t.total_quantity), t.total_revenue.toFixed(2), avgT]);
+      summaryRows.push(['TOTAL', String(t.total_quantity), t.total_revenue.toFixed(2), avgT]);
     }
 
-    // Build comparison rows
-    const compRows: string[][] = [];
     if (comparison) {
-      compRows.push([`${comparison.date || ''}`, '', '', '']);
-      compRows.push(['Channel', 'N QTY', 'Selling Price', 'AVG']);
+      comparisonRows.push([`Comparison Summary (${comparison.date || ''})`, '', '', '']);
+      comparisonRows.push(['Channel', 'N QTY', 'Selling Price', 'AVG']);
       for (const r of (comparison.report || [])) {
         const avg = r.quantity > 0 ? (r.selling_price / r.quantity).toFixed(2) : '0';
-        compRows.push([r.channel_name, String(r.quantity), r.selling_price.toFixed(2), avg]);
+        comparisonRows.push([r.channel_name, String(r.quantity), r.selling_price.toFixed(2), avg]);
       }
       if (comparison.totals) {
         const ct = comparison.totals;
         const avgT = ct.total_quantity > 0 ? (ct.total_revenue / ct.total_quantity).toFixed(2) : '0';
-        compRows.push(['TOTAL', String(ct.total_quantity), ct.total_revenue.toFixed(2), avgT]);
+        comparisonRows.push(['TOTAL', String(ct.total_quantity), ct.total_revenue.toFixed(2), avgT]);
       }
     }
 
-    // Combine: item columns on left, spacer, channel summaries on right
-    const maxRows = Math.max(items.length, chRows.length, compRows.length);
+    const maxRows = Math.max(items.length + 1, summaryRows.length, comparisonRows.length);
     const lines: string[] = [];
 
-    // Header row: item cols + spacer + summary headers are in chRows row 0/1
-    const hdrParts = ['Item SKU Code', 'Sale Order Item Code', 'Item Type Name', 'Size', 'Channel Name', 'Order Date', 'Bundle SKU Code Number', 'Selling Price', 'Good Inventory', 'Virtual Inventory', ''];
-    if (chRows.length > 0) hdrParts.push(...chRows[0]);
-    else hdrParts.push('', '', '', '');
-    if (comparison) {
-      hdrParts.push('');
-      if (compRows.length > 0) hdrParts.push(...compRows[0]);
-      else hdrParts.push('', '', '', '');
-    }
-    lines.push(hdrParts.join(','));
-
-    // Sub-header row (Channel/N QTY/Selling Price/AVG)
-    const subParts = ['', '', '', '', '', '', '', '', '', ''];
-    if (chRows.length > 1) subParts.push(...chRows[1]);
-    else subParts.push('', '', '', '');
-    if (comparison) {
-      subParts.push('');
-      if (compRows.length > 1) subParts.push(...compRows[1]);
-      else subParts.push('', '', '', '');
-    }
-    lines.push(subParts.join(','));
+    const itemHeader = [
+      'Item SKU Code',
+      'Sale Order Item Code',
+      'Item Type Name',
+      'Size',
+      'Channel Name',
+      'Order Date',
+      'Bundle SKU Code Number',
+      'Selling Price',
+      'Good Inventory',
+      'Virtual Inventory',
+    ];
 
     for (let i = 0; i < maxRows; i++) {
-      const parts: string[] = [];
+      const row: string[] = [];
 
-      // Left: item detail
-      if (i < items.length) {
-        const it = items[i];
-        const name = (it.item_type_name || '').replace(/,/g, ' ');
-        const size = (it.size || '').replace(/,/g, ' ');
-        parts.push(it.item_sku_code, it.sale_order_item_code || '', name, size, it.channel_name, it.order_date || '', it.bundle_sku_code_number || '', String(it.selling_price), it.good_inventory != null ? String(it.good_inventory) : 'N/A', it.virtual_inventory != null ? String(it.virtual_inventory) : 'N/A');
+      if (i === 0) {
+        row.push(...itemHeader);
+      } else if (i - 1 < items.length) {
+        const it = items[i - 1];
+        row.push(
+          it.item_sku_code,
+          it.sale_order_item_code || '',
+          it.item_type_name || '',
+          it.size || '',
+          it.channel_name,
+          it.order_date || '',
+          it.bundle_sku_code_number || '',
+          String(it.selling_price),
+          it.good_inventory != null ? String(it.good_inventory) : 'N/A',
+          it.virtual_inventory != null ? String(it.virtual_inventory) : 'N/A',
+        );
       } else {
-        parts.push('', '', '', '', '', '', '', '', '', '');
+        row.push('', '', '', '', '', '', '', '', '', '');
       }
 
-      // Spacer column
-      parts.push('');
+      // Two empty columns between item block and right summary blocks
+      row.push(...spacer2);
 
-      // Right: channel summary (current date) — skip first 2 rows (date header + column header already emitted)
-      const chIdx = i + 2;
-      if (chIdx < chRows.length) {
-        parts.push(...chRows[chIdx]);
-      } else {
-        parts.push('', '', '', '');
-      }
+      if (i < summaryRows.length) row.push(...summaryRows[i]);
+      else row.push('', '', '', '');
 
-      // Right: comparison
-      if (comparison) {
-        parts.push(''); // spacer between summaries
-        const compIdx = i + 2;
-        if (compIdx < compRows.length) {
-          parts.push(...compRows[compIdx]);
-        } else {
-          parts.push('', '', '', '');
-        }
-      }
+      // Two empty columns between current summary and comparison summary
+      row.push(...spacer2);
 
-      lines.push(parts.join(','));
+      if (i < comparisonRows.length) row.push(...comparisonRows[i]);
+      else row.push('', '', '', '');
+
+      lines.push(row.map(toCsvCell).join(','));
     }
 
     const csv = lines.join('\n');
@@ -601,9 +614,18 @@ export default function DailySalesReportPage() {
             className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-10 flex flex-col items-center gap-4">
             <div className="h-10 w-10 rounded-full border-[3px] border-blue-500 border-t-transparent animate-spin" />
             <p className="text-sm text-slate-500 dark:text-slate-400">Fetching sales data for {dateLabel}…</p>
-            <p className="text-xs font-medium tabular-nums text-blue-600 dark:text-blue-400">
-              {elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`} elapsed
-            </p>
+            <div className="w-full max-w-md space-y-1.5">
+              <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-blue-600 transition-all duration-300"
+                  style={{ width: `${loadingPercent}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs font-medium tabular-nums text-blue-600 dark:text-blue-400">
+                <span>{loadingPercent}%</span>
+                <span>{elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`} elapsed</span>
+              </div>
+            </div>
             <p className="text-[11px] text-slate-400 dark:text-slate-500">Large date ranges may take a few minutes</p>
           </motion.div>
         )}
