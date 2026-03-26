@@ -1658,6 +1658,20 @@ class UnicommerceService:
                 except (ValueError, TypeError):
                     discount = 0.0
 
+                try:
+                    quantity = int(float(
+                        row.get("Quantity")
+                        or row.get("Qty")
+                        or row.get("QTY")
+                        or row.get("quantity")
+                        or row.get("Sale Order Item Quantity")
+                        or 1
+                    ))
+                except (ValueError, TypeError):
+                    quantity = 1
+                if quantity <= 0:
+                    quantity = 1
+
                 sku_code = (row.get("Item SKU Code") or row.get("skuCode") or row.get("itemSku") or "").strip()
                 item_details = (row.get("Item Details") or row.get("itemDetails") or "").strip()
                 soi_code = (row.get("Sale Order Item Code") or row.get("soicode") or "").strip()
@@ -1668,7 +1682,7 @@ class UnicommerceService:
                     "itemName": item_details or sku_code,
                     "sellingPrice": selling_price,
                     "maxRetailPrice": mrp,
-                    "quantity": 1,
+                    "quantity": quantity,
                     "discount": discount,
                 })
 
@@ -1722,12 +1736,14 @@ class UnicommerceService:
                     seen_orders.add(order_code)
                     total_orders += 1
                 for item in order.get("saleOrderItems", []):
-                    total_items += 1
+                    qty = int(item.get("quantity", 1) or 1)
+                    total_items += qty
                     items_list.append({
                         "soiCode": item.get("soiCode", ""),
                         "sku": item.get("itemSku", ""),
                         "orderCode": order_code,
                         "created": created,
+                        "quantity": qty,
                     })
 
             result = {

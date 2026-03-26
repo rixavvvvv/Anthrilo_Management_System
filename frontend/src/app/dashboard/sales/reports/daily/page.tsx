@@ -54,7 +54,7 @@ const ITEMS_PER_PAGE = 50;
 
 type ReportMode = 'daily' | 'weekly' | 'monthly' | 'custom';
 type SortKey = 'channel_name' | 'quantity' | 'selling_price' | 'orders' | 'avg' | 'pct';
-type ItemSortKey = 'item_sku_code' | 'item_type_name' | 'channel_name' | 'order_date' | 'bundle_sku_code_number' | 'selling_price' | 'size' | 'good_inventory' | 'virtual_inventory';
+type ItemSortKey = 'item_sku_code' | 'sale_order_item_code' | 'item_type_name' | 'channel_name' | 'order_date' | 'bundle_sku_code_number' | 'selling_price' | 'size' | 'good_inventory' | 'virtual_inventory';
 type SortDir = 'asc' | 'desc';
 
 /* animated counter */
@@ -220,7 +220,7 @@ export default function DailySalesReportPage() {
     const lines: string[] = [];
 
     // Header row: item cols + spacer + summary headers are in chRows row 0/1
-    const hdrParts = ['Item SKU Code', 'Item Type Name', 'Size', 'Channel Name', 'Order Date', 'Bundle SKU Code Number', 'Selling Price', 'Good Inventory', 'Virtual Inventory', ''];
+    const hdrParts = ['Item SKU Code', 'Sale Order Item Code', 'Item Type Name', 'Size', 'Channel Name', 'Order Date', 'Bundle SKU Code Number', 'Selling Price', 'Good Inventory', 'Virtual Inventory', ''];
     if (chRows.length > 0) hdrParts.push(...chRows[0]);
     else hdrParts.push('', '', '', '');
     if (comparison) {
@@ -231,7 +231,7 @@ export default function DailySalesReportPage() {
     lines.push(hdrParts.join(','));
 
     // Sub-header row (Channel/N QTY/Selling Price/AVG)
-    const subParts = ['', '', '', '', '', '', '', ''];
+    const subParts = ['', '', '', '', '', '', '', '', '', ''];
     if (chRows.length > 1) subParts.push(...chRows[1]);
     else subParts.push('', '', '', '');
     if (comparison) {
@@ -249,9 +249,9 @@ export default function DailySalesReportPage() {
         const it = items[i];
         const name = (it.item_type_name || '').replace(/,/g, ' ');
         const size = (it.size || '').replace(/,/g, ' ');
-        parts.push(it.item_sku_code, name, size, it.channel_name, it.order_date || '', it.bundle_sku_code_number || '', String(it.selling_price), it.good_inventory != null ? String(it.good_inventory) : 'N/A', it.virtual_inventory != null ? String(it.virtual_inventory) : 'N/A');
+        parts.push(it.item_sku_code, it.sale_order_item_code || '', name, size, it.channel_name, it.order_date || '', it.bundle_sku_code_number || '', String(it.selling_price), it.good_inventory != null ? String(it.good_inventory) : 'N/A', it.virtual_inventory != null ? String(it.virtual_inventory) : 'N/A');
       } else {
-        parts.push('', '', '', '', '', '', '', '', '');
+        parts.push('', '', '', '', '', '', '', '', '', '');
       }
 
       // Spacer column
@@ -359,6 +359,7 @@ export default function DailySalesReportPage() {
       const q = itemSearch.toLowerCase();
       filtered = items.filter((it: any) =>
         (it.item_sku_code || '').toLowerCase().includes(q) ||
+        (it.sale_order_item_code || '').toLowerCase().includes(q) ||
         (it.item_type_name || '').toLowerCase().includes(q) ||
         (it.size || '').toLowerCase().includes(q) ||
         (it.channel_name || '').toLowerCase().includes(q) ||
@@ -868,6 +869,7 @@ export default function DailySalesReportPage() {
                     <tr className="bg-slate-50/80 dark:bg-slate-900/50 sticky top-0 z-10">
                       {([
                         { key: 'item_sku_code' as ItemSortKey, label: 'Item SKU Code', align: 'left' },
+                        { key: 'sale_order_item_code' as ItemSortKey, label: 'Sale Order Item Code', align: 'left' },
                         { key: 'item_type_name' as ItemSortKey, label: 'Item Type Name', align: 'left' },
                         { key: 'size' as ItemSortKey, label: 'Size', align: 'left' },
                         { key: 'channel_name' as ItemSortKey, label: 'Channel Name', align: 'left' },
@@ -890,6 +892,7 @@ export default function DailySalesReportPage() {
                     {paginatedItems.map((item: any, idx: number) => (
                       <tr key={(itemPage - 1) * ITEMS_PER_PAGE + idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition">
                         <td className="px-4 py-2 text-slate-700 dark:text-slate-300 font-mono text-xs whitespace-nowrap">{item.item_sku_code}</td>
+                        <td className="px-4 py-2 text-slate-700 dark:text-slate-300 font-mono text-xs whitespace-nowrap">{item.sale_order_item_code || '—'}</td>
                         <td className="px-4 py-2 text-slate-800 dark:text-slate-200 max-w-[400px] truncate">{item.item_type_name}</td>
                         <td className="px-4 py-2 text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.size || '—'}</td>
                         <td className="px-4 py-2 text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.channel_name}</td>
@@ -902,7 +905,7 @@ export default function DailySalesReportPage() {
                     ))}
                     {paginatedItems.length === 0 && (
                       <tr>
-                        <td colSpan={9} className="px-4 py-8 text-center text-sm text-slate-400">
+                        <td colSpan={10} className="px-4 py-8 text-center text-sm text-slate-400">
                           {itemSearch ? 'No items match your search' : 'No item data available'}
                         </td>
                       </tr>
