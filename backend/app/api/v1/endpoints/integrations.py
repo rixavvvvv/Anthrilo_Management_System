@@ -4,7 +4,8 @@ from fastapi import APIRouter, Query, BackgroundTasks, WebSocket, WebSocketDisco
 import logging
 import asyncio
 import json as json_module
-from datetime import datetime, timezone, timedelta
+from calendar import monthrange
+from datetime import datetime, timezone, timedelta, date as date_cls
 from app.services.unicommerce import get_unicommerce_service
 from app.services.sync_service import get_sync_service
 from app.core.token_manager import get_token_manager
@@ -1539,6 +1540,312 @@ async def get_return_report(
 
     except Exception as e:
         logger.error(f"Error in return report: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/unicommerce/cancellation-report")
+async def get_cancellation_report(
+    date: str | None = Query(None, description="Date for report (YYYY-MM-DD)"),
+    from_date: str | None = Query(None, description="Start date for custom report (YYYY-MM-DD)"),
+    to_date: str | None = Query(None, description="End date for custom report (YYYY-MM-DD)"),
+    period: str = Query("daily", description="daily, weekly, monthly, custom"),
+):
+    """
+    Cancellation Report with channel-wise + SKU-wise + item-level breakdown.
+    Uses Unicommerce Sale Orders export and includes only CANCELLED/CANCELED orders.
+    """
+    try:
+        service = get_unicommerce_service()
+
+        def _add_months(src: date_cls, months: int) -> date_cls:
+            month_index = (src.month - 1) + months
+            year = src.year + (month_index // 12)
+            month = (month_index % 12) + 1
+            day = min(src.day, monthrange(year, month)[1])
+            return date_cls(year, month, day)
+
+        def _build_three_month_chunks(start: date_cls, end: date_cls) -> list[tuple[date_cls, date_cls]]:
+            chunks: list[tuple[date_cls, date_cls]] = []
+            cursor = start
+            while cursor <= end:
+                chunk_end = min(_add_months(cursor, 3) - timedelta(days=1), end)
+                chunks.append((cursor, chunk_end))
+                cursor = chunk_end + timedelta(days=1)
+            return chunks
+
+        period_norm = (period or "daily").strip().lower()
+        today_ist = datetime.now(IST).date()
+
+        if period_norm == "custom" or (from_date and to_date):
+            if not from_date or not to_date:
+                return {
+                    "success": False,
+                    "error": "Both from_date and to_date are required for custom range",
+                    "period": "custom",
+                }
+            start_date = datetime.strptime(from_date, "%Y-%m-%d").date()
+            end_date = datetime.strptime(to_date, "%Y-%m-%d").date()
+            period_norm = "custom"
+        elif period_norm == "weekly":
+            current_week_start = today_ist - timedelta(days=today_ist.weekday())
+            start_date = current_week_start - timedelta(days=7)
+            end_date = current_week_start - timedelta(days=1)
+        elif period_norm == "monthly":
+            base_date = datetime.strptime(date, "%Y-%m-%d").date() if date else (today_ist - timedelta(days=1))
+            start_date = base_date.replace(day=1)
+
+            if base_date.year == today_ist.year and base_date.month == today_ist.month:
+                # Current month: use month-to-date so users can load ongoing month data.
+                end_date = today_ist - timedelta(days=1)
+            else:
+                # Past month: use full calendar month of the selected anchor date.
+                if base_date.month == 12:
+                    first_next_month = date_cls(base_date.year + 1, 1, 1)
+                else:
+                    first_next_month = date_cls(base_date.year, base_date.month + 1, 1)
+                end_date = first_next_month - timedelta(days=1)
+        else:
+            base_date = datetime.strptime(date, "%Y-%m-%d").date() if date else (today_ist - timedelta(days=1))
+            start_date = base_date
+            end_date = base_date
+            period_norm = "daily"
+
+        if start_date > end_date:
+            return {
+                "success": False,
+                "error": "from_date cannot be greater than to_date",
+                "period": period_norm,
+                "from_date": start_date.isoformat(),
+                "to_date": end_date.isoformat(),
+            }
+
+        chunks = _build_three_month_chunks(start_date, end_date)
+        all_orders = []
+        total_fetch_time = 0.0
+
+        for chunk_start, chunk_end in chunks:
+            from_dt = datetime.combine(chunk_start, datetime.min.time()).replace(tzinfo=IST)
+            to_dt = datetime.combine(chunk_end, datetime.max.time().replace(microsecond=0)).replace(tzinfo=IST)
+
+            fetch_result = await service.fetch_all_orders_with_revenue(from_dt, to_dt)
+            if not fetch_result.get("successful", False):
+                return {
+                    "success": False,
+                    "error": fetch_result.get("error", "Failed to fetch orders"),
+                    "period": period_norm,
+                    "from_date": start_date.isoformat(),
+                    "to_date": end_date.isoformat(),
+                    "failed_chunk": {
+                        "from_date": chunk_start.isoformat(),
+                        "to_date": chunk_end.isoformat(),
+                    },
+                    "chunk_count": len(chunks),
+                }
+
+            all_orders.extend(fetch_result.get("orders", []))
+            total_fetch_time += float(fetch_result.get("total_time", 0) or 0)
+
+        raw_orders = all_orders
+        total_orders_all = len(raw_orders)
+        cancelled_statuses = {"CANCELLED", "CANCELED"}
+
+        def _fmt_created(raw_val) -> str:
+            raw = str(raw_val or "").strip()
+            if not raw:
+                return ""
+            try:
+                numeric = float(raw)
+                if numeric > 1e12:
+                    numeric = numeric / 1000.0
+                dt = datetime.fromtimestamp(numeric, tz=timezone.utc).astimezone(IST)
+                return dt.strftime("%d/%m/%Y %H:%M:%S")
+            except (ValueError, TypeError, OverflowError, OSError):
+                pass
+            try:
+                iso_raw = raw.replace("Z", "+00:00")
+                dt = datetime.fromisoformat(iso_raw)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=IST)
+                else:
+                    dt = dt.astimezone(IST)
+                return dt.strftime("%d/%m/%Y %H:%M:%S")
+            except ValueError:
+                return raw
+
+        cancellations = []
+        items_flat = []
+        channel_map = {}
+        sku_map = {}
+        daily_map = {}
+
+        total_cancelled_orders = 0
+        total_cancelled_items = 0
+        total_cancelled_value = 0.0
+        cod_orders = 0
+        prepaid_orders = 0
+
+        for order in raw_orders:
+            status = (order.get("status") or "").upper()
+            if status not in cancelled_statuses:
+                continue
+
+            total_cancelled_orders += 1
+            channel = order.get("channel", "UNKNOWN")
+            order_code = order.get("code", "")
+            created_raw = order.get("created") or order.get("displayOrderDateTime")
+            created_fmt = _fmt_created(created_raw)
+            is_cod = bool(order.get("cod") or order.get("cashOnDelivery"))
+            if is_cod:
+                cod_orders += 1
+            else:
+                prepaid_orders += 1
+
+            order_entry = {
+                "sale_order_code": order_code,
+                "channel": channel,
+                "status": status,
+                "created": created_fmt,
+                "cod": is_cod,
+                "items": [],
+                "total_items": 0,
+                "total_value": 0.0,
+            }
+
+            if channel not in channel_map:
+                channel_map[channel] = {
+                    "channel": channel,
+                    "cancellations": 0,
+                    "items": 0,
+                    "value": 0.0,
+                    "cod": 0,
+                    "prepaid": 0,
+                }
+            channel_map[channel]["cancellations"] += 1
+            if is_cod:
+                channel_map[channel]["cod"] += 1
+            else:
+                channel_map[channel]["prepaid"] += 1
+
+            day_key = created_fmt[:10] if len(created_fmt) >= 10 else str(start_date)
+            if day_key not in daily_map:
+                daily_map[day_key] = {
+                    "date": day_key,
+                    "cancellations": 0,
+                    "items": 0,
+                    "value": 0.0,
+                }
+            daily_map[day_key]["cancellations"] += 1
+
+            for item in order.get("saleOrderItems", []):
+                sku = item.get("itemSku", "")
+                name = item.get("itemTypeName") or item.get("itemName") or sku
+                soi_code = item.get("code", "")
+                try:
+                    qty = int(float(item.get("quantity", 1) or 1))
+                except (ValueError, TypeError):
+                    qty = 1
+                if qty <= 0:
+                    qty = 1
+
+                try:
+                    selling = float(item.get("sellingPrice", 0) or 0)
+                except (ValueError, TypeError):
+                    selling = 0.0
+                line_value = selling * qty
+
+                total_cancelled_items += qty
+                total_cancelled_value += line_value
+                order_entry["total_items"] += qty
+                order_entry["total_value"] += line_value
+                channel_map[channel]["items"] += qty
+                channel_map[channel]["value"] += line_value
+                daily_map[day_key]["items"] += qty
+                daily_map[day_key]["value"] += line_value
+
+                order_entry["items"].append({
+                    "sale_order_item_code": soi_code,
+                    "sku": sku,
+                    "name": name,
+                    "quantity": qty,
+                    "selling_price": round(selling, 2),
+                    "line_value": round(line_value, 2),
+                })
+
+                items_flat.append({
+                    "sale_order_code": order_code,
+                    "sale_order_item_code": soi_code,
+                    "channel": channel,
+                    "status": status,
+                    "created": created_fmt,
+                    "cod": is_cod,
+                    "sku": sku,
+                    "name": name,
+                    "quantity": qty,
+                    "selling_price": round(selling, 2),
+                    "line_value": round(line_value, 2),
+                })
+
+                if sku not in sku_map:
+                    sku_map[sku] = {
+                        "sku": sku,
+                        "name": name,
+                        "quantity": 0,
+                        "value": 0.0,
+                        "cancellation_count": 0,
+                    }
+                sku_map[sku]["quantity"] += qty
+                sku_map[sku]["value"] += line_value
+                sku_map[sku]["cancellation_count"] += 1
+
+            order_entry["total_value"] = round(order_entry["total_value"], 2)
+            cancellations.append(order_entry)
+
+        by_channel = sorted(channel_map.values(), key=lambda x: x["value"], reverse=True)
+        by_sku = sorted(sku_map.values(), key=lambda x: x["value"], reverse=True)
+        daily_trend = sorted(daily_map.values(), key=lambda x: x["date"])
+
+        for c in by_channel:
+            c["value"] = round(c["value"], 2)
+        for s in by_sku:
+            s["value"] = round(s["value"], 2)
+        for d in daily_trend:
+            d["value"] = round(d["value"], 2)
+
+        cancellation_rate = (
+            (total_cancelled_orders / total_orders_all) * 100
+            if total_orders_all > 0 else 0.0
+        )
+
+        return {
+            "success": True,
+            "period": period_norm,
+            "date": start_date.isoformat(),
+            "from_date": start_date.isoformat(),
+            "to_date": end_date.isoformat(),
+            "cancellations": cancellations,
+            "items": items_flat,
+            "by_channel": by_channel,
+            "by_sku": by_sku,
+            "daily_trend": daily_trend,
+            "totals": {
+                "total_orders": total_orders_all,
+                "total_cancellations": total_cancelled_orders,
+                "total_items": total_cancelled_items,
+                "total_value": round(total_cancelled_value, 2),
+                "cod_orders": cod_orders,
+                "prepaid_orders": prepaid_orders,
+                "cancellation_rate": round(cancellation_rate, 2),
+            },
+            "search_results": {
+                "export_orders": total_orders_all,
+                "method": "export_job_sale_orders_chunked" if len(chunks) > 1 else "export_job_sale_orders",
+                "total_time": round(total_fetch_time, 2),
+                "chunk_count": len(chunks),
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Error in cancellation report: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 

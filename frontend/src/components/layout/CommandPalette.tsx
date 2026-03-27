@@ -65,6 +65,15 @@ const SEARCH_ITEMS: SearchItem[] = [
     keywords: ['returns', 'refunds', 'rto', 'cir'],
   },
   {
+    id: 'cancellation-report',
+    title: 'Cancellation Report',
+    description: 'Order cancellations summary by channel and SKU',
+    href: '/dashboard/reports/sales/cancellations',
+    icon: Undo2,
+    category: 'Reports',
+    keywords: ['cancellation', 'cancelled', 'canceled', 'orders'],
+  },
+  {
     id: 'sku-sales',
     title: 'SKU Sales',
     description: 'Size-wise bundle sales & search',
@@ -472,21 +481,21 @@ export const CommandPalette = memo(function CommandPalette({ open, onClose }: Co
                             onClick={() => navigate(item)}
                             onMouseEnter={() => setCursor(idx)}
                             className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isActive
-                                ? 'bg-primary-50 dark:bg-primary-950/50'
-                                : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                              ? 'bg-primary-50 dark:bg-primary-950/50'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
                               }`}
                           >
                             {/* Icon */}
                             <div
                               className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${isActive
-                                  ? 'bg-primary-100 dark:bg-primary-900/60'
-                                  : 'bg-slate-100 dark:bg-slate-800'
+                                ? 'bg-primary-100 dark:bg-primary-900/60'
+                                : 'bg-slate-100 dark:bg-slate-800'
                                 }`}
                             >
                               <Icon
                                 className={`w-[15px] h-[15px] ${isActive
-                                    ? 'text-primary-600 dark:text-primary-400'
-                                    : 'text-slate-500 dark:text-slate-400'
+                                  ? 'text-primary-600 dark:text-primary-400'
+                                  : 'text-slate-500 dark:text-slate-400'
                                   }`}
                               />
                             </div>
@@ -495,8 +504,8 @@ export const CommandPalette = memo(function CommandPalette({ open, onClose }: Co
                             <div className="flex-1 min-w-0">
                               <p
                                 className={`text-[13.5px] font-medium truncate ${isActive
-                                    ? 'text-primary-700 dark:text-primary-300'
-                                    : 'text-slate-800 dark:text-slate-200'
+                                  ? 'text-primary-700 dark:text-primary-300'
+                                  : 'text-slate-800 dark:text-slate-200'
                                   }`}
                               >
                                 {item.title}
