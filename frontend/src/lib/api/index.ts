@@ -65,7 +65,7 @@ export const productionApi = {
 
 // Unicommerce integration API
 export const unicommerceApi = {
-// Summary endpoints (dashboard cards)
+  // Summary endpoints (dashboard cards)
   getToday: () => apiClient.get('/integrations/unicommerce/today'),
   getYesterday: () => apiClient.get('/integrations/unicommerce/yesterday'),
   getLast7Days: () => apiClient.get('/integrations/unicommerce/last-7-days'),
@@ -100,6 +100,14 @@ export const unicommerceApi = {
     period?: 'daily' | 'weekly' | 'monthly' | 'custom';
     return_type?: string;
   }) => apiClient.get('/integrations/unicommerce/return-report', { params }),
+
+  // Cancellation report — channel + SKU + item-level breakdown
+  getCancellationReport: (params: {
+    date?: string;
+    from_date?: string;
+    to_date?: string;
+    period?: 'daily' | 'weekly' | 'monthly' | 'custom';
+  }) => apiClient.get('/integrations/unicommerce/cancellation-report', { params }),
 
   // Best performing SKUs for a given month
   getBestSkusMonthly: (params?: { month?: number; year?: number; limit?: number; force_refresh?: boolean; b2c_only?: boolean }) =>

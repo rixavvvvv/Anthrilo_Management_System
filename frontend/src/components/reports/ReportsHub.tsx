@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, ArrowRight, Star, Clock, TrendingUp,
   BarChart3, ShoppingCart, Undo2, DollarSign, Package, FileText,
-  PieChart, Receipt, Percent, Store, Zap, Target, Truck, Megaphone,
+  PieChart, Receipt, Percent, Store, Zap, Target, Truck, Megaphone, AlertTriangle,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -146,6 +146,17 @@ const REPORTS: ReportDef[] = [
     icon: Undo2,
     category: 'Returns',
     frequency: 'Daily',
+    popular: true,
+  },
+  {
+    id: 'cancellation-report',
+    title: 'Cancellation Report',
+    description: 'Cancelled orders and items by channel, SKU and value',
+    href: '/dashboard/reports/sales/cancellations',
+    icon: AlertTriangle,
+    category: 'Returns',
+    frequency: 'Daily',
+    badge: 'New',
     popular: true,
   },
 
