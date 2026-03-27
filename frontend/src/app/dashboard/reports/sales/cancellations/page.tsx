@@ -209,11 +209,11 @@ export default function CancellationReportPage() {
 
                     <button
                         onClick={handleGenerate}
-                            disabled={queryLoading || !canGenerate}
+                        disabled={queryLoading || !canGenerate}
                         className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium transition disabled:opacity-50"
                     >
-                            {queryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
-                            {queryLoading ? 'Generating…' : 'Generate Report'}
+                        {queryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
+                        {queryLoading ? 'Generating…' : 'Generate Report'}
                     </button>
 
                     {showReport && raw?.success && (
