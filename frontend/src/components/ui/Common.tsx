@@ -42,9 +42,8 @@ export function StatCard({ title, value, icon, trend, color = 'blue' }: StatCard
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">{title}</p>
           <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1.5 truncate">{value}</p>
           {trend && (
-            <p className={`text-xs mt-1.5 font-semibold flex items-center gap-1 ${
-              trend.isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
-            }`}>
+            <p className={`text-xs mt-1.5 font-semibold flex items-center gap-1 ${trend.isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+              }`}>
               <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                 {trend.isPositive
                   ? <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
@@ -102,9 +101,15 @@ const DEFAULT_STAGES: ProgressStage[] = [
 export function ProgressLoader({ loading, stages, skeletonRows = 5 }: ProgressLoaderProps) {
   const [progress, setProgress] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const resetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stageList = stages ?? DEFAULT_STAGES;
 
   useEffect(() => {
+    if (resetRef.current) {
+      clearTimeout(resetRef.current);
+      resetRef.current = null;
+    }
+
     if (loading) {
       setProgress(0);
       let p = 0;
@@ -115,13 +120,16 @@ export function ProgressLoader({ loading, stages, skeletonRows = 5 }: ProgressLo
       }, 400);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (progress > 0) {
-        setProgress(100);
-        const t = setTimeout(() => setProgress(0), 500);
-        return () => clearTimeout(t);
-      }
+      setProgress((prev) => {
+        if (prev <= 0) return prev;
+        resetRef.current = setTimeout(() => setProgress(0), 500);
+        return 100;
+      });
     }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (resetRef.current) clearTimeout(resetRef.current);
+    };
   }, [loading]);
 
   if (!loading && progress === 0) return null;

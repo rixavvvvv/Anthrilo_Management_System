@@ -30,8 +30,8 @@ export default function DiscountsPage() {
     staleTime: 120_000,
   });
 
-  const summary = data?.summary || {};
-  const skus = data?.skus || [];
+  const summary = useMemo(() => data?.summary ?? {}, [data?.summary]);
+  const skus = useMemo(() => data?.skus ?? [], [data?.skus]);
 
   const stats = useMemo(() => {
     const avgDisc = summary.avg_discount_pct ?? 0;
@@ -86,11 +86,10 @@ export default function DiscountsPage() {
       <div className="flex items-center gap-2">
         {PERIODS.map(p => (
           <button key={p.key} onClick={() => setPeriod(p.key)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-              period === p.key
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${period === p.key
                 ? 'bg-primary-600 text-white shadow-md shadow-primary-500/20'
                 : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-700'
-            }`}>
+              }`}>
             {p.label}
           </button>
         ))}
@@ -169,9 +168,8 @@ export default function DiscountsPage() {
                 <div className="space-y-2">
                   {topDiscounted.map((sku: any, i: number) => (
                     <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white ${
-                        sku.discount_pct > 30 ? 'bg-rose-500' : sku.discount_pct > 20 ? 'bg-orange-500' : 'bg-amber-500'
-                      }`}>
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white ${sku.discount_pct > 30 ? 'bg-rose-500' : sku.discount_pct > 20 ? 'bg-orange-500' : 'bg-amber-500'
+                        }`}>
                         {sku.discount_pct.toFixed(0)}%
                       </div>
                       <div className="flex-1 min-w-0">
@@ -199,9 +197,8 @@ export default function DiscountsPage() {
                   >
                     <Store className="w-4 h-4 mx-auto text-slate-400 mb-2" />
                     <p className="text-xs font-medium text-slate-600 dark:text-slate-300 truncate">{ch.channel}</p>
-                    <p className={`text-lg font-bold mt-1 ${
-                      ch.disc_pct > 30 ? 'text-rose-600 dark:text-rose-400' : ch.disc_pct > 15 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
-                    }`}>{ch.disc_pct.toFixed(1)}%</p>
+                    <p className={`text-lg font-bold mt-1 ${ch.disc_pct > 30 ? 'text-rose-600 dark:text-rose-400' : ch.disc_pct > 15 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
+                      }`}>{ch.disc_pct.toFixed(1)}%</p>
                     <p className="text-[10px] text-slate-400 mt-0.5">{fmt(ch.discount)}</p>
                   </motion.div>
                 ))}
