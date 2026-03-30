@@ -197,7 +197,7 @@ export default function SalesReportsPage() {
     });
 
     // Extract data
-    const summary = report?.summary || {};
+    const summary = useMemo(() => report?.summary ?? {}, [report?.summary]);
     const orders = ordersData?.orders || [];
     const pagination = ordersData?.pagination || { total_pages: 1, current_page: 1 };
 

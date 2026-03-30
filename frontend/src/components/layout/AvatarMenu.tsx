@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   User, Settings, Moon, Sun, LogOut, ChevronDown,
@@ -133,7 +134,7 @@ export const AvatarMenu = memo(function AvatarMenu() {
                           flex items-center justify-center flex-shrink-0 overflow-hidden
                           ring-2 ring-primary-500/20 shadow-sm shadow-primary-600/20">
             {user?.picture ? (
-              <img src={user.picture} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <Image src={user.picture} alt="Avatar" width={32} height={32} unoptimized className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
               <span className="text-white text-xs font-bold">{(user?.name?.[0] || 'A').toUpperCase()}</span>
             )}
@@ -179,7 +180,7 @@ export const AvatarMenu = memo(function AvatarMenu() {
                                   flex items-center justify-center overflow-hidden
                                   shadow-md shadow-primary-600/20">
                     {user?.picture ? (
-                      <img src={user.picture} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <Image src={user.picture} alt="Avatar" width={44} height={44} unoptimized className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     ) : (
                       <span className="text-white text-sm font-bold">
                         {(user?.name?.[0] || 'A').toUpperCase()}
@@ -276,9 +277,8 @@ export const AvatarMenu = memo(function AvatarMenu() {
                     : <Moon className="w-[14px] h-[14px]" strokeWidth={1.8} />}
                   {darkMode ? 'Light Mode' : 'Dark Mode'}
                 </span>
-                <span className={`w-8 h-[18px] rounded-full relative transition-colors duration-200 ${
-                  darkMode ? 'bg-primary-600' : 'bg-slate-300 dark:bg-slate-600'
-                }`}>
+                <span className={`w-8 h-[18px] rounded-full relative transition-colors duration-200 ${darkMode ? 'bg-primary-600' : 'bg-slate-300 dark:bg-slate-600'
+                  }`}>
                   <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm
                     transition-transform duration-200 ${darkMode ? 'translate-x-[16px]' : 'translate-x-[2px]'}`}
                   />

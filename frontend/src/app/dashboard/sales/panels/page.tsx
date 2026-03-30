@@ -7,15 +7,15 @@ import { ucSales } from '@/features/sales';
 const fmt = (v: number) => v >= 100_000 ? `₹${(v / 100_000).toFixed(1)}L` : v >= 1_000 ? `₹${(v / 1_000).toFixed(1)}K` : `₹${v.toLocaleString('en-IN')}`;
 
 const channelColors: Record<string, { bar: string; bg: string }> = {
-  MYNTRA:            { bar: 'bg-pink-500',   bg: 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300' },
-  FIRSTCRY_NEW:      { bar: 'bg-orange-500', bg: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' },
-  AMAZON_FLEX:       { bar: 'bg-amber-500',  bg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' },
-  AMAZON_IN_API:     { bar: 'bg-yellow-500', bg: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' },
-  SHOPIFY:           { bar: 'bg-green-500',  bg: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' },
+  MYNTRA: { bar: 'bg-pink-500', bg: 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300' },
+  FIRSTCRY_NEW: { bar: 'bg-orange-500', bg: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' },
+  AMAZON_FLEX: { bar: 'bg-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' },
+  AMAZON_IN_API: { bar: 'bg-yellow-500', bg: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' },
+  SHOPIFY: { bar: 'bg-green-500', bg: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' },
   NYKAA_FASHION_NEW: { bar: 'bg-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' },
-  AJIO_OMNI:         { bar: 'bg-blue-500',   bg: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' },
-  MEESHO_26:         { bar: 'bg-teal-500',   bg: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300' },
-  TATACLIQ:          { bar: 'bg-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' },
+  AJIO_OMNI: { bar: 'bg-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' },
+  MEESHO_26: { bar: 'bg-teal-500', bg: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300' },
+  TATACLIQ: { bar: 'bg-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' },
 };
 const defaultChColor = { bar: 'bg-slate-500', bg: 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300' };
 
@@ -37,15 +37,15 @@ export default function PanelsPage() {
     queryFn: async () => {
       const fn = period === 'today' ? ucSales.getToday
         : period === 'yesterday' ? ucSales.getYesterday
-        : period === 'last7' ? ucSales.getLast7Days
-        : ucSales.getLast30Days;
+          : period === 'last7' ? ucSales.getLast7Days
+            : ucSales.getLast30Days;
       return (await fn()).data;
     },
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
 
-  const summary = raw?.summary || {};
+  const summary = useMemo(() => raw?.summary ?? {}, [raw?.summary]);
   const totalRev = summary.total_revenue || 0;
 
   /* channels sorted by revenue */
@@ -100,10 +100,10 @@ export default function PanelsPage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {([
-          { label: 'Total Orders',   value: summary.total_orders,     icon: '📦', gradient: 'from-blue-500 to-blue-600' },
-          { label: 'Revenue',        value: totalRev,                 icon: '💰', gradient: 'from-emerald-500 to-emerald-600', isCur: true },
-          { label: 'Avg Order Value',value: summary.avg_order_value,  icon: '📊', gradient: 'from-violet-500 to-violet-600', isCur: true },
-          { label: 'Valid Orders',   value: summary.valid_orders,     icon: '✅', gradient: 'from-green-500 to-green-600' },
+          { label: 'Total Orders', value: summary.total_orders, icon: '📦', gradient: 'from-blue-500 to-blue-600' },
+          { label: 'Revenue', value: totalRev, icon: '💰', gradient: 'from-emerald-500 to-emerald-600', isCur: true },
+          { label: 'Avg Order Value', value: summary.avg_order_value, icon: '📊', gradient: 'from-violet-500 to-violet-600', isCur: true },
+          { label: 'Valid Orders', value: summary.valid_orders, icon: '✅', gradient: 'from-green-500 to-green-600' },
         ] as const).map((c) => (
           <div key={c.label} className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
             <div className={`absolute -top-4 -right-4 h-16 w-16 rounded-full bg-gradient-to-br ${c.gradient} opacity-10`} />

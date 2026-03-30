@@ -5,7 +5,7 @@ Enterprise-grade ERP system for textile manufacturing and garment production man
 ## Architecture
 
 - **Frontend**: Next.js 14 + TypeScript + React
-- **Backend**: FastAPI + Python 3.11
+- **Backend**: FastAPI + Python 3.12
 - **Database**: PostgreSQL 15
 - **Cache**: Redis 7 (optional)
 
@@ -33,7 +33,7 @@ Enterprise-grade ERP system for textile manufacturing and garment production man
 ## Quick Start
 
 ### Prerequisites
-- **Python 3.11+** - [Download](https://www.python.org/downloads/)
+- **Python 3.12+** - [Download](https://www.python.org/downloads/)
 - **PostgreSQL 15+** - [Download](https://www.postgresql.org/download/)
 - **Node.js 18+** - [Download](https://nodejs.org/)
 - **Redis** (optional) - [Download](https://redis.io/)
@@ -69,6 +69,20 @@ python -c "from app.db.base import Base; from app.db.session import engine; Base
 python -m uvicorn app.main:app --reload
 ```
 
+#### 2.1️⃣ VS Code Interpreter Standard (team-wide)
+
+To avoid editor-only import errors (for example `Import "fastapi" could not be resolved`), use the workspace interpreter and install backend dependencies there:
+
+```powershell
+# From repository root
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+```
+
+- Workspace default interpreter is already set in `.vscode/settings.json` to `${workspaceFolder}/.venv/Scripts/python.exe`.
+- If VS Code still shows stale diagnostics, run `Python: Select Interpreter` and pick `.venv`, then reload the window.
+
 Backend will run on: **http://127.0.0.1:8000**
 
 #### 3️⃣ Frontend Setup
@@ -98,7 +112,7 @@ Frontend will run on: **http://localhost:3000**
 ```powershell
 # Activate virtual environment
 cd backend
-.\venv\Scripts\activate
+.\.venv\Scripts\activate
 
 # Create a new migration
 alembic revision --autogenerate -m "description"
@@ -115,7 +129,7 @@ alembic downgrade -1
 ```powershell
 # Backend tests
 cd backend
-.\venv\Scripts\activate
+.\.venv\Scripts\activate
 pytest
 
 # Frontend tests

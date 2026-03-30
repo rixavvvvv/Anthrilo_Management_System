@@ -11,27 +11,27 @@ const fmt = (v: number) =>
   v >= 100_000 ? `₹${(v / 100_000).toFixed(1)}L` : v >= 1_000 ? `₹${(v / 1_000).toFixed(1)}K` : `₹${v.toLocaleString('en-IN')}`;
 
 const channelColors: Record<string, string> = {
-  MYNTRA:           'from-pink-500 to-pink-600',
-  FIRSTCRY_NEW:     'from-orange-500 to-orange-600',
-  AMAZON_FLEX:      'from-amber-500 to-amber-600',
-  AMAZON_IN_API:    'from-yellow-500 to-yellow-600',
-  SHOPIFY:          'from-green-500 to-green-600',
-  NYKAA_FASHION_NEW:'from-purple-500 to-purple-600',
-  AJIO_OMNI:        'from-blue-500 to-blue-600',
-  MEESHO_26:        'from-teal-500 to-teal-600',
-  TATACLIQ:         'from-indigo-500 to-indigo-600',
+  MYNTRA: 'from-pink-500 to-pink-600',
+  FIRSTCRY_NEW: 'from-orange-500 to-orange-600',
+  AMAZON_FLEX: 'from-amber-500 to-amber-600',
+  AMAZON_IN_API: 'from-yellow-500 to-yellow-600',
+  SHOPIFY: 'from-green-500 to-green-600',
+  NYKAA_FASHION_NEW: 'from-purple-500 to-purple-600',
+  AJIO_OMNI: 'from-blue-500 to-blue-600',
+  MEESHO_26: 'from-teal-500 to-teal-600',
+  TATACLIQ: 'from-indigo-500 to-indigo-600',
 };
 const channelLabel = (c: string) => c.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()).replace(/ New$/, '').replace(/ Api$/, '').replace(/ 26$/, '');
 
 const statusStyle: Record<string, { bg: string; dot: string }> = {
-  CREATED:              { bg: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',      dot: 'bg-blue-500' },
-  PROCESSING:           { bg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',  dot: 'bg-amber-500' },
-  COMPLETE:             { bg: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
-  CANCELLED:            { bg: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',      dot: 'bg-rose-500' },
-  DISPATCHED:           { bg: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300', dot: 'bg-violet-500' },
-  SHIPPED:              { bg: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300', dot: 'bg-indigo-500' },
-  DELIVERED:            { bg: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',  dot: 'bg-green-500' },
-  PENDING_VERIFICATION: { bg: 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300',     dot: 'bg-slate-400' },
+  CREATED: { bg: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300', dot: 'bg-blue-500' },
+  PROCESSING: { bg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300', dot: 'bg-amber-500' },
+  COMPLETE: { bg: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
+  CANCELLED: { bg: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300', dot: 'bg-rose-500' },
+  DISPATCHED: { bg: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300', dot: 'bg-violet-500' },
+  SHIPPED: { bg: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300', dot: 'bg-indigo-500' },
+  DELIVERED: { bg: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300', dot: 'bg-green-500' },
+  PENDING_VERIFICATION: { bg: 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300', dot: 'bg-slate-400' },
 };
 const defaultStatus = { bg: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300', dot: 'bg-slate-400' };
 
@@ -46,15 +46,15 @@ export default function OrdersPage() {
     queryFn: async () => {
       const fn = period === 'today' ? ucSales.getToday
         : period === 'yesterday' ? ucSales.getYesterday
-        : period === 'last_7_days' ? ucSales.getLast7Days
-        : ucSales.getLast30Days;
+          : period === 'last_7_days' ? ucSales.getLast7Days
+            : ucSales.getLast30Days;
       return (await fn()).data;
     },
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
 
-  const summary = summaryRaw?.summary || {};
+  const summary = useMemo(() => summaryRaw?.summary ?? {}, [summaryRaw?.summary]);
 
   /* channels derived from channel_breakdown */
   const channels = useMemo(() => {
@@ -82,7 +82,7 @@ export default function OrdersPage() {
     placeholderData: (prev: any) => prev,
   });
 
-  const rawOrders = ordersData?.orders || [];
+  const rawOrders = useMemo(() => ordersData?.orders ?? [], [ordersData?.orders]);
   const orders = useMemo(() => {
     const mapped = rawOrders.map((o: any) => ({
       code: o.code || o.displayOrderCode || '-',
@@ -135,11 +135,10 @@ export default function OrdersPage() {
             { key: 'last_30_days', label: '30 Days' },
           ]).map((p) => (
             <button key={p.key} onClick={() => { setPeriod(p.key); setPage(1); setChannelFilter(null); }}
-              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                period === p.key
+              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all ${period === p.key
                   ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-              }`}>
+                }`}>
               {p.label}
             </button>
           ))}
@@ -150,9 +149,9 @@ export default function OrdersPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {([
           { label: 'Total Orders', value: summary.total_orders, icon: '🛒', gradient: 'from-blue-500 to-blue-600', suffix: '' },
-          { label: 'Revenue',      value: totalRevenue,          icon: '💰', gradient: 'from-emerald-500 to-emerald-600', fmt: true },
-          { label: 'Avg Order',    value: summary.avg_order_value, icon: '📊', gradient: 'from-violet-500 to-violet-600', fmt: true },
-          { label: 'Channels',     value: channels.length,       icon: '🏪', gradient: 'from-amber-500 to-amber-600', suffix: '' },
+          { label: 'Revenue', value: totalRevenue, icon: '💰', gradient: 'from-emerald-500 to-emerald-600', fmt: true },
+          { label: 'Avg Order', value: summary.avg_order_value, icon: '📊', gradient: 'from-violet-500 to-violet-600', fmt: true },
+          { label: 'Channels', value: channels.length, icon: '🏪', gradient: 'from-amber-500 to-amber-600', suffix: '' },
         ] as const).map((c) => (
           <div key={c.label} className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
             <div className={`absolute -top-4 -right-4 h-16 w-16 rounded-full bg-gradient-to-br ${c.gradient} opacity-10`} />
@@ -184,11 +183,10 @@ export default function OrdersPage() {
               const grad = channelColors[ch.name] || 'from-slate-500 to-slate-600';
               return (
                 <button key={ch.name} onClick={() => setChannelFilter(isActive ? null : ch.name)}
-                  className={`text-left p-3.5 rounded-xl border transition-all group ${
-                    isActive
+                  className={`text-left p-3.5 rounded-xl border transition-all group ${isActive
                       ? 'border-blue-400 dark:border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 ring-1 ring-blue-400/30'
                       : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600'
-                  }`}>
+                    }`}>
                   <div className="flex items-center gap-2 mb-2">
                     <div className={`h-2.5 w-2.5 rounded-full bg-gradient-to-br ${grad}`} />
                     <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">{channelLabel(ch.name)}</p>
@@ -317,11 +315,10 @@ export default function OrdersPage() {
                       </td>
                       {/* Payment type */}
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded-md text-[11px] font-medium ${
-                          o.cod
+                        <span className={`px-2 py-0.5 rounded-md text-[11px] font-medium ${o.cod
                             ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
                             : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-                        }`}>
+                          }`}>
                           {o.cod ? 'COD' : 'Prepaid'}
                         </span>
                       </td>
@@ -347,11 +344,10 @@ export default function OrdersPage() {
                 <span key={`e${i}`} className="px-2 text-slate-400 text-sm">…</span>
               ) : (
                 <button key={n} onClick={() => setPage(n as number)}
-                  className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-colors ${
-                    n === page
+                  className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-colors ${n === page
                       ? 'bg-blue-600 text-white shadow-sm'
                       : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
-                  }`}>
+                    }`}>
                   {n}
                 </button>
               )

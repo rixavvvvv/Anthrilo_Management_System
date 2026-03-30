@@ -24,8 +24,8 @@ export default function BundleSkuPage() {
     staleTime: 300_000,
   });
 
-  const summary = data?.summary || {};
-  const allBundles: any[] = data?.bundles || [];
+  const summary = useMemo(() => data?.summary ?? {}, [data?.summary]);
+  const allBundles: any[] = useMemo(() => data?.bundles ?? [], [data?.bundles]);
   const categories: Record<string, number> = summary.categories || {};
 
   const filtered = useMemo(() => {
@@ -312,8 +312,8 @@ export default function BundleSkuPage() {
                       <tr
                         onClick={() => setExpandedSku(isExpanded ? null : row.skuCode)}
                         className={`cursor-pointer transition-colors duration-150 ${isExpanded
-                            ? 'bg-indigo-50/60 dark:bg-indigo-900/15'
-                            : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/50'
+                          ? 'bg-indigo-50/60 dark:bg-indigo-900/15'
+                          : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/50'
                           }`}
                       >
                         {columns.map((col) => (

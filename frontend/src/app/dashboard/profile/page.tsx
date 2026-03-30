@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import {
   User, Mail, Save, Loader2, CheckCircle2, AlertTriangle,
   Camera, Calendar, Shield,
@@ -80,7 +81,7 @@ export default function ProfilePage() {
           const u = JSON.parse(stored);
           u.name = fullName;
           localStorage.setItem('auth_user', JSON.stringify(u));
-        } catch {}
+        } catch { }
       }
     },
     onError: (err: any) => {
@@ -141,7 +142,7 @@ export default function ProfilePage() {
                               flex items-center justify-center ring-4 ring-white dark:ring-slate-900 shadow-lg
                               overflow-hidden">
                 {user?.picture ? (
-                  <img src={user.picture} alt="" className="w-full h-full object-cover" />
+                  <Image src={user.picture} alt="Profile" width={80} height={80} unoptimized className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-white text-2xl font-bold">{initials}</span>
                 )}

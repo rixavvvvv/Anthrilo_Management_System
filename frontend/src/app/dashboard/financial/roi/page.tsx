@@ -37,7 +37,7 @@ export default function ROIAnalysisPage() {
   });
 
   const mtd = (mtdData || {}) as any;
-  const channels = channelsData?.channels || [];
+  const channels = useMemo(() => channelsData?.channels ?? [], [channelsData?.channels]);
   const weekRevenue = weekData?.summary?.total_revenue || 0;
 
   const totalSpend = mtd.total_spend || 0;

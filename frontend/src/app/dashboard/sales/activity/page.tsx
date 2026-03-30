@@ -29,9 +29,15 @@ export default function SalesActivityPage() {
   const [search, setSearch] = useState('');
   const [progress, setProgress] = useState(0);
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const resetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Simulated progress: ramps up fast then slows, caps at 92%
   useEffect(() => {
+    if (resetRef.current) {
+      clearTimeout(resetRef.current);
+      resetRef.current = null;
+    }
+
     if (loading) {
       setProgress(0);
       let p = 0;
@@ -43,13 +49,16 @@ export default function SalesActivityPage() {
       }, 400);
     } else {
       if (progressRef.current) clearInterval(progressRef.current);
-      if (progress > 0) {
-        setProgress(100);
-        const t = setTimeout(() => setProgress(0), 600);
-        return () => clearTimeout(t);
-      }
+      setProgress((prev) => {
+        if (prev <= 0) return prev;
+        resetRef.current = setTimeout(() => setProgress(0), 600);
+        return 100;
+      });
     }
-    return () => { if (progressRef.current) clearInterval(progressRef.current); };
+    return () => {
+      if (progressRef.current) clearInterval(progressRef.current);
+      if (resetRef.current) clearTimeout(resetRef.current);
+    };
   }, [loading]);
 
   const PROGRESS_STAGES = [

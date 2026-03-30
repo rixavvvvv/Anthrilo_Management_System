@@ -133,11 +133,11 @@ export default function BundleSalesAnalysisPage() {
     enabled: dateMode !== 'custom' || (!!fromDate && !!toDate),
   });
 
-  const summary = data?.summary || {};
-  const bundleSales: any[] = data?.bundle_sales || [];
-  const dailyTrend: any[] = data?.daily_trend || [];
-  const channelBreakdown: Record<string, any> = data?.channel_breakdown || {};
-  const categoryBreakdown: Record<string, any> = data?.category_breakdown || {};
+  const summary = useMemo(() => data?.summary ?? {}, [data?.summary]);
+  const bundleSales: any[] = useMemo(() => data?.bundle_sales ?? [], [data?.bundle_sales]);
+  const dailyTrend: any[] = useMemo(() => data?.daily_trend ?? [], [data?.daily_trend]);
+  const channelBreakdown: Record<string, any> = useMemo(() => data?.channel_breakdown ?? {}, [data?.channel_breakdown]);
+  const categoryBreakdown: Record<string, any> = useMemo(() => data?.category_breakdown ?? {}, [data?.category_breakdown]);
 
   /* Filter bundle table */
   const filteredBundles = useMemo(() => {
@@ -264,8 +264,8 @@ export default function BundleSalesAnalysisPage() {
             key={p.key}
             onClick={() => handleDateMode(p.key)}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${dateMode === p.key
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-900/40'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-900/40'
+              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600'
               }`}
           >
             {p.label}
@@ -296,8 +296,8 @@ export default function BundleSalesAnalysisPage() {
           onClick={() => refetch()}
           disabled={isFetching}
           className={`ml-auto px-4 py-2 rounded-xl text-sm font-medium transition-colors ${isFetching
-              ? 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
-              : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
+            ? 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
+            : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
             }`}
         >
           {isFetching ? 'Analysing…' : '🔄 Refresh'}

@@ -21,9 +21,9 @@ export default function TopSellersPage() {
     staleTime: 120_000,
   });
 
-  const allSkus = data?.skus || [];
+  const allSkus = useMemo(() => data?.skus ?? [], [data?.skus]);
   const topByQty = allSkus.slice(0, 50);
-  const summary = data?.summary || {};
+  const summary = useMemo(() => data?.summary ?? {}, [data?.summary]);
 
   const avgRevenuePerSku = summary.total_skus > 0 ? summary.total_revenue / summary.total_skus : 0;
   const avgQtyPerSku = summary.total_skus > 0 ? summary.total_quantity / summary.total_skus : 0;
@@ -197,8 +197,8 @@ export default function TopSellersPage() {
               key={p.key}
               onClick={() => setPeriod(p.key)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${period === p.key
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                ? 'bg-primary-600 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
             >
               {p.label}

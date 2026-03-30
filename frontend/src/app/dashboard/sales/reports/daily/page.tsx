@@ -306,7 +306,7 @@ export default function DailySalesReportPage() {
   /* derived data */
   const totals = raw?.totals;
   const totalRev = totals?.total_revenue || 1;
-  const items: any[] = raw?.items || [];
+  const items: any[] = useMemo(() => raw?.items ?? [], [raw?.items]);
 
   const enriched = useMemo(() => {
     if (!raw?.report) return [];
