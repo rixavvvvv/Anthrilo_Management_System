@@ -234,13 +234,14 @@ export default function SettingsPage() {
             </div>
           </div>
           <button
+            type="button"
             onClick={() => setForm((p) => ({ ...p, email_notifications: !p.email_notifications }))}
-            className={`w-11 h-6 rounded-full relative transition-colors duration-200 ${
+            className={`w-11 h-6 rounded-full relative transition-colors duration-200 outline-none border-0 ring-0 appearance-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 ${
               form.email_notifications ? 'bg-primary-600' : 'bg-slate-300 dark:bg-slate-600'
             }`}
           >
-            <span className={`absolute top-[3px] w-[18px] h-[18px] rounded-full bg-white shadow-sm
-              transition-transform duration-200 ${form.email_notifications ? 'translate-x-[22px]' : 'translate-x-[3px]'}`}
+            <span className={`absolute left-[3px] top-[3px] w-[18px] h-[18px] rounded-full bg-white shadow-sm
+              transition-transform duration-200 ${form.email_notifications ? 'translate-x-[20px]' : 'translate-x-0'}`}
             />
           </button>
         </div>

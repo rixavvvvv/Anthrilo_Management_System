@@ -266,21 +266,20 @@ export const AvatarMenu = memo(function AvatarMenu() {
               </div>
               {/* Theme toggle */}
               <button
+                type="button"
                 role="menuitem"
                 tabIndex={0}
                 onClick={toggleTheme}
-                className={`w-full justify-between ${menuItemClass}`}
+                className={`w-full justify-between outline-none border-0 ring-0 appearance-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 ${menuItemClass}`}
               >
                 <span className="flex items-center gap-2.5">
-                  {darkMode
-                    ? <Sun className="w-[14px] h-[14px]" strokeWidth={1.8} />
-                    : <Moon className="w-[14px] h-[14px]" strokeWidth={1.8} />}
-                  {darkMode ? 'Light Mode' : 'Dark Mode'}
+                  <Moon className="w-[14px] h-[14px]" strokeWidth={1.8} />
+                  Dark Mode
                 </span>
-                <span className={`w-8 h-[18px] rounded-full relative transition-colors duration-200 ${darkMode ? 'bg-primary-600' : 'bg-slate-300 dark:bg-slate-600'
+                <span className={`relative inline-block w-8 h-[18px] rounded-full transition-colors duration-200 ${darkMode ? 'bg-primary-600' : 'bg-slate-300 dark:bg-slate-600'
                   }`}>
-                  <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm
-                    transition-transform duration-200 ${darkMode ? 'translate-x-[16px]' : 'translate-x-[2px]'}`}
+                  <span className={`absolute left-[2px] top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm
+                    transition-transform duration-200 ${darkMode ? 'translate-x-[14px]' : 'translate-x-0'}`}
                   />
                 </span>
               </button>
