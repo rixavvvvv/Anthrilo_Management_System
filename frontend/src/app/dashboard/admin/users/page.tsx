@@ -504,12 +504,12 @@ function AdminUsersContent() {
             <button
               type="button"
               onClick={() => setEditForm((p) => ({ ...p, is_active: !p.is_active }))}
-              className={`w-10 h-5 rounded-full relative transition-colors ${
+              className={`w-10 h-5 rounded-full relative transition-colors outline-none border-0 ring-0 appearance-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 ${
                 editForm.is_active ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
               }`}
             >
-              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
-                editForm.is_active ? 'translate-x-[22px]' : 'translate-x-[2px]'
+              <span className={`absolute left-[2px] top-[2px] w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                editForm.is_active ? 'translate-x-[20px]' : 'translate-x-0'
               }`} />
             </button>
           </div>

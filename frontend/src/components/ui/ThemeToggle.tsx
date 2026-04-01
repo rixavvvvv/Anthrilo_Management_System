@@ -31,8 +31,9 @@ export function ThemeToggle() {
 
   return (
     <button
+      type="button"
       onClick={toggleDarkMode}
-      className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+      className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors outline-none border-0 ring-0 appearance-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0"
       aria-label="Toggle dark mode"
       title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
     >
