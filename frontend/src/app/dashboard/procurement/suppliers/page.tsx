@@ -51,12 +51,12 @@ export default function SuppliersPage() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <input
-          className="input w-64"
+          className="input w-full sm:w-72"
           placeholder="Search name or code…"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <select className="input w-48" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+        <select className="input w-full sm:w-56" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
           <option value="">All Types</option>
           {SUPPLIER_TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
         </select>
@@ -71,7 +71,7 @@ export default function SuppliersPage() {
 
       {!isLoading && data && data.length > 0 && (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll-wrap">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -145,7 +145,7 @@ function SupplierForm({ initial, onSubmit, loading }: { initial?: Supplier | nul
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">Supplier Code *</label>
           <input className="input" required value={form.supplier_code} onChange={e => set('supplier_code', e.target.value)} />
@@ -172,7 +172,7 @@ function SupplierForm({ initial, onSubmit, loading }: { initial?: Supplier | nul
           <label className="label">Email</label>
           <input className="input" type="email" value={form.email} onChange={e => set('email', e.target.value)} />
         </div>
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className="label">Address</label>
           <textarea className="input" rows={2} value={form.address} onChange={e => set('address', e.target.value)} />
         </div>
@@ -206,7 +206,7 @@ function SupplierForm({ initial, onSubmit, loading }: { initial?: Supplier | nul
         <label htmlFor="is_active" className="text-sm text-slate-700 dark:text-slate-300">Active</label>
       </div>
       <div className="flex justify-end pt-2">
-        <button type="submit" disabled={loading} className="btn btn-primary">
+        <button type="submit" disabled={loading} className="btn btn-primary w-full sm:w-auto">
           {loading ? 'Saving…' : initial ? 'Update Supplier' : 'Create Supplier'}
         </button>
       </div>

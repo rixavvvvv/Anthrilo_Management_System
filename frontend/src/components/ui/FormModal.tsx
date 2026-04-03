@@ -28,7 +28,7 @@ export function FormModal({ open, onClose, title, children, wide }: FormModalPro
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[5vh] sm:pt-[10vh]">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-start justify-center pt-0 sm:pt-[8vh]">
           <motion.div
             ref={overlayRef}
             initial={{ opacity: 0 }}
@@ -42,11 +42,11 @@ export function FormModal({ open, onClose, title, children, wide }: FormModalPro
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className={`relative z-10 w-full ${wide ? 'max-w-4xl' : 'max-w-2xl'} mx-4 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[80vh] flex flex-col`}
+            className={`relative z-10 w-full ${wide ? 'max-w-5xl' : 'max-w-3xl'} mx-2 sm:mx-4 bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[92vh] sm:max-h-[84vh] flex flex-col`}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h2>
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 dark:border-slate-700">
+              <h2 className="text-base sm:text-lg 2xl:text-xl font-semibold text-slate-900 dark:text-white break-words pr-3">{title}</h2>
               <button
                 onClick={onClose}
                 className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
@@ -57,7 +57,7 @@ export function FormModal({ open, onClose, title, children, wide }: FormModalPro
               </button>
             </div>
             {/* Body */}
-            <div className="overflow-y-auto px-6 py-4 flex-1">
+            <div className="overflow-y-auto px-4 sm:px-6 py-3.5 sm:py-4 flex-1">
               {children}
             </div>
           </motion.div>

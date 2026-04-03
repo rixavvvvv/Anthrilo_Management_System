@@ -156,43 +156,48 @@ export default function DiscountByChannelPage() {
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="page-section-gap">
       <PageHeader title="Discount by Channel" description="Channel-wise discount performance comparison" />
 
       {/* Controls */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        <div className="flex gap-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
-          {[
-            { key: 'daily', label: 'Daily' },
-            { key: 'weekly', label: 'Weekly' },
-            { key: 'monthly', label: 'Monthly' },
-            { key: 'custom', label: 'Custom' },
-          ].map(p => (
-            <button key={p.key} onClick={() => setMode(p.key as ReportDateMode)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                mode === p.key
-                  ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-              }`}>
-              {p.label}
-            </button>
-          ))}
-        </div>
-        {mode === 'daily' && (
-          <input type="date" className="input" value={anchorDate} onChange={e => setAnchorDate(e.target.value)} />
-        )}
-        {mode === 'custom' && (
-          <div className="flex gap-2">
-            <input type="date" className="input" value={fromDate} onChange={e => setFromDate(e.target.value)} />
-            <input type="date" className="input" value={toDate} onChange={e => setToDate(e.target.value)} />
+      <div className="flex flex-col gap-3">
+        <div className="tab-strip">
+          <div className="tab-strip-inner">
+            {[
+              { key: 'daily', label: 'Daily' },
+              { key: 'weekly', label: 'Weekly' },
+              { key: 'monthly', label: 'Monthly' },
+              { key: 'custom', label: 'Custom' },
+            ].map(p => (
+              <button key={p.key} onClick={() => setMode(p.key as ReportDateMode)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-200 ${
+                  mode === p.key
+                    ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                }`}>
+                {p.label}
+              </button>
+            ))}
           </div>
-        )}
-        <div className="text-xs text-slate-500 dark:text-slate-400">{effectiveRange.label}</div>
-        <div className="flex-1" />
-        <button onClick={handleExport} disabled={!channelDiscounts.length}
-          className="btn btn-secondary flex items-center gap-2 text-xs disabled:opacity-40">
-          <Download className="w-3.5 h-3.5" /> Export CSV
-        </button>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+          {mode === 'daily' && (
+            <input type="date" className="input w-full sm:w-auto" value={anchorDate} onChange={e => setAnchorDate(e.target.value)} />
+          )}
+          {mode === 'custom' && (
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <input type="date" className="input w-full sm:w-auto" value={fromDate} onChange={e => setFromDate(e.target.value)} />
+              <input type="date" className="input w-full sm:w-auto" value={toDate} onChange={e => setToDate(e.target.value)} />
+            </div>
+          )}
+          <div className="text-xs text-slate-500 dark:text-slate-400 sm:ml-1">{effectiveRange.label}</div>
+          <div className="flex-1" />
+          <button onClick={handleExport} disabled={!channelDiscounts.length}
+            className="btn btn-secondary flex items-center justify-center gap-2 text-xs disabled:opacity-40 w-full sm:w-auto">
+            <Download className="w-3.5 h-3.5" /> Export CSV
+          </button>
+          </div>
       </div>
 
       {error && <ErrorPanel message="Failed to load channel discount data." />}
@@ -231,7 +236,7 @@ export default function DiscountByChannelPage() {
 
           {/* Channel Cards Mini-Grid (top 4 channels) */}
           {channelDiscounts.length > 0 && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {channelDiscounts.slice(0, 4).map((ch, i) => (
                 <motion.div key={ch.channel}
                   initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}

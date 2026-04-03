@@ -43,7 +43,7 @@ export default function ProductionReportsPage() {
   const currentReport = reportType === 'plan' ? planReport : varianceReport;
 
   return (
-    <div>
+    <div className="page-section-gap">
       <h1 className="mb-6">Production Reports</h1>
 
       <div className="card mb-6">
@@ -79,49 +79,51 @@ export default function ProductionReportsPage() {
         {reportType === 'variance' && (
           <div className="mt-4">
             <label className="block text-sm font-medium mb-3">Report Range</label>
-            <div className="flex flex-wrap items-center gap-2">
-              {([
-                { id: 'daily', label: 'Daily' },
-                { id: 'weekly', label: 'Weekly' },
-                { id: 'monthly', label: 'Monthly' },
-                { id: 'custom', label: 'Custom' },
-              ] as const).map((mode) => (
-                <button
-                  key={mode.id}
-                  onClick={() => setDateMode(mode.id)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${dateMode === mode.id
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                    }`}
-                >
-                  {mode.label}
-                </button>
-              ))}
+            <div className="space-y-2">
+              <div className="tab-strip">
+                {([
+                  { id: 'daily', label: 'Daily' },
+                  { id: 'weekly', label: 'Weekly' },
+                  { id: 'monthly', label: 'Monthly' },
+                  { id: 'custom', label: 'Custom' },
+                ] as const).map((mode) => (
+                  <button
+                    key={mode.id}
+                    onClick={() => setDateMode(mode.id)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${dateMode === mode.id
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                      }`}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
 
               {dateMode === 'daily' && (
                 <input
                   type="date"
                   value={anchorDate}
                   onChange={(e) => setAnchorDate(e.target.value)}
-                  className="input max-w-xs"
+                  className="input w-full sm:w-auto"
                 />
               )}
 
               {dateMode === 'custom' && (
-                <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input
                     type="date"
                     value={fromDate}
                     onChange={(e) => setFromDate(e.target.value)}
-                    className="input max-w-xs"
+                    className="input w-full"
                   />
                   <input
                     type="date"
                     value={toDate}
                     onChange={(e) => setToDate(e.target.value)}
-                    className="input max-w-xs"
+                    className="input w-full"
                   />
-                </>
+                </div>
               )}
             </div>
             <p className="text-xs text-gray-500 mt-2">{effectiveRange.label} (variance uses end date)</p>
@@ -136,7 +138,7 @@ export default function ProductionReportsPage() {
           {/* Plan Status Report */}
           {reportType === 'plan' && (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div className="card">
                   <div className="text-sm text-gray-600 mb-1">Total Plans</div>
                   <div className="text-3xl font-bold text-primary-600">
@@ -166,7 +168,7 @@ export default function ProductionReportsPage() {
               {currentReport.plans && currentReport.plans.length > 0 && (
                 <div className="card">
                   <h3 className="mb-4">Production Plans</h3>
-                  <div className="overflow-x-auto">
+                  <div className="table-scroll-wrap">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
@@ -257,7 +259,7 @@ export default function ProductionReportsPage() {
           {reportType === 'variance' && (
             <>
               {currentReport.summary && (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                   <div className="card">
                     <div className="text-sm text-gray-600 mb-1">Total Activities</div>
                     <div className="text-3xl font-bold text-primary-600">
@@ -294,7 +296,7 @@ export default function ProductionReportsPage() {
               {currentReport.activities && currentReport.activities.length > 0 ? (
                 <div className="card">
                   <h3 className="mb-4">Production Activities - {varianceDate}</h3>
-                  <div className="overflow-x-auto">
+                  <div className="table-scroll-wrap">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>

@@ -112,14 +112,14 @@ export default function YarnForecastingPage() {
   ];
  
   return (
-    <div>
+    <div className="page-section-gap">
       <PageHeader
         title="Yarn Demand Forecasting"
         description="AI-driven demand forecasting based on production plans & consumption patterns"
       />
  
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard title="Yarn Types" value={totalYarnTypes} icon="🧶" color="blue" />
         <StatCard
           title="Critical (< 14d)"
@@ -142,10 +142,10 @@ export default function YarnForecastingPage() {
       </div>
  
       {/* Forecast Period Selector */}
-      <div className="card mb-4">
-        <div className="flex items-center gap-3">
+      <div className="card">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
           <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Forecast Period:</span>
-          <div className="flex gap-2">
+          <div className="tab-strip">
             {[
               { key: 7, label: '7 Days' },
               { key: 14, label: '14 Days' },
@@ -156,7 +156,7 @@ export default function YarnForecastingPage() {
               <button
                 key={p.key}
                 onClick={() => setForecastDays(p.key)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                   forecastDays === p.key
                     ? 'bg-violet-600 text-white'
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'

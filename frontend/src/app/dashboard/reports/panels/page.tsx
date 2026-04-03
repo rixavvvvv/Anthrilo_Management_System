@@ -98,19 +98,19 @@ export default function PanelReportsPage() {
     ];
 
     return (
-        <div className="space-y-6">
+        <div className="page-section-gap">
             <PageHeader title="Panel / Channel Reports" description="Channel-wise sales performance from Anthrilo" />
 
             {/* Quick Links */}
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
                 <Link href="/dashboard/reports/panels/settlement"
-                    className="btn btn-secondary text-sm flex items-center gap-2 hover:shadow-md transition-all">
+                    className="btn btn-secondary text-sm flex items-center justify-center gap-2 hover:shadow-md transition-all w-full sm:w-auto">
                     💵 Settlement Report
                 </Link>
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 <StatCard title="Total Revenue" value={`₹${(totalRevenue / 1000).toFixed(1)}K`} icon="💰" color="green" />
                 <StatCard title="Total Orders" value={totalOrders.toLocaleString()} icon="📦" color="blue" />
                 <StatCard title="Active Channels" value={channels.length.toString()} icon="🏪" color="purple" />
@@ -119,33 +119,35 @@ export default function PanelReportsPage() {
 
             {/* Global Date Range */}
             <div className="card">
-                <div className="flex gap-2 flex-wrap items-center">
-                    {[
-                        { key: 'daily', label: 'Daily' },
-                        { key: 'weekly', label: 'Weekly' },
-                        { key: 'monthly', label: 'Monthly' },
-                        { key: 'custom', label: 'Custom' },
-                    ].map((p) => (
-                        <button key={p.key} onClick={() => setMode(p.key as ReportDateMode)}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === p.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
-                            {p.label}
-                        </button>
-                    ))}
+                <div className="space-y-2">
+                    <div className="tab-strip">
+                        {[
+                            { key: 'daily', label: 'Daily' },
+                            { key: 'weekly', label: 'Weekly' },
+                            { key: 'monthly', label: 'Monthly' },
+                            { key: 'custom', label: 'Custom' },
+                        ].map((p) => (
+                            <button key={p.key} onClick={() => setMode(p.key as ReportDateMode)}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${mode === p.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
+                                {p.label}
+                            </button>
+                        ))}
+                    </div>
 
                     {mode === 'daily' && (
                         <input
                             type="date"
                             value={anchorDate}
                             onChange={(e) => setAnchorDate(e.target.value)}
-                            className="input max-w-xs"
+                            className="input w-full sm:w-auto"
                         />
                     )}
 
                     {mode === 'custom' && (
-                        <>
-                            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="input max-w-xs" />
-                            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="input max-w-xs" />
-                        </>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="input w-full" />
+                            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="input w-full" />
+                        </div>
                     )}
 
                     <div className="text-xs text-gray-500 dark:text-gray-400">{effectiveRange.label}</div>

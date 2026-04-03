@@ -8,7 +8,7 @@ import {
   User, Settings, Moon, Sun, LogOut, ChevronDown,
   Users, History, KeyRound, Clock,
 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { RoleBadge } from '@/components/auth/RoleBadge';
 
 // Helpers
@@ -29,6 +29,7 @@ type MenuItem = {
   label: string;
   icon: typeof User;
   href: string;
+  minRole?: 'admin' | 'developer';
 };
 
 const PERSONAL_ITEMS: MenuItem[] = [
@@ -38,8 +39,8 @@ const PERSONAL_ITEMS: MenuItem[] = [
 ];
 
 const ADMIN_ITEMS: MenuItem[] = [
-  { label: 'Manage Users', icon: Users, href: '/dashboard/admin/users' },
-  { label: 'Login History', icon: History, href: '/dashboard/admin/history' },
+  { label: 'Manage Users', icon: Users, href: '/dashboard/admin/users', minRole: 'admin' },
+  { label: 'Login History', icon: History, href: '/dashboard/admin/history', minRole: 'developer' },
 ];
 
 // Shared item class
@@ -58,7 +59,7 @@ export const AvatarMenu = memo(function AvatarMenu() {
   const [focusIdx, setFocusIdx] = useState(-1);
   const ref = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { user, isAdmin, isOwner, logout } = useAuth();
+  const { user, isAdmin, isDeveloper, logout } = useAuth();
 
   // Dark mode state
   const [darkMode, setDarkMode] = useState(false);
@@ -107,12 +108,12 @@ export const AvatarMenu = memo(function AvatarMenu() {
 
   // Filter admin items by role
   const adminItems = useMemo(() => {
-    if (!isAdmin && !isOwner) return [];
-    return ADMIN_ITEMS.filter((_, i) => {
-      if (i === 1) return isOwner; // Login History = owner only
-      return isAdmin;
+    if (!isAdmin && !isDeveloper) return [];
+    return ADMIN_ITEMS.filter((item) => {
+      if (item.minRole === 'developer') return isDeveloper;
+      return isAdmin || isDeveloper;
     });
-  }, [isAdmin, isOwner]);
+  }, [isAdmin, isDeveloper]);
 
   const handleOpen = () => { setOpen((v) => !v); setFocusIdx(-1); };
 

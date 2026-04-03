@@ -105,19 +105,19 @@ export default function SKUSalesPage() {
   ];
 
   return (
-    <div>
+    <div className="page-section-gap">
       <PageHeader title="SKU Sales Report" description="Sales performance by SKU from Anthrilo" />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard title="Total SKUs Sold" value={summary.total_skus || 0} icon="📦" color="blue" />
         <StatCard title="Total Units" value={summary.total_quantity || 0} icon="🛒" color="purple" />
         <StatCard title="Total Revenue" value={`₹${((summary.total_revenue || 0) / 1000).toFixed(1)}K`} icon="💰" color="green" />
         <StatCard title="Total Discount" value={`₹${((summary.total_discount || 0) / 1000).toFixed(1)}K`} icon="💸" color="red" />
       </div>
 
-      <div className="card mb-4">
-        <div className="flex gap-4 items-center flex-wrap">
-          <div className="flex gap-2">
+      <div className="card">
+        <div className="space-y-3">
+          <div className="tab-strip">
             {[
               { key: 'daily', label: 'Daily' },
               { key: 'weekly', label: 'Weekly' },
@@ -125,23 +125,46 @@ export default function SKUSalesPage() {
               { key: 'custom', label: 'Custom' },
             ].map((p) => (
               <button key={p.key} onClick={() => { setMode(p.key as ReportDateMode); setPage(0); }}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${mode === p.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors whitespace-nowrap ${mode === p.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
                 {p.label}
               </button>
             ))}
           </div>
-          {mode === 'daily' && (
-            <input type="date" value={anchorDate} onChange={(e) => { setAnchorDate(e.target.value); setPage(0); }} className="input max-w-xs" />
-          )}
-          {mode === 'custom' && (
-            <>
-              <input type="date" value={fromDate} onChange={(e) => { setFromDate(e.target.value); setPage(0); }} className="input max-w-xs" />
-              <input type="date" value={toDate} onChange={(e) => { setToDate(e.target.value); setPage(0); }} className="input max-w-xs" />
-            </>
-          )}
-          <span className="text-xs text-slate-500 dark:text-slate-400">{effectiveRange.label}</span>
-          <input type="text" placeholder="Search SKU or product name..." className="input flex-1"
-            value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
+
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2">
+            {mode === 'daily' && (
+              <input
+                type="date"
+                value={anchorDate}
+                onChange={(e) => { setAnchorDate(e.target.value); setPage(0); }}
+                className="input w-full sm:w-auto"
+              />
+            )}
+            {mode === 'custom' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full lg:w-auto">
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => { setFromDate(e.target.value); setPage(0); }}
+                  className="input w-full"
+                />
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => { setToDate(e.target.value); setPage(0); }}
+                  className="input w-full"
+                />
+              </div>
+            )}
+            <span className="text-xs text-slate-500 dark:text-slate-400">{effectiveRange.label}</span>
+            <input
+              type="text"
+              placeholder="Search SKU or product name..."
+              className="input w-full lg:flex-1"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            />
+          </div>
         </div>
       </div>
 
@@ -152,7 +175,7 @@ export default function SKUSalesPage() {
       )}
 
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
           <h2 className="text-slate-900 dark:text-white">SKU Sales Breakdown</h2>
           <span className="text-sm text-slate-500 dark:text-slate-400">{filtered.length} SKUs</span>
         </div>
@@ -168,7 +191,7 @@ export default function SKUSalesPage() {
       </div>
 
       {totalPages > 1 && (
-        <div className="flex justify-between items-center mt-4">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mt-4">
           <button disabled={page === 0} onClick={() => setPage(page - 1)}
             className="btn btn-secondary disabled:opacity-40">← Previous</button>
           <span className="text-sm text-slate-600 dark:text-slate-400">Page {page + 1} of {totalPages}</span>

@@ -137,48 +137,53 @@ export default function DiscountAnalysisPage() {
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="page-section-gap">
       <PageHeader title="SKU Discount Analysis" description="Product-level discount breakdown with distribution buckets" />
 
       {/* Controls bar */}
-      <div className="flex flex-col md:flex-row gap-3">
-        <div className="flex gap-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
-          {[
-            { key: 'daily', label: 'Daily' },
-            { key: 'weekly', label: 'Weekly' },
-            { key: 'monthly', label: 'Monthly' },
-            { key: 'custom', label: 'Custom' },
-          ].map(p => (
-            <button key={p.key} onClick={() => { setMode(p.key as ReportDateMode); setPage(0); }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                mode === p.key
-                  ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-              }`}>
-              {p.label}
-            </button>
-          ))}
-        </div>
-        {mode === 'daily' && (
-          <input type="date" className="input" value={anchorDate} onChange={e => { setAnchorDate(e.target.value); setPage(0); }} />
-        )}
-        {mode === 'custom' && (
-          <div className="flex gap-2">
-            <input type="date" className="input" value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(0); }} />
-            <input type="date" className="input" value={toDate} onChange={e => { setToDate(e.target.value); setPage(0); }} />
+      <div className="flex flex-col gap-3">
+        <div className="tab-strip">
+          <div className="tab-strip-inner">
+            {[
+              { key: 'daily', label: 'Daily' },
+              { key: 'weekly', label: 'Weekly' },
+              { key: 'monthly', label: 'Monthly' },
+              { key: 'custom', label: 'Custom' },
+            ].map(p => (
+              <button key={p.key} onClick={() => { setMode(p.key as ReportDateMode); setPage(0); }}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-200 ${
+                  mode === p.key
+                    ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                }`}>
+                {p.label}
+              </button>
+            ))}
           </div>
-        )}
-        <div className="text-xs text-slate-500 dark:text-slate-400 self-center">{effectiveRange.label}</div>
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input type="text" placeholder="Search SKU or product name..."
-            className="input pl-9 w-full"
-            value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} />
         </div>
-        <button onClick={handleExport} disabled={!filtered.length}
-          className="btn btn-secondary flex items-center gap-2 text-xs disabled:opacity-40">
-          <Download className="w-3.5 h-3.5" /> Export CSV
-        </button>
+
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+          {mode === 'daily' && (
+            <input type="date" className="input w-full sm:w-auto" value={anchorDate} onChange={e => { setAnchorDate(e.target.value); setPage(0); }} />
+          )}
+          {mode === 'custom' && (
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <input type="date" className="input w-full sm:w-auto" value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(0); }} />
+              <input type="date" className="input w-full sm:w-auto" value={toDate} onChange={e => { setToDate(e.target.value); setPage(0); }} />
+            </div>
+          )}
+          <div className="text-xs text-slate-500 dark:text-slate-400 sm:ml-1">{effectiveRange.label}</div>
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input type="text" placeholder="Search SKU or product name..."
+              className="input pl-9 w-full"
+              value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} />
+          </div>
+          <button onClick={handleExport} disabled={!filtered.length}
+            className="btn btn-secondary flex items-center justify-center gap-2 text-xs disabled:opacity-40 w-full sm:w-auto">
+            <Download className="w-3.5 h-3.5" /> Export CSV
+          </button>
+        </div>
       </div>
 
       {error && <ErrorPanel message="Failed to load discount data." />}
@@ -218,7 +223,7 @@ export default function DiscountAnalysisPage() {
           {/* Distribution Buckets */}
           <div className="card">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">Discount Distribution</h3>
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               {bucketCounts.map((b, i) => {
                 const pct = allSkus.length > 0 ? (b.count / allSkus.length) * 100 : 0;
                 return (
@@ -249,12 +254,12 @@ export default function DiscountAnalysisPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <button disabled={page === 0} onClick={() => setPage(page - 1)}
                 className="btn btn-secondary flex items-center gap-1 text-xs disabled:opacity-40">
                 <ChevronLeft className="w-3.5 h-3.5" /> Previous
               </button>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 flex-wrap">
                 {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
                   const p = totalPages <= 7 ? i : page < 3 ? i : page > totalPages - 4 ? totalPages - 7 + i : page - 3 + i;
                   return (

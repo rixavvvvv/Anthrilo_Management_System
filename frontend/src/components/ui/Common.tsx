@@ -72,9 +72,9 @@ interface LoadingSpinnerProps {
 export function LoadingSpinner({ size = 'md', message }: LoadingSpinnerProps) {
   const sizeClasses = { sm: 'w-5 h-5', md: 'w-10 h-10', lg: 'w-14 h-14' };
   return (
-    <div className="flex flex-col items-center justify-center py-16">
+    <div className="flex flex-col items-center justify-center py-10 sm:py-16">
       <div className={`${sizeClasses[size]} border-[3px] border-slate-200 dark:border-slate-700 border-t-primary-500 rounded-full animate-spin`}></div>
-      {message && <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">{message}</p>}
+      {message && <p className="mt-3 sm:mt-4 text-sm text-slate-500 dark:text-slate-400 text-center px-4">{message}</p>}
     </div>
   );
 }
@@ -178,7 +178,7 @@ interface EmptyStateProps {
 
 export function EmptyState({ title, description, action, icon }: EmptyStateProps) {
   return (
-    <div className="text-center py-16">
+    <div className="text-center py-12 sm:py-16 px-4">
       {icon && <div className="flex justify-center mb-4 text-slate-300 dark:text-slate-600 text-5xl">{icon}</div>}
       <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-1">{title}</h3>
       {description && <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">{description}</p>}
@@ -195,12 +195,16 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, action }: PageHeaderProps) {
   return (
-    <div className="mb-8 flex justify-between items-start">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{title}</h1>
+    <div className="mb-5 sm:mb-7 lg:mb-8 flex flex-col gap-4 sm:gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl 2xl:text-4xl font-bold text-slate-900 dark:text-white break-words">{title}</h1>
         {description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{description}</p>}
       </div>
-      {action && <button onClick={action.onClick} className="btn btn-primary">{action.label}</button>}
+      {action && (
+        <button onClick={action.onClick} className="btn btn-primary w-full sm:w-auto sm:flex-shrink-0">
+          {action.label}
+        </button>
+      )}
     </div>
   );
 }
@@ -212,13 +216,13 @@ interface ErrorPanelProps {
 export function ErrorPanel({ message }: ErrorPanelProps) {
   return (
     <div className="card bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800/50 mb-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-start sm:items-center gap-3">
         <div className="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center flex-shrink-0">
           <svg className="w-4 h-4 text-rose-600 dark:text-rose-400" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
           </svg>
         </div>
-        <p className="text-sm text-rose-700 dark:text-rose-300">{message}</p>
+        <p className="text-sm text-rose-700 dark:text-rose-300 break-words">{message}</p>
       </div>
     </div>
   );

@@ -64,11 +64,11 @@ export default function FabricReportsPage() {
   };
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
+    <div className="page-section-gap">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <h1>Fabric Reports</h1>
         {currentReport && (
-          <button onClick={downloadReport} className="btn btn-secondary">
+          <button onClick={downloadReport} className="btn btn-secondary w-full sm:w-auto">
             📥 Download Report
           </button>
         )}
@@ -77,7 +77,7 @@ export default function FabricReportsPage() {
       {/* Report Type Selector */}
       <div className="card mb-6">
         <h3 className="mb-4">Select Report Type</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <button
             onClick={() => setReportType('total')}
             className={`p-4 border-2 rounded-lg transition-all ${
@@ -138,7 +138,7 @@ export default function FabricReportsPage() {
             <select
               value={fabricType}
               onChange={(e) => setFabricType(e.target.value)}
-              className="input max-w-xs"
+              className="input w-full sm:max-w-xs"
             >
               <option value="JERSEY">Jersey</option>
               <option value="TERRY">Terry</option>
@@ -148,7 +148,7 @@ export default function FabricReportsPage() {
         )}
 
         {reportType === 'period' && (
-          <div className="mt-4 grid grid-cols-2 gap-4 max-w-md">
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 w-full sm:max-w-md">
             <div>
               <label className="block text-sm font-medium mb-2">Start Date</label>
               <input
@@ -179,7 +179,7 @@ export default function FabricReportsPage() {
       ) : currentReport ? (
         <div className="space-y-6">
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {currentReport.summary && (
               <>
                 {currentReport.summary.total_fabric_types !== undefined && (
@@ -218,7 +218,7 @@ export default function FabricReportsPage() {
             </div>
             
             {currentReport.fabrics && currentReport.fabrics.length > 0 ? (
-              <div className="overflow-x-auto">
+              <div className="table-scroll-wrap">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
@@ -267,7 +267,7 @@ export default function FabricReportsPage() {
                 </table>
               </div>
             ) : currentReport.detailed_costs ? (
-              <div className="overflow-x-auto">
+              <div className="table-scroll-wrap">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>

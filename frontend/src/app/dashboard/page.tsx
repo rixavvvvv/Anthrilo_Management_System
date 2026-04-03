@@ -220,7 +220,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="page-section-gap">
       {/* Toast Notification */}
       <AnimatePresence>
         {showToast && newOrderNotification && (
@@ -269,15 +269,15 @@ export default function DashboardPage() {
       </AnimatePresence>
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Dashboard</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          <h1 className="responsive-title text-slate-900 dark:text-white">Dashboard</h1>
+          <p className="responsive-subtitle mt-0.5">
             Your business at a glance
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800">
               <span className={`w-1.5 h-1.5 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
               <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
@@ -293,11 +293,11 @@ export default function DashboardPage() {
           </div>
           <button
             onClick={handleRefresh}
-            className="btn btn-secondary text-xs"
+            className="btn btn-secondary w-auto self-start sm:self-auto !px-3.5 !py-2 !text-sm"
             disabled={fetchingToday}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${fetchingToday ? 'animate-spin' : ''}`} />
-            Refresh
+            {fetchingToday ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
       </div>
@@ -307,7 +307,7 @@ export default function DashboardPage() {
         <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
           Performance Snapshot
         </h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4 2xl:gap-5">
           <KPIStatCard
             title="Revenue"
             value={todayRevenue}
@@ -380,7 +380,7 @@ export default function DashboardPage() {
         <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
           Channel Contribution
         </h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4 2xl:gap-5">
           <ChartCard title="Revenue by Channel" subtitle="Top channels — last 7 days" downloadable={false}>
             <Suspense fallback={<ChartSkeleton />}><ChannelBarChart data={channelChartData} /></Suspense>
           </ChartCard>
@@ -395,7 +395,7 @@ export default function DashboardPage() {
         <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
           Comparison & Insights
         </h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4 2xl:gap-5">
           <ComparisonCard
             title="Yesterday vs Day Before"
             leftLabel="Yesterday"
@@ -426,7 +426,7 @@ export default function DashboardPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: 'easeOut', delay: 0.1 }}
             className="rounded-2xl border border-slate-200/60 dark:border-slate-800
-              bg-white dark:bg-slate-900 shadow-[var(--shadow-soft)] p-6"
+              bg-white dark:bg-slate-900 shadow-[var(--shadow-soft)] p-4 sm:p-5 lg:p-6 2xl:p-7"
           >
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">
               Insights
@@ -452,7 +452,7 @@ export default function DashboardPage() {
         <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
           Quick Access
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3 md:gap-4 2xl:gap-5">
           {quickLinks.map((link, i) => (
             <Link key={link.href} href={link.href}>
               <motion.div

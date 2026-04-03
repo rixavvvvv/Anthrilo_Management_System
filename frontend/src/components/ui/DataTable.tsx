@@ -26,6 +26,9 @@ export function DataTable<T extends Record<string, any>>({
   emptyMessage = 'No data available',
   onRowClick,
 }: DataTableProps<T>) {
+  const renderCell = (row: T, column: Column<T>) =>
+    column.render ? column.render(row[column.key], row) : row[column.key];
+
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -51,34 +54,59 @@ export function DataTable<T extends Record<string, any>>({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-700/80">
-      <table className="min-w-full">
-        <thead>
-          <tr className="bg-slate-50/80 dark:bg-slate-800/50">
+    <div>
+      <div className="md:hidden space-y-3">
+        {data.map((row, rowIndex) => (
+          <div
+            key={rowIndex}
+            onClick={() => onRowClick?.(row)}
+            className={`rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-900 p-3.5 space-y-2.5 ${
+              onRowClick ? 'cursor-pointer hover:bg-primary-50/50 dark:hover:bg-primary-900/10' : ''
+            }`}
+          >
             {columns.map((column) => (
-              <th key={column.key} scope="col"
-                className="px-4 py-3 text-left text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
-                style={{ width: column.width }}>
-                {column.header}
-              </th>
+              <div key={column.key} className="flex items-start justify-between gap-3">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  {column.header}
+                </span>
+                <div className="text-sm text-slate-700 dark:text-slate-300 text-right break-words max-w-[65%]">
+                  {renderCell(row, column)}
+                </div>
+              </div>
             ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-          {data.map((row, rowIndex) => (
-            <tr key={rowIndex} onClick={() => onRowClick?.(row)}
-              className={`transition-colors duration-150 ${
-                onRowClick ? 'cursor-pointer hover:bg-primary-50/50 dark:hover:bg-primary-900/10' : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/50'
-              }`}>
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+        <table className="min-w-full">
+          <thead>
+            <tr className="bg-slate-50/80 dark:bg-slate-800/50">
               {columns.map((column) => (
-                <td key={column.key} className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
-                  {column.render ? column.render(row[column.key], row) : row[column.key]}
-                </td>
+                <th key={column.key} scope="col"
+                  className="px-4 py-3 text-left text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
+                  style={{ width: column.width }}>
+                  {column.header}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+            {data.map((row, rowIndex) => (
+              <tr key={rowIndex} onClick={() => onRowClick?.(row)}
+                className={`transition-colors duration-150 ${
+                  onRowClick ? 'cursor-pointer hover:bg-primary-50/50 dark:hover:bg-primary-900/10' : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/50'
+                }`}>
+                {columns.map((column) => (
+                  <td key={column.key} className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+                    {renderCell(row, column)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

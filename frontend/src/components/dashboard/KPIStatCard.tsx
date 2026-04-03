@@ -184,7 +184,7 @@ export function KPIStatCard({
 
   if (loading) {
     return (
-      <div className="card p-5 space-y-3">
+      <div className="card p-4 sm:p-5 lg:p-6 2xl:p-7 space-y-3">
         <div className="flex items-center justify-between">
           <div className="skeleton w-24 h-4" />
           <div className="skeleton w-9 h-9 rounded-xl" />
@@ -200,7 +200,8 @@ export function KPIStatCard({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: delay / 1000, ease: 'easeOut' }}
-      className={`relative overflow-hidden rounded-2xl p-5 border transition-all duration-200
+      className={`relative overflow-hidden rounded-2xl border transition-all duration-200
+        p-4 sm:p-5 lg:p-6 2xl:p-7
         ${glass
           ? 'bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)]'
           : `bg-white dark:bg-slate-900 border-slate-200/60 dark:border-slate-800 bg-gradient-to-br ${colors.gradient}`
@@ -211,7 +212,7 @@ export function KPIStatCard({
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-1.5 relative">
-          <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400">{title}</p>
+          <p className="text-[13px] 2xl:text-[15px] font-medium text-slate-500 dark:text-slate-400">{title}</p>
           {tooltip && (
             <button
               type="button"
@@ -242,15 +243,15 @@ export function KPIStatCard({
             )}
           </AnimatePresence>
         </div>
-        <div className={`p-2 rounded-xl ${colors.icon}`}>
-          <Icon className="w-4 h-4" strokeWidth={2} />
+        <div className={`p-2 2xl:p-2.5 rounded-xl ${colors.icon}`}>
+          <Icon className="w-4 h-4 2xl:w-[18px] 2xl:h-[18px]" strokeWidth={2} />
         </div>
       </div>
 
       {/* Value */}
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight leading-none">
+          <p className="text-xl sm:text-2xl 2xl:text-3xl font-bold text-slate-900 dark:text-white tracking-tight leading-none break-words">
             {prefix}{formattedValue}{suffix}
           </p>
 
@@ -286,7 +287,7 @@ export function KPIStatCard({
 
         {/* Sparkline */}
         {sparklineData && sparklineData.length > 1 && (
-          <div className="opacity-60 group-hover:opacity-100 transition-opacity">
+          <div className="opacity-60 group-hover:opacity-100 transition-opacity hidden sm:block">
             <Sparkline data={sparklineData} color={colors.spark} />
           </div>
         )}

@@ -40,8 +40,8 @@ export default function GateEntryPage() {
     <div className="space-y-6">
       <PageHeader title="Gate Entry" description="Record incoming material at gate" action={{ label: '+ New Entry', onClick: () => setModalOpen(true) }} />
 
-      <div className="flex gap-3">
-        <select className="input w-40" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+      <div className="flex flex-wrap gap-3">
+        <select className="input w-full sm:w-44" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="">All Status</option>
           {['OPEN', 'CLOSED'].map(s => <option key={s} value={s}>{s}</option>)}
         </select>
@@ -56,7 +56,7 @@ export default function GateEntryPage() {
 
       {!isLoading && entries && entries.length > 0 && (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll-wrap">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -114,7 +114,7 @@ function GateEntryForm({ suppliers, openPOs, onSubmit, loading }: { suppliers: S
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">Entry Date *</label>
           <input className="input" type="date" required value={form.entry_date} onChange={e => set('entry_date', e.target.value)} />
@@ -159,7 +159,7 @@ function GateEntryForm({ suppliers, openPOs, onSubmit, loading }: { suppliers: S
         <textarea className="input" rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} />
       </div>
       <div className="flex justify-end pt-2">
-        <button type="submit" disabled={loading || form.supplier_id === 0} className="btn btn-primary">
+        <button type="submit" disabled={loading || form.supplier_id === 0} className="btn btn-primary w-full sm:w-auto">
           {loading ? 'Saving…' : 'Create Gate Entry'}
         </button>
       </div>

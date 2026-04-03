@@ -68,27 +68,29 @@ export default function ProcessingPage() {
       <PageHeader title="Processing / Dyeing" description="Manage dyeing & processing job work" action={{ label: '+ New Order', onClick: () => setModalOpen(true) }} />
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 w-fit">
-        {tabs.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${tab === t.key ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="tab-strip">
+        <div className="tab-strip-inner">
+          {tabs.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-lg transition-all ${tab === t.key ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
         {tab === 'orders' && (
           <>
-            <select className="input w-40" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <select className="input w-full sm:w-44" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
               <option value="">All Status</option>
               {['OPEN', 'IN_PROGRESS', 'COMPLETED'].map(s => <option key={s} value={s}>{s}</option>)}
             </select>
-            <button onClick={() => setIssueOpen(true)} className="btn btn-primary text-sm">Issue Grey Fabric</button>
-            <button onClick={() => setReceiptOpen(true)} className="btn btn-primary text-sm">Receive Finished Fabric</button>
+            <button onClick={() => setIssueOpen(true)} className="btn btn-primary text-sm w-full sm:w-auto">Issue Grey Fabric</button>
+            <button onClick={() => setReceiptOpen(true)} className="btn btn-primary text-sm w-full sm:w-auto">Receive Finished Fabric</button>
           </>
         )}
       </div>
@@ -101,7 +103,7 @@ export default function ProcessingPage() {
           {!isLoading && orders && orders.length === 0 && <EmptyState title="No processing orders" />}
           {!isLoading && orders && orders.length > 0 && (
             <div className="card overflow-hidden">
-              <div className="overflow-x-auto">
+              <div className="table-scroll-wrap">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -134,7 +136,7 @@ export default function ProcessingPage() {
 
       {tab === 'grey' && (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll-wrap">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -161,7 +163,7 @@ export default function ProcessingPage() {
 
       {tab === 'finished' && (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll-wrap">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -210,7 +212,7 @@ function ProcessingOrderForm({ suppliers, onSubmit, loading }: { suppliers: Supp
 
   return (
     <form onSubmit={e => { e.preventDefault(); onSubmit({ ...form, target_date: form.target_date || undefined }); }} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><label className="label">Order Date *</label><input className="input" type="date" required value={form.order_date} onChange={e => set('order_date', e.target.value)} /></div>
         <div>
           <label className="label">Processor *</label>
@@ -228,7 +230,7 @@ function ProcessingOrderForm({ suppliers, onSubmit, loading }: { suppliers: Supp
         <div><label className="label">Target Date</label><input className="input" type="date" value={form.target_date} onChange={e => set('target_date', e.target.value)} /></div>
       </div>
       <div><label className="label">Remarks</label><textarea className="input" rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} /></div>
-      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.processor_supplier_id} className="btn btn-primary">{loading ? 'Creating…' : 'Create Order'}</button></div>
+      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.processor_supplier_id} className="btn btn-primary w-full sm:w-auto">{loading ? 'Creating…' : 'Create Order'}</button></div>
     </form>
   );
 }
@@ -239,7 +241,7 @@ function GreyIssueForm({ orders, onSubmit, loading }: { orders: ProcessingOrder[
 
   return (
     <form onSubmit={e => { e.preventDefault(); onSubmit(form); }} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><label className="label">Issue Date *</label><input className="input" type="date" required value={form.issue_date} onChange={e => set('issue_date', e.target.value)} /></div>
         <div>
           <label className="label">Processing Order *</label>
@@ -253,7 +255,7 @@ function GreyIssueForm({ orders, onSubmit, loading }: { orders: ProcessingOrder[
         <div><label className="label">Lot #</label><input className="input" value={form.lot_number} onChange={e => set('lot_number', e.target.value)} /></div>
         <div><label className="label">Color</label><input className="input" value={form.color} onChange={e => set('color', e.target.value)} /></div>
       </div>
-      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.processing_order_id || !form.fabric_id} className="btn btn-primary">{loading ? 'Issuing…' : 'Issue Grey Fabric'}</button></div>
+      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.processing_order_id || !form.fabric_id} className="btn btn-primary w-full sm:w-auto">{loading ? 'Issuing…' : 'Issue Grey Fabric'}</button></div>
     </form>
   );
 }
@@ -264,7 +266,7 @@ function FinishedReceiptForm({ orders, onSubmit, loading }: { orders: Processing
 
   return (
     <form onSubmit={e => { e.preventDefault(); onSubmit(form); }} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><label className="label">Receipt Date *</label><input className="input" type="date" required value={form.receipt_date} onChange={e => set('receipt_date', e.target.value)} /></div>
         <div>
           <label className="label">Processing Order *</label>
@@ -282,7 +284,7 @@ function FinishedReceiptForm({ orders, onSubmit, loading }: { orders: Processing
         <div><label className="label">Actual GSM</label><input className="input" type="number" value={form.gsm_actual || ''} onChange={e => set('gsm_actual', parseInt(e.target.value) || 0)} /></div>
         <div><label className="label">Shrinkage %</label><input className="input" type="number" step="0.01" value={form.shrinkage_percent || ''} onChange={e => set('shrinkage_percent', parseFloat(e.target.value) || 0)} /></div>
       </div>
-      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.processing_order_id || !form.fabric_id} className="btn btn-primary">{loading ? 'Recording…' : 'Record Receipt'}</button></div>
+      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.processing_order_id || !form.fabric_id} className="btn btn-primary w-full sm:w-auto">{loading ? 'Recording…' : 'Record Receipt'}</button></div>
     </form>
   );
 }

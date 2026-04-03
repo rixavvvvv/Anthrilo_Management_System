@@ -175,14 +175,14 @@ export default function BundleSkuPage() {
   ];
 
   return (
-    <div>
+    <div className="page-section-gap">
       <PageHeader
         title="Bundle SKU Catalog"
         description="All bundle/combo SKUs from Unicommerce Item Master — deduplicated with component details"
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <StatCard
           title="Total Bundles"
           value={(summary.total_bundles || 0).toLocaleString('en-IN')}
@@ -216,19 +216,19 @@ export default function BundleSkuPage() {
       </div>
 
       {/* Filters */}
-      <div className="card mb-4">
+      <div className="card">
         <div className="flex gap-4 items-center flex-wrap">
           <input
             type="text"
             placeholder="Search SKU, name, category, brand, component..."
-            className="input flex-1"
+            className="input w-full sm:flex-1"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
           />
           <select
             value={category}
             onChange={(e) => { setCategory(e.target.value); setPage(0); }}
-            className="input w-56"
+            className="input w-full sm:w-56"
           >
             <option value="all">All Categories ({Object.keys(categories).length})</option>
             {Object.entries(categories).map(([cat, count]) => (
@@ -249,7 +249,7 @@ export default function BundleSkuPage() {
           <button
             onClick={handleRefresh}
             disabled={isFetching}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${isFetching
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto ${isFetching
               ? 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
               : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
               }`}
@@ -292,7 +292,7 @@ export default function BundleSkuPage() {
             <p className="text-sm text-slate-500 dark:text-slate-400">No bundle SKUs match the current filters.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+          <div className="table-scroll-wrap rounded-xl border border-slate-200/80 dark:border-slate-700/80">
             <table className="min-w-full">
               <thead>
                 <tr className="bg-slate-50/80 dark:bg-slate-800/50">
@@ -381,7 +381,7 @@ export default function BundleSkuPage() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex justify-between items-center mt-4">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mt-4">
           <button
             disabled={page === 0}
             onClick={() => setPage(page - 1)}
