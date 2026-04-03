@@ -13,4 +13,3 @@ htmlcov/
 .git
 .gitignore
 tests/
-alembic/

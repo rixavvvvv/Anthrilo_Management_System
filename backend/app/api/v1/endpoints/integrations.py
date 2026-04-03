@@ -23,24 +23,23 @@ class ConnectionManager:
     """Manages WebSocket connections for real-time dashboard updates."""
 
     def __init__(self):
-        self.active_connections: list[WebSocket] = []
+        self.active_connections: set[WebSocket] = set()
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
-        self.active_connections.append(websocket)
+        self.active_connections.add(websocket)
         logger.info(
             f"WebSocket connected. Total: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
+        self.active_connections.discard(websocket)
         logger.info(
             f"WebSocket disconnected. Total: {len(self.active_connections)}")
 
     async def broadcast(self, message: dict):
         """Send data to all connected clients."""
         disconnected = []
-        for connection in self.active_connections:
+        for connection in list(self.active_connections):
             try:
                 await connection.send_json(message)
             except Exception:
@@ -2546,8 +2545,10 @@ async def websocket_sales(websocket: WebSocket):
                     cached = CacheService.get(today_key)
                     if cached:
                         await websocket.send_json({"type": "today_sales", "data": cached})
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"WebSocket periodic send failed; disconnecting client: {e}")
+                    ws_manager.disconnect(websocket)
+                    break
 
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)
