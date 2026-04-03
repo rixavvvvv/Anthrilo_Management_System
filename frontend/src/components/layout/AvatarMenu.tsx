@@ -166,15 +166,14 @@ export const AvatarMenu = memo(function AvatarMenu() {
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
             className="absolute right-0 top-full mt-2.5 w-72 z-50
                        rounded-2xl overflow-hidden
-                       border border-white/50 dark:border-slate-700/50
-                       bg-white/80 dark:bg-slate-900/80
-                       backdrop-blur-2xl backdrop-saturate-[1.8]
+                       border border-slate-200 dark:border-slate-700
+                       bg-white dark:bg-slate-900
                        shadow-[0_20px_60px_-15px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)]"
           >
             {/* Gradient header */}
-            <div className="relative px-4 py-4 border-b border-slate-100/80 dark:border-slate-800/60
-                            bg-gradient-to-br from-primary-50/60 via-white/0 to-violet-50/40
-                            dark:from-primary-950/30 dark:via-transparent dark:to-violet-950/20">
+            <div className="relative px-4 py-4 border-b border-slate-200 dark:border-slate-800
+                            bg-gradient-to-br from-primary-50 via-white to-violet-50
+                            dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
               <div className="flex items-start gap-3">
                 <div className="relative flex-shrink-0">
                   <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-600 to-violet-600
@@ -236,7 +235,7 @@ export const AvatarMenu = memo(function AvatarMenu() {
 
             {/* Admin section */}
             {adminItems.length > 0 && (
-              <div className="p-1.5 border-t border-slate-100/80 dark:border-slate-800/60">
+              <div className="p-1.5 border-t border-slate-200 dark:border-slate-800">
                 <div className="px-3 pt-1.5 pb-1">
                   <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400/80 dark:text-slate-500/80">
                     Admin
@@ -259,7 +258,7 @@ export const AvatarMenu = memo(function AvatarMenu() {
             )}
 
             {/* Preferences section */}
-            <div className="p-1.5 border-t border-slate-100/80 dark:border-slate-800/60">
+            <div className="p-1.5 border-t border-slate-200 dark:border-slate-800">
               <div className="px-3 pt-1.5 pb-1">
                 <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400/80 dark:text-slate-500/80">
                   Preferences

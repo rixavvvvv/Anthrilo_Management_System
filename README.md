@@ -32,6 +32,8 @@ Enterprise-grade ERP system for textile manufacturing and garment production man
 
 ## Quick Start
 
+For production hosting on a VPS, follow the deployment runbook in `DEPLOYMENT.md`.
+
 ### Prerequisites
 - **Python 3.12+** - [Download](https://www.python.org/downloads/)
 - **PostgreSQL 15+** - [Download](https://www.postgresql.org/download/)
