@@ -143,31 +143,33 @@ export default function CancellationReportPage() {
     }, [items, raw, reportDate]);
 
     return (
-        <div className="space-y-6">
+        <div className="page-section-gap">
             <div>
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Cancellation Report</h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Cancelled orders and items by channel, SKU and value</p>
+                <h1 className="responsive-title text-slate-900 dark:text-white">Cancellation Report</h1>
+                <p className="responsive-subtitle mt-1">Cancelled orders and items by channel, SKU and value</p>
             </div>
 
-            <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5">
+            <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-4 sm:p-5">
                 <div className="flex flex-wrap items-end gap-3">
-                    <div className="min-w-[260px]">
+                    <div className="w-full sm:min-w-[260px]">
                         <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Range</label>
-                        <div className="flex rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 overflow-hidden">
-                            {PERIOD_OPTIONS.map((opt) => (
-                                <button
-                                    key={opt.value}
-                                    onClick={() => { setPeriod(opt.value); setShowReport(false); }}
-                                    className={`flex-1 px-3 py-2 text-xs font-medium transition ${period === opt.value ? 'bg-rose-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-                                >
-                                    {opt.label}
-                                </button>
-                            ))}
+                        <div className="tab-strip">
+                            <div className="tab-strip-inner">
+                                {PERIOD_OPTIONS.map((opt) => (
+                                    <button
+                                        key={opt.value}
+                                        onClick={() => { setPeriod(opt.value); setShowReport(false); }}
+                                        className={`px-3 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition ${period === opt.value ? 'bg-rose-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
 
                     {period === 'daily' && (
-                        <div className="min-w-[180px]">
+                        <div className="w-full sm:min-w-[180px] sm:w-auto">
                             <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Report date</label>
                             <div className="relative">
                                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -183,7 +185,7 @@ export default function CancellationReportPage() {
 
                     {period === 'custom' && (
                         <>
-                            <div className="min-w-[170px]">
+                            <div className="w-full sm:min-w-[170px] sm:w-auto">
                                 <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">From</label>
                                 <input
                                     type="date"
@@ -193,7 +195,7 @@ export default function CancellationReportPage() {
                                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
                                 />
                             </div>
-                            <div className="min-w-[170px]">
+                            <div className="w-full sm:min-w-[170px] sm:w-auto">
                                 <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">To</label>
                                 <input
                                     type="date"
@@ -210,7 +212,7 @@ export default function CancellationReportPage() {
                     <button
                         onClick={handleGenerate}
                         disabled={queryLoading || !canGenerate}
-                        className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium transition disabled:opacity-50"
+                        className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium transition disabled:opacity-50 w-full sm:w-auto"
                     >
                         {queryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
                         {queryLoading ? 'Generating…' : 'Generate Report'}
@@ -219,7 +221,7 @@ export default function CancellationReportPage() {
                     {showReport && raw?.success && (
                         <button
                             onClick={handleCSV}
-                            className="inline-flex items-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition"
+                            className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition w-full sm:w-auto"
                         >
                             <Download className="w-4 h-4" /> Download CSV
                         </button>
@@ -280,7 +282,7 @@ export default function CancellationReportPage() {
                                 />
                             </div>
                         </div>
-                        <div className="overflow-x-auto">
+                        <div className="table-scroll-wrap">
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="bg-slate-50 dark:bg-slate-900/50">
@@ -317,7 +319,7 @@ export default function CancellationReportPage() {
                         <div className="p-4 border-b border-slate-100 dark:border-slate-700">
                             <h2 className="text-base font-semibold text-slate-900 dark:text-white">Cancelled Item Details</h2>
                         </div>
-                        <div className="overflow-x-auto max-h-[520px]">
+                        <div className="table-scroll-wrap max-h-[520px]">
                             <table className="w-full text-sm">
                                 <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900/70">
                                     <tr>

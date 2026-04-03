@@ -133,16 +133,16 @@ export default function FabricYarnMasterPage() {
             <p className="text-sm text-slate-500 dark:text-slate-400">Manage yarn composition, pricing, and fabric readiness records.</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => { setEditTarget(null); setIsFormOpen(true); }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm w-full sm:w-auto"
           >
             <Plus className="w-4 h-4" /> Add New
           </button>
           <button
             onClick={() => setIsImportOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm w-full sm:w-auto"
           >
             <Upload className="w-4 h-4" /> Import CSV/Excel
           </button>
@@ -161,7 +161,7 @@ export default function FabricYarnMasterPage() {
           <select
             value={fabricTypeFilter}
             onChange={(event) => { setFabricTypeFilter(event.target.value); setPage(1); }}
-            className="input lg:w-52"
+            className="input w-full sm:w-auto lg:w-52"
           >
             <option value="">Fabric Type: All</option>
             {fabricTypeOptions.map((value) => (
@@ -171,7 +171,7 @@ export default function FabricYarnMasterPage() {
           <select
             value={printFilter}
             onChange={(event) => { setPrintFilter(event.target.value); setPage(1); }}
-            className="input lg:w-44"
+            className="input w-full sm:w-auto lg:w-44"
           >
             <option value="">Print: All</option>
             {(filterQuery.data?.prints ?? []).map((value) => (
@@ -185,7 +185,7 @@ export default function FabricYarnMasterPage() {
               setSortBy(newSortBy);
               setSortOrder(newSortOrder as 'asc' | 'desc');
             }}
-            className="input lg:w-52"
+            className="input w-full sm:w-auto lg:w-52"
           >
             <option value="created_at:desc">Newest First</option>
             <option value="created_at:asc">Oldest First</option>
@@ -197,7 +197,7 @@ export default function FabricYarnMasterPage() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500 dark:text-slate-400">
         <span>{(listQuery.data?.total ?? 0).toLocaleString()} records found</span>
         {listQuery.isFetching && <Loader2 className="w-4 h-4 animate-spin text-primary-500" />}
       </div>
@@ -213,7 +213,7 @@ export default function FabricYarnMasterPage() {
       />
 
       {(listQuery.data?.total_pages ?? 1) > 1 && (
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             disabled={page <= 1}
             onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
@@ -272,7 +272,7 @@ export default function FabricYarnMasterPage() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-6 max-w-sm w-full border border-slate-200 dark:border-slate-700"
+              className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-5 sm:p-6 max-w-sm w-full border border-slate-200 dark:border-slate-700"
               onClick={(event) => event.stopPropagation()}
             >
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">Delete Record</h3>

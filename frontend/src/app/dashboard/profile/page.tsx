@@ -240,7 +240,7 @@ export default function ProfilePage() {
               <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                value={(profile?.role || 'staff').charAt(0).toUpperCase() + (profile?.role || 'staff').slice(1)}
+                value={(profile?.role || 'user').charAt(0).toUpperCase() + (profile?.role || 'user').slice(1)}
                 readOnly
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700
                            bg-slate-100/60 dark:bg-slate-800/30 text-sm text-slate-500 dark:text-slate-400

@@ -38,7 +38,7 @@ export default function BarcodingPage() {
       <PageHeader title="Barcoding" description="Generate and manage barcode labels" action={{ label: '+ Generate Batch', onClick: () => setGenOpen(true) }} />
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card p-4 text-center">
           <p className="text-2xl font-bold text-slate-900 dark:text-white">{barcodes?.length ?? 0}</p>
           <p className="text-xs text-slate-500 mt-1">Total Labels</p>
@@ -54,12 +54,14 @@ export default function BarcodingPage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-slate-200 dark:border-slate-700">
-        {(['list', 'generate'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-            {t === 'list' ? 'All Labels' : 'Pending Print'}
-          </button>
-        ))}
+      <div className="tab-strip border-b border-slate-200 dark:border-slate-700">
+        <div className="inline-flex min-w-max gap-1">
+          {(['list', 'generate'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)} className={`px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 transition-colors ${tab === t ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+              {t === 'list' ? 'All Labels' : 'Pending Print'}
+            </button>
+          ))}
+        </div>
       </div>
 
       {error && <ErrorPanel message={(error as Error).message} />}
@@ -93,7 +95,7 @@ function BarcodeTable({ barcodes, onMarkPrint }: { barcodes: BarcodeLabel[]; onM
 
   return (
     <div className="card overflow-hidden">
-      <div className="overflow-x-auto">
+      <div className="table-scroll-wrap">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -158,7 +160,7 @@ function BatchForm({ onSubmit, loading }: { onSubmit: (v: any) => void; loading:
         sizes,
       });
     }} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><label className="label">Garment Finishing ID *</label><input className="input" type="number" required value={form.garment_finishing_id || ''} onChange={e => set('garment_finishing_id', parseInt(e.target.value) || 0)} /></div>
         <div><label className="label">Garment ID *</label><input className="input" type="number" required value={form.garment_id || ''} onChange={e => set('garment_id', parseInt(e.target.value) || 0)} /></div>
         <div><label className="label">Batch Number</label><input className="input" value={form.batch_number} onChange={e => set('batch_number', e.target.value)} placeholder="e.g. BATCH-2026-001" /></div>
@@ -169,7 +171,7 @@ function BatchForm({ onSubmit, loading }: { onSubmit: (v: any) => void; loading:
         <input className="input font-mono text-xs" value={form.sizes} onChange={e => set('sizes', e.target.value)} placeholder='{"S":50,"M":100,"L":80,"XL":40}' />
         <p className="text-xs text-slate-400 mt-1">One barcode per piece will be generated for each size.</p>
       </div>
-      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.garment_finishing_id || !form.garment_id} className="btn btn-primary">{loading ? 'Generating…' : 'Generate Barcodes'}</button></div>
+      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.garment_finishing_id || !form.garment_id} className="btn btn-primary w-full sm:w-auto">{loading ? 'Generating…' : 'Generate Barcodes'}</button></div>
     </form>
   );
 }

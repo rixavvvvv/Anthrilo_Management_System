@@ -94,7 +94,7 @@ export default function FinancialPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="page-section-gap">
       <PageHeader title="Financial Management" description="Revenue analytics, discounts, advertising, and profitability" />
 
       <ProgressLoader loading={isLoading} stages={[
@@ -106,12 +106,12 @@ export default function FinancialPage() {
       {!isLoading && (
         <>
           {/* KPI Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             {kpis.map((kpi, i) => (
               <motion.div key={kpi.title}
                 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: i * 0.06 }}
-                className="rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-[var(--shadow-soft)] p-5"
+                className="rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-[var(--shadow-soft)] p-4 sm:p-5 2xl:p-6"
               >
                 <div className="flex items-start justify-between mb-3">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{kpi.title}</p>
@@ -119,7 +119,7 @@ export default function FinancialPage() {
                     <kpi.icon className={`w-4 h-4 text-${kpi.accent}-500`} strokeWidth={2} />
                   </div>
                 </div>
-                <p className="text-2xl font-bold text-slate-900 dark:text-white">{kpi.value}</p>
+                <p className="text-2xl sm:text-3xl 2xl:text-4xl font-bold text-slate-900 dark:text-white break-words">{kpi.value}</p>
                 {kpi.growth !== null && kpi.growth !== undefined && (
                   <div className={`flex items-center gap-1 mt-1.5 ${kpi.growth >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                     {kpi.growth >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
@@ -134,7 +134,7 @@ export default function FinancialPage() {
           {/* Modules */}
           <div>
             <h2 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">Modules</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {modules.map((m, i) => (
                 <Link key={m.href} href={m.href}>
                   <motion.div
@@ -167,7 +167,7 @@ export default function FinancialPage() {
           {/* Quick Reports */}
           <div>
             <h2 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">Quick Reports</h2>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               {quickReports.map((r, i) => (
                 <Link key={r.href} href={r.href}>
                   <motion.div

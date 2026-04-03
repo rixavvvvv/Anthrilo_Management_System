@@ -149,16 +149,16 @@ export default function ProductMasterPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => { setEditProduct(null); setShowAddModal(true); }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm w-full sm:w-auto"
           >
             <Plus className="w-4 h-4" /> Add Product
           </button>
           <button
             onClick={() => setShowImportModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm w-full sm:w-auto"
           >
             <Upload className="w-4 h-4" /> Upload CSV/Excel
           </button>
@@ -188,7 +188,7 @@ export default function ProductMasterPage() {
           {/* Filter toggle */}
           <button
             onClick={() => setShowFilters(f => !f)}
-            className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl text-sm font-medium transition-all
+            className={`flex items-center justify-center gap-2 px-4 py-2.5 border rounded-xl text-sm font-medium transition-all w-full sm:w-auto
               ${activeFilterCount > 0
                 ? 'border-primary-300 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
                 : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
@@ -211,7 +211,7 @@ export default function ProductMasterPage() {
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
                 {[
                   { key: 'collection', label: 'Collection', options: filterOpts?.collections },
                   { key: 'season', label: 'Season', options: filterOpts?.seasons },
@@ -250,7 +250,7 @@ export default function ProductMasterPage() {
 
       {/* Table */}
       <div className="card p-0 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="table-scroll-wrap">
           <table className="min-w-full">
             <thead>
               <tr className="bg-slate-50/80 dark:bg-slate-800/50">
@@ -354,7 +354,7 @@ export default function ProductMasterPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/30">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-t border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/30">
             <span className="text-xs text-slate-500 dark:text-slate-400">
               Page {page} of {totalPages}
             </span>
@@ -566,7 +566,7 @@ function ProductFormModal({
         initial={{ scale: 0.95, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.95, opacity: 0, y: 20 }}
-        className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 dark:border-slate-700 max-h-[90vh] flex flex-col"
+        className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 dark:border-slate-700 max-h-[92vh] sm:max-h-[90vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -580,10 +580,10 @@ function ProductFormModal({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {FIELDS.map(f => (
-              <div key={f.key} className={f.half ? 'col-span-1' : 'col-span-2'}>
+              <div key={f.key} className={f.half ? 'col-span-1' : 'sm:col-span-2'}>
                 <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                   {f.label} {f.required && <span className="text-rose-500">*</span>}
                 </label>
@@ -604,17 +604,17 @@ function ProductFormModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-800">
           <button
             onClick={onClose}
-            className="px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+            className="px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors w-full sm:w-auto"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="px-5 py-2.5 text-sm font-semibold bg-primary-500 hover:bg-primary-600 text-white rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
+            className="px-5 py-2.5 text-sm font-semibold bg-primary-500 hover:bg-primary-600 text-white rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto"
           >
             {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
             {isEdit ? 'Save Changes' : 'Add Product'}
@@ -705,7 +705,7 @@ function ImportModal({
         initial={{ scale: 0.95, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.95, opacity: 0, y: 20 }}
-        className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 dark:border-slate-700 max-h-[90vh] flex flex-col"
+        className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 dark:border-slate-700 max-h-[92vh] sm:max-h-[90vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -722,7 +722,7 @@ function ImportModal({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-5">
           {/* Upload area */}
           <div
             onClick={() => fileRef.current?.click()}
@@ -763,7 +763,7 @@ function ImportModal({
               <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
                 Preview (first {preview.length} rows)
               </h4>
-              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+              <div className="table-scroll-wrap rounded-xl border border-slate-200 dark:border-slate-700">
                 <table className="min-w-full text-xs">
                   <thead>
                     <tr className="bg-slate-50 dark:bg-slate-800/50">
@@ -792,7 +792,7 @@ function ImportModal({
               <h4 className="text-sm font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4" /> Import Complete
               </h4>
-              <div className="grid grid-cols-3 gap-3 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                 <div className="text-center">
                   <p className="text-2xl font-bold text-emerald-600">{result.inserted}</p>
                   <p className="text-xs text-slate-500">Inserted</p>
@@ -818,10 +818,10 @@ function ImportModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-800">
           <button
             onClick={onClose}
-            className="px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+            className="px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors w-full sm:w-auto"
           >
             {result ? 'Close' : 'Cancel'}
           </button>
@@ -829,7 +829,7 @@ function ImportModal({
             <button
               onClick={handleUpload}
               disabled={!file || uploading || !!parseError}
-              className="px-5 py-2.5 text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
+              className="px-5 py-2.5 text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto"
             >
               {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
               Import Products

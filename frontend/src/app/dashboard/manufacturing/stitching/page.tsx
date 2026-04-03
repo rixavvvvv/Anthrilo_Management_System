@@ -34,8 +34,8 @@ export default function StitchingPage() {
     <div className="space-y-6">
       <PageHeader title="Stitching Orders" description="Manage stitching job work" action={{ label: '+ New Order', onClick: () => setModalOpen(true) }} />
 
-      <div className="flex gap-3">
-        <select className="input w-40" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+      <div className="flex flex-wrap gap-3">
+        <select className="input w-full sm:w-44" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="">All Status</option>
           {['OPEN', 'IN_PROGRESS', 'COMPLETED'].map(s => <option key={s} value={s}>{s}</option>)}
         </select>
@@ -48,7 +48,7 @@ export default function StitchingPage() {
 
       {!isLoading && orders && orders.length > 0 && (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll-wrap">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -112,7 +112,7 @@ function StitchingForm({ suppliers, onSubmit, loading }: { suppliers: Supplier[]
         stitching_rate: form.stitching_rate || undefined,
       });
     }} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><label className="label">Order Date *</label><input className="input" type="date" required value={form.order_date} onChange={e => set('order_date', e.target.value)} /></div>
         <div><label className="label">Cutting Order ID *</label><input className="input" type="number" required value={form.cutting_order_id || ''} onChange={e => set('cutting_order_id', parseInt(e.target.value) || 0)} /></div>
         <div>
@@ -125,13 +125,13 @@ function StitchingForm({ suppliers, onSubmit, loading }: { suppliers: Supplier[]
         <div><label className="label">Pieces Issued *</label><input className="input" type="number" required value={form.pieces_issued || ''} onChange={e => set('pieces_issued', parseInt(e.target.value) || 0)} /></div>
         <div><label className="label">Target Date</label><input className="input" type="date" value={form.target_date} onChange={e => set('target_date', e.target.value)} /></div>
         <div><label className="label">Stitching Rate ₹</label><input className="input" type="number" step="0.01" value={form.stitching_rate || ''} onChange={e => set('stitching_rate', parseFloat(e.target.value) || 0)} /></div>
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className="label">Size Breakdown (JSON)</label>
           <input className="input font-mono text-xs" value={form.size_breakdown} onChange={e => set('size_breakdown', e.target.value)} placeholder='{"S":50,"M":100,"L":80}' />
         </div>
       </div>
       <div><label className="label">Remarks</label><textarea className="input" rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} /></div>
-      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.cutting_order_id} className="btn btn-primary">{loading ? 'Creating…' : 'Create Stitching Order'}</button></div>
+      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.cutting_order_id} className="btn btn-primary w-full sm:w-auto">{loading ? 'Creating…' : 'Create Stitching Order'}</button></div>
     </form>
   );
 }

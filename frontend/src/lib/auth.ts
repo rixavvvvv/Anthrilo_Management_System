@@ -1,6 +1,7 @@
 // Auth utilities — token storage, user state, and helpers
 
-export type UserRole = 'admin' | 'manager' | 'staff';
+export type SystemRole = 'developer' | 'admin' | 'user';
+export type UserRole = SystemRole | (string & {});
 
 export interface AuthUser {
   id: string;
@@ -8,6 +9,10 @@ export interface AuthUser {
   name: string;
   picture?: string;
   role: UserRole;
+  role_priority?: number;
+  permissions?: string[];
+  module_access?: string[];
+  is_developer?: boolean;
   is_active: boolean;
   last_login?: string;
 }

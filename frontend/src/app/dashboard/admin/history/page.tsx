@@ -265,7 +265,7 @@ function HistoryContent() {
 // Export
 export default function HistoryPage() {
   return (
-    <ProtectedRoute ownerOnly>
+    <ProtectedRoute allowedRoles={['developer']}>
       <HistoryContent />
     </ProtectedRoute>
   );

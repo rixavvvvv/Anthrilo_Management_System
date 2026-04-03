@@ -63,23 +63,23 @@ const Pagination = ({
     }, [currentPage, totalPages]);
 
     return (
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-center gap-2">
             <button
                 onClick={() => onPageChange(currentPage - 1)}
                 disabled={disabled || currentPage <= 1}
-                className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full sm:w-auto px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
                 ← Previous
             </button>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 overflow-x-auto max-w-full">
                 {pages.map((page, i) => (
                     typeof page === 'number' ? (
                         <button
                             key={i}
                             onClick={() => onPageChange(page)}
                             disabled={disabled}
-                            className={`w-10 h-10 rounded-lg font-medium transition-colors ${page === currentPage
+                            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg font-medium transition-colors shrink-0 ${page === currentPage
                                 ? 'bg-primary-600 text-white'
                                 : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                                 }`}
@@ -95,7 +95,7 @@ const Pagination = ({
             <button
                 onClick={() => onPageChange(currentPage + 1)}
                 disabled={disabled || currentPage >= totalPages}
-                className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full sm:w-auto px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
                 Next →
             </button>
@@ -224,7 +224,7 @@ export default function SalesReportsPage() {
     const isLoading = summaryLoading || ordersLoading;
 
     return (
-        <div className="space-y-6">
+        <div className="page-section-gap">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
@@ -238,7 +238,7 @@ export default function SalesReportsPage() {
                 <button
                     onClick={() => refetch()}
                     disabled={isLoading}
-                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2 transition-colors"
+                    className="w-full sm:w-auto px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
                 >
                     {isLoading ? (
                         <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -251,65 +251,69 @@ export default function SalesReportsPage() {
 
             {/* Global Date Range */}
             <div className="card">
-                <div className="flex flex-wrap items-center gap-3">
-                    {([
-                        { id: 'daily', label: 'Daily' },
-                        { id: 'weekly', label: 'Weekly' },
-                        { id: 'monthly', label: 'Monthly' },
-                        { id: 'custom', label: 'Custom' },
-                    ] as const).map((filter) => (
-                        <button
-                            key={filter.id}
-                            onClick={() => handleModeChange(filter.id)}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${dateMode === filter.id
-                                ? 'bg-primary-600 text-white shadow-lg'
-                                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                                }`}
-                        >
-                            {filter.label}
-                        </button>
-                    ))}
+                <div className="space-y-3">
+                    <div className="tab-strip">
+                        {([
+                            { id: 'daily', label: 'Daily' },
+                            { id: 'weekly', label: 'Weekly' },
+                            { id: 'monthly', label: 'Monthly' },
+                            { id: 'custom', label: 'Custom' },
+                        ] as const).map((filter) => (
+                            <button
+                                key={filter.id}
+                                onClick={() => handleModeChange(filter.id)}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${dateMode === filter.id
+                                    ? 'bg-primary-600 text-white shadow-lg'
+                                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                    }`}
+                            >
+                                {filter.label}
+                            </button>
+                        ))}
+                    </div>
 
-                    {dateMode === 'daily' && (
-                        <div className="flex items-center gap-2 ml-4">
-                            <span className="text-sm text-gray-600 dark:text-gray-400">Report Date</span>
-                            <input
-                                type="date"
-                                value={anchorDate}
-                                onChange={(e) => {
-                                    setAnchorDate(e.target.value);
-                                    setCurrentPage(1);
-                                }}
-                                className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
-                            />
-                        </div>
-                    )}
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-2">
+                        {dateMode === 'daily' && (
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full lg:w-auto">
+                                <span className="text-sm text-gray-600 dark:text-gray-400">Report Date</span>
+                                <input
+                                    type="date"
+                                    value={anchorDate}
+                                    onChange={(e) => {
+                                        setAnchorDate(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
+                                    className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm w-full sm:w-auto"
+                                />
+                            </div>
+                        )}
 
-                    {dateMode === 'custom' && (
-                        <div className="flex items-center gap-2 ml-4">
-                            <input
-                                type="date"
-                                value={customDates.from}
-                                onChange={(e) => {
-                                    setCustomDates(d => ({ ...d, from: e.target.value }));
-                                    setCurrentPage(1);
-                                }}
-                                className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
-                            />
-                            <span className="text-gray-500">to</span>
-                            <input
-                                type="date"
-                                value={customDates.to}
-                                onChange={(e) => {
-                                    setCustomDates(d => ({ ...d, to: e.target.value }));
-                                    setCurrentPage(1);
-                                }}
-                                className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
-                            />
-                        </div>
-                    )}
+                        {dateMode === 'custom' && (
+                            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-2 w-full lg:w-auto">
+                                <input
+                                    type="date"
+                                    value={customDates.from}
+                                    onChange={(e) => {
+                                        setCustomDates(d => ({ ...d, from: e.target.value }));
+                                        setCurrentPage(1);
+                                    }}
+                                    className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm w-full"
+                                />
+                                <span className="text-gray-500 self-center text-center">to</span>
+                                <input
+                                    type="date"
+                                    value={customDates.to}
+                                    onChange={(e) => {
+                                        setCustomDates(d => ({ ...d, to: e.target.value }));
+                                        setCurrentPage(1);
+                                    }}
+                                    className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm w-full"
+                                />
+                            </div>
+                        )}
 
-                    <div className="text-xs text-gray-500 dark:text-gray-400 ml-4">{effectiveRange.label}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{effectiveRange.label}</div>
+                    </div>
                 </div>
             </div>
 
@@ -400,7 +404,7 @@ export default function SalesReportsPage() {
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                                 📋 Order Status
                             </h3>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {Object.entries(summary.status_breakdown || {})
                                     .sort((a, b) => (b[1] as number) - (a[1] as number))
                                     .slice(0, 8)
@@ -420,7 +424,7 @@ export default function SalesReportsPage() {
 
                     {/* Orders Table with Pagination */}
                     <div className="card">
-                        <div className="flex items-center justify-between mb-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                                 📝 Orders
                             </h3>
@@ -431,7 +435,7 @@ export default function SalesReportsPage() {
                         </div>
 
                         {/* Table */}
-                        <div className="overflow-x-auto">
+                        <div className="table-scroll-wrap">
                             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                 <thead className="bg-gray-50 dark:bg-gray-800">
                                     <tr>

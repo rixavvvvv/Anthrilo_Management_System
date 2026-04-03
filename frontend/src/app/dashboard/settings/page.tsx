@@ -45,7 +45,7 @@ function Toast({ message, type, onClose }: { message: string; type: 'success' | 
       initial={{ opacity: 0, y: -20, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -10 }}
-      className={`fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg backdrop-blur-xl
+      className={`fixed top-4 left-4 right-4 sm:left-auto sm:right-6 sm:top-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg backdrop-blur-xl
         ${type === 'success'
           ? 'bg-emerald-50/90 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40'
           : 'bg-red-50/90 dark:bg-red-950/80 text-red-700 dark:text-red-300 border border-red-200/60 dark:border-red-800/40'}`}
@@ -148,17 +148,17 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto py-8 px-4">
+    <div className="w-full max-w-3xl 2xl:max-w-5xl mx-auto py-5 sm:py-8 2xl:py-10 px-1 sm:px-2">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-5 sm:mb-8">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-primary-50 dark:bg-primary-950/40">
-            <Settings className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+          <div className="p-2 sm:p-2.5 rounded-xl bg-primary-50 dark:bg-primary-950/40">
+            <Settings className="w-5 h-5 sm:w-6 sm:h-6 text-primary-600 dark:text-primary-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Account Settings</h1>
+            <h1 className="text-xl sm:text-2xl 2xl:text-3xl font-bold text-slate-900 dark:text-slate-100">Account Settings</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
               Customize your experience and notification preferences.
             </p>
@@ -172,7 +172,7 @@ export default function SettingsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.05 }}
         className="rounded-2xl border border-slate-200/60 dark:border-slate-800/60
-                   bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-6"
+                   bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-4 sm:p-6 2xl:p-7"
       >
         <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-4">General</h3>
         <div className="space-y-4">
@@ -217,11 +217,11 @@ export default function SettingsPage() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="mt-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/60
-                   bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-6"
+        className="mt-4 sm:mt-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/60
+                   bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-4 sm:p-6 2xl:p-7"
       >
         <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-4">Notifications</h3>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800">
               <Bell className="w-4 h-4 text-slate-500 dark:text-slate-400" />
@@ -252,7 +252,7 @@ export default function SettingsPage() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15 }}
-        className="mt-6 flex items-center justify-end gap-3"
+        className="mt-4 sm:mt-6 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3"
       >
         {isDirty && (
           <span className="text-xs text-amber-500 dark:text-amber-400">Unsaved changes</span>
@@ -260,7 +260,7 @@ export default function SettingsPage() {
         <button
           onClick={handleSave}
           disabled={!isDirty || saveMutation.isPending}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium w-full sm:w-auto
                      bg-primary-600 text-white hover:bg-primary-700
                      disabled:opacity-50 disabled:cursor-not-allowed
                      shadow-sm shadow-primary-600/20 transition-all duration-150"

@@ -12,6 +12,7 @@ import {
   Boxes, LayoutDashboard, Receipt,
   type LucideIcon,
 } from 'lucide-react';
+import { NAVIGATION_ITEMS } from './Sidebar';
 
 // Types
 interface SearchItem {
@@ -25,7 +26,7 @@ interface SearchItem {
 }
 
 // Search Catalogue
-const SEARCH_ITEMS: SearchItem[] = [
+const BASE_SEARCH_ITEMS: SearchItem[] = [
   // Dashboard
   {
     id: 'dashboard',
@@ -251,6 +252,62 @@ const SEARCH_ITEMS: SearchItem[] = [
     keywords: ['roi', 'return', 'investment', 'channels'],
   },
 ];
+
+function toKeywordTokens(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/[&/\\]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+const NAVIGATION_SEARCH_ITEMS: SearchItem[] = NAVIGATION_ITEMS.flatMap((item) => {
+  const parentKeywords = toKeywordTokens(item.name);
+
+  if (item.href) {
+    return [
+      {
+        id: `nav-${item.href.replace(/[^a-zA-Z0-9]+/g, '-').replace(/(^-|-$)/g, '').toLowerCase()}`,
+        title: item.name,
+        description: `${item.name} section`,
+        href: item.href,
+        icon: item.icon,
+        category: item.name,
+        keywords: parentKeywords,
+      },
+    ];
+  }
+
+  return (item.children || []).map((child) => ({
+    id: `nav-${child.href.replace(/[^a-zA-Z0-9]+/g, '-').replace(/(^-|-$)/g, '').toLowerCase()}`,
+    title: child.name,
+    description: `${item.name} • ${child.name}`,
+    href: child.href,
+    icon: child.icon || item.icon,
+    category: item.name,
+    keywords: [...parentKeywords, ...toKeywordTokens(child.name)],
+  }));
+});
+
+const SEARCH_ITEMS: SearchItem[] = (() => {
+  const byHref = new Map<string, SearchItem>();
+
+  [...BASE_SEARCH_ITEMS, ...NAVIGATION_SEARCH_ITEMS].forEach((item) => {
+    const existing = byHref.get(item.href);
+
+    if (!existing) {
+      byHref.set(item.href, item);
+      return;
+    }
+
+    byHref.set(item.href, {
+      ...existing,
+      keywords: Array.from(new Set([...(existing.keywords || []), ...(item.keywords || [])])),
+    });
+  });
+
+  return Array.from(byHref.values());
+})();
 
 // Recent search persistence
 const RECENT_KEY = 'cmd_recent';

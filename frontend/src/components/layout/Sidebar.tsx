@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -36,8 +36,10 @@ import {
   QrCode,
   Factory,
   BookOpen,
+  X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface NavChild {
   name: string;
@@ -52,7 +54,7 @@ interface NavItem {
   children?: NavChild[];
 }
 
-const navigation: NavItem[] = [
+export const NAVIGATION_ITEMS: NavItem[] = [
   {
     name: 'Overview',
     href: '/dashboard',
@@ -132,17 +134,70 @@ const navigation: NavItem[] = [
   },
 ];
 
+const MODULE_BY_ITEM_NAME: Record<string, string> = {
+  Overview: 'dashboard',
+  Reports: 'reports',
+  Garments: 'garments',
+  Sales: 'sales',
+  Financial: 'financial',
+  Procurement: 'procurement',
+  Manufacturing: 'manufacturing',
+};
+
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
-export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export function Sidebar({
+  collapsed,
+  onToggle,
+  mobileOpen = false,
+  onMobileClose,
+}: SidebarProps) {
   const pathname = usePathname();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileOpen]);
+
+  const allowedModules = useMemo(() => {
+    if (!user) return new Set<string>();
+    if (user.role === 'developer') return new Set(Object.values(MODULE_BY_ITEM_NAME));
+
+    const explicitModules = new Set((user.module_access || []).map((m) => m.toLowerCase()));
+    if (explicitModules.size > 0) return explicitModules;
+
+    const permissionModules = new Set<string>();
+    (user.permissions || []).forEach((code) => {
+      const [module, action] = code.split(':');
+      if (module && action === 'view') permissionModules.add(module.toLowerCase());
+    });
+    return permissionModules;
+  }, [user]);
+
+  const visibleNavigation = useMemo(() => {
+    if (!user) return [] as NavItem[];
+    if (user.role === 'developer') return NAVIGATION_ITEMS;
+
+    return NAVIGATION_ITEMS.filter((item) => {
+      const moduleKey = MODULE_BY_ITEM_NAME[item.name];
+      if (!moduleKey) return true;
+      return allowedModules.has(moduleKey);
+    });
+  }, [allowedModules, user]);
+
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     // Auto-expand the group containing the current page
     const initial: Record<string, boolean> = {};
-    navigation.forEach((item) => {
+    NAVIGATION_ITEMS.forEach((item) => {
       if (item.children?.some((c) => pathname === c.href || pathname.startsWith(c.href + '/'))) {
         initial[item.name] = true;
       }
@@ -158,125 +213,150 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     setOpenGroups((prev) => ({ ...prev, [name]: !prev[name] }));
   };
 
+  const closeForMobile = () => {
+    onMobileClose?.();
+  };
+
   return (
-    <aside
-      className={`${collapsed ? 'w-[72px]' : 'w-[260px]'
-        } flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out
-        bg-white dark:bg-slate-950 
-        border-r border-slate-200/70 dark:border-slate-800/70
-        z-40`}
-    >
-      {/* Logo */}
-      <div className="h-14 flex items-center px-4 border-b border-slate-100 dark:border-slate-800/50">
-        <Link href="/dashboard" className="flex items-center gap-3 overflow-hidden">
-          <div className="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center flex-shrink-0">
-            <span className="text-white font-bold text-sm">A</span>
-          </div>
-          {!collapsed && (
+    <>
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.button
+            type="button"
+            aria-label="Close navigation"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={closeForMobile}
+            className="fixed inset-0 z-30 bg-black/45 backdrop-blur-[1px] md:hidden"
+          />
+        )}
+      </AnimatePresence>
+
+      <aside
+        className={`fixed md:sticky top-0 left-0 md:left-auto z-40 flex flex-col min-h-0 shrink-0 h-dvh md:h-dvh overflow-hidden transition-all duration-300 ease-in-out
+          w-[84vw] max-w-[340px]
+          ${collapsed ? 'md:w-[72px] 2xl:w-[88px]' : 'md:w-[260px] 2xl:w-[300px] 3xl:w-[340px]'}
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          bg-white dark:bg-slate-950 border-r border-slate-200/70 dark:border-slate-800/70`}
+      >
+        {/* Logo */}
+        <div className="h-14 2xl:h-16 flex items-center px-3.5 2xl:px-4 border-b border-slate-100 dark:border-slate-800/50">
+          <Link href="/dashboard" onClick={closeForMobile} className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
+            <div className="w-8 h-8 2xl:w-9 2xl:h-9 rounded-lg bg-primary-600 flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-bold text-sm 2xl:text-base">A</span>
+            </div>
             <motion.span
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
-              className="text-base font-bold text-slate-900 dark:text-white whitespace-nowrap"
+              className={`text-base 2xl:text-lg 3xl:text-xl font-bold text-slate-900 dark:text-white whitespace-nowrap ${collapsed ? 'md:hidden' : ''}`}
             >
               Anthrilo
             </motion.span>
-          )}
-        </Link>
-      </div>
+          </Link>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-0.5">
-        {navigation.map((item) => {
-          if (item.href) {
-            // Direct link (no children)
+          <button
+            type="button"
+            onClick={closeForMobile}
+            className="md:hidden p-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            aria-label="Close navigation"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-3 px-2.5 2xl:px-3 pb-4 space-y-0.5">
+          {visibleNavigation.map((item) => {
+            if (item.href) {
+              // Direct link (no children)
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={closeForMobile}
+                  className={`sidebar-item 2xl:text-[15px] ${isActive(item.href) ? 'sidebar-active' : ''}`}
+                  title={collapsed ? item.name : undefined}
+                >
+                  <item.icon className="w-[18px] h-[18px] 2xl:w-5 2xl:h-5 flex-shrink-0" strokeWidth={1.8} />
+                  <span className={`${collapsed ? 'md:hidden' : ''}`}>{item.name}</span>
+                </Link>
+              );
+            }
+
+            // Group with children
+            const groupActive = isGroupActive(item.children);
+            const isOpen = openGroups[item.name] || false;
+
             return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`sidebar-item ${isActive(item.href) ? 'sidebar-active' : ''}`}
-                title={collapsed ? item.name : undefined}
-              >
-                <item.icon className="w-[18px] h-[18px] flex-shrink-0" strokeWidth={1.8} />
-                {!collapsed && <span>{item.name}</span>}
-              </Link>
+              <div key={item.name} className="space-y-0.5">
+                <button
+                  onClick={() => toggleGroup(item.name)}
+                  className={`sidebar-item w-full 2xl:text-[15px] ${groupActive ? 'text-primary-700 dark:text-primary-300 font-semibold' : ''
+                    }`}
+                  title={collapsed ? item.name : undefined}
+                >
+                  <item.icon className="w-[18px] h-[18px] 2xl:w-5 2xl:h-5 flex-shrink-0" strokeWidth={1.8} />
+                  <span className={`flex-1 text-left ${collapsed ? 'md:hidden' : ''}`}>{item.name}</span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${collapsed ? 'md:hidden' : ''} ${isOpen ? 'rotate-180' : ''
+                      }`}
+                  />
+                </button>
+
+                {/* Sub-items */}
+                <AnimatePresence initial={false}>
+                  {isOpen && item.children && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: 'easeInOut' }}
+                      className={`overflow-hidden ${collapsed ? 'md:hidden' : ''}`}
+                    >
+                      <div className="ml-3 pl-3 border-l border-slate-200 dark:border-slate-800 space-y-0.5">
+                        {item.children.map((child) => (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            onClick={closeForMobile}
+                            className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] 2xl:text-sm transition-colors duration-150 ${isActive(child.href)
+                              ? 'text-primary-600 dark:text-primary-400 bg-primary-50/80 dark:bg-primary-950/40 font-medium'
+                              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                              }`}
+                          >
+                            {child.icon && <child.icon className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 flex-shrink-0" strokeWidth={1.8} />}
+                            <span>{child.name}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             );
-          }
+          })}
+        </nav>
 
-          // Group with children
-          const groupActive = isGroupActive(item.children);
-          const isOpen = openGroups[item.name] || false;
-
-          return (
-            <div key={item.name} className="space-y-0.5">
-              <button
-                onClick={() => !collapsed && toggleGroup(item.name)}
-                className={`sidebar-item w-full ${groupActive ? 'text-primary-700 dark:text-primary-300 font-semibold' : ''
-                  }`}
-                title={collapsed ? item.name : undefined}
-              >
-                <item.icon className="w-[18px] h-[18px] flex-shrink-0" strokeWidth={1.8} />
-                {!collapsed && (
-                  <>
-                    <span className="flex-1 text-left">{item.name}</span>
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''
-                        }`}
-                    />
-                  </>
-                )}
-              </button>
-
-              {/* Sub-items */}
-              <AnimatePresence initial={false}>
-                {!collapsed && isOpen && item.children && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2, ease: 'easeInOut' }}
-                    className="overflow-hidden"
-                  >
-                    <div className="ml-3 pl-3 border-l border-slate-200 dark:border-slate-800 space-y-0.5">
-                      {item.children.map((child) => (
-                        <Link
-                          key={child.href}
-                          href={child.href}
-                          className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] transition-colors duration-150 ${isActive(child.href)
-                            ? 'text-primary-600 dark:text-primary-400 bg-primary-50/80 dark:bg-primary-950/40 font-medium'
-                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                            }`}
-                        >
-                          {child.icon && <child.icon className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.8} />}
-                          <span>{child.name}</span>
-                        </Link>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          );
-        })}
-      </nav>
-
-      {/* Collapse Toggle */}
-      <div className="p-3 border-t border-slate-100 dark:border-slate-800/50">
-        <button
-          onClick={onToggle}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs 
-                     text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 
+        {/* Collapse Toggle */}
+        <div className="p-3 border-t border-slate-100 dark:border-slate-800/50 hidden md:block">
+          <button
+            onClick={onToggle}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs 2xl:text-sm
+                     text-slate-400 hover:text-slate-600 dark:hover:text-slate-300
                      hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors"
-        >
-          {collapsed ? (
-            <ChevronRight className="w-4 h-4" />
-          ) : (
-            <>
-              <ChevronLeft className="w-4 h-4" />
-              <span>Collapse</span>
-            </>
-          )}
-        </button>
-      </div>
-    </aside>
+          >
+            {collapsed ? (
+              <ChevronRight className="w-4 h-4" />
+            ) : (
+              <>
+                <ChevronLeft className="w-4 h-4" />
+                <span>Collapse</span>
+              </>
+            )}
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }

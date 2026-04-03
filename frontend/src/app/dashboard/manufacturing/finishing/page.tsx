@@ -54,16 +54,16 @@ export default function FinishingPage() {
     <div className="space-y-6">
       <PageHeader title="Finishing" description="Track finishing stages for stitched garments" action={{ label: '+ Record Stage', onClick: () => setModalOpen(true) }} />
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         <input
-          className="input w-48"
+          className="input w-full sm:w-52"
           type="number"
           min={1}
           placeholder="Stitching Order ID"
           value={stitchingOrderId || ''}
           onChange={e => setStitchingOrderId(parseInt(e.target.value) || 0)}
         />
-        <select className="input w-48" value={stageFilter} onChange={e => setStageFilter(e.target.value)}>
+        <select className="input w-full sm:w-52" value={stageFilter} onChange={e => setStageFilter(e.target.value)}>
           <option value="">All Stages</option>
           {FINISHING_STAGES.map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
         </select>
@@ -78,7 +78,7 @@ export default function FinishingPage() {
 
       {!isLoading && stitchingOrderId > 0 && filteredStages.length > 0 && (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll-wrap">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -146,7 +146,7 @@ function FinishingForm({ onSubmit, loading }: { onSubmit: (v: any) => void; load
         remarks: form.remarks || undefined,
       });
     }} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><label className="label">Stitching Order ID *</label><input className="input" type="number" required value={form.stitching_order_id || ''} onChange={e => set('stitching_order_id', parseInt(e.target.value) || 0)} /></div>
         <div>
           <label className="label">Stage *</label>
@@ -161,7 +161,7 @@ function FinishingForm({ onSubmit, loading }: { onSubmit: (v: any) => void; load
         <div><label className="label">Operator</label><input className="input" value={form.operator} onChange={e => set('operator', e.target.value)} /></div>
       </div>
       <div><label className="label">Remarks</label><textarea className="input" rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} /></div>
-      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.stitching_order_id || !form.pieces_in || !form.pieces_ok} className="btn btn-primary">{loading ? 'Recording…' : 'Record Stage'}</button></div>
+      <div className="flex justify-end pt-2"><button type="submit" disabled={loading || !form.stitching_order_id || !form.pieces_in || !form.pieces_ok} className="btn btn-primary w-full sm:w-auto">{loading ? 'Recording…' : 'Record Stage'}</button></div>
     </form>
   );
 }

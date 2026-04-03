@@ -41,7 +41,7 @@ export default function YarnStorePage() {
 
       {!isLoading && balances && (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll-wrap">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -74,7 +74,7 @@ export default function YarnStorePage() {
       <FormModal open={ledgerYarnId !== null} onClose={() => setLedgerYarnId(null)} title={`Yarn Ledger #${ledgerYarnId}`} wide>
         <ProgressLoader loading={ledgerLoading} />
         {ledgerData && (
-          <div className="overflow-x-auto">
+          <div className="table-scroll-wrap">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -117,7 +117,7 @@ function AdjustForm({ onSubmit, loading }: { onSubmit: (v: any) => void; loading
 
   return (
     <form onSubmit={e => { e.preventDefault(); onSubmit(form); }} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">Yarn ID *</label>
           <input className="input" type="number" required value={form.yarn_id || ''} onChange={e => set('yarn_id', parseInt(e.target.value) || 0)} />
@@ -137,13 +137,13 @@ function AdjustForm({ onSubmit, loading }: { onSubmit: (v: any) => void; loading
           <label className="label">Date *</label>
           <input className="input" type="date" required value={form.transaction_date} onChange={e => set('transaction_date', e.target.value)} />
         </div>
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className="label">Reference # *</label>
           <input className="input" required value={form.reference_number} onChange={e => set('reference_number', e.target.value)} placeholder="e.g. ADJ-001" />
         </div>
       </div>
       <div className="flex justify-end pt-2">
-        <button type="submit" disabled={loading || !form.yarn_id} className="btn btn-primary">
+        <button type="submit" disabled={loading || !form.yarn_id} className="btn btn-primary w-full sm:w-auto">
           {loading ? 'Processing…' : 'Submit Adjustment'}
         </button>
       </div>

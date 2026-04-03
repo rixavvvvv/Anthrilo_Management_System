@@ -424,16 +424,17 @@ export default function DailySalesReportPage() {
 
   /*  */
   return (
-    <div className="space-y-8">
+    <div className="page-section-gap">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Sales Report</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Sales breakdown · Revenue-generating orders only</p>
+        <h1 className="responsive-title text-slate-900 dark:text-white">Sales Report</h1>
+        <p className="responsive-subtitle mt-1">Sales breakdown · Revenue-generating orders only</p>
       </div>
 
       {/* Mode Selector */}
-      <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-5 space-y-5">
-        <div className="flex gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-900 w-fit">
+      <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-4 sm:p-5 space-y-5">
+        <div className="tab-strip">
+          <div className="tab-strip-inner">
           {([
             { key: 'daily' as ReportMode, label: 'Daily', icon: Calendar },
             { key: 'weekly' as ReportMode, label: 'Weekly', icon: Layers },
@@ -441,7 +442,7 @@ export default function DailySalesReportPage() {
             { key: 'custom' as ReportMode, label: 'Custom Range', icon: BarChart3 },
           ]).map((tab) => (
             <button key={tab.key} onClick={() => { setMode(tab.key); setShowReport(false); }}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${mode === tab.key
+              className={`inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${mode === tab.key
                 ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                 }`}>
@@ -450,11 +451,12 @@ export default function DailySalesReportPage() {
             </button>
           ))}
         </div>
+        </div>
 
         {/* Daily controls */}
         {mode === 'daily' && (
           <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[180px] max-w-[260px]" ref={calRef}>
+            <div className="w-full sm:flex-1 sm:min-w-[180px] sm:max-w-[260px]" ref={calRef}>
               <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">
                 Report date
               </label>
@@ -482,13 +484,13 @@ export default function DailySalesReportPage() {
               </div>
             </div>
             <button onClick={handleGenerate} disabled={queryLoading}
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
+              className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm w-full sm:w-auto">
               {queryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
               {queryLoading ? 'Generating…' : 'Generate Report'}
             </button>
             {showReport && raw?.success && (
               <button onClick={handleCSV}
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition shadow-sm">
+                className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition shadow-sm w-full sm:w-auto">
                 <Download className="w-4 h-4" /> Download CSV
               </button>
             )}
@@ -503,13 +505,13 @@ export default function DailySalesReportPage() {
             </div>
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <button onClick={handleGenerate} disabled={queryLoading}
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
+                className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm w-full sm:w-auto">
                 {queryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
                 {queryLoading ? 'Generating…' : 'Generate Last Week Report'}
               </button>
               {showReport && raw?.success && (
                 <button onClick={handleCSV}
-                  className="inline-flex items-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition shadow-sm">
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition shadow-sm w-full sm:w-auto">
                   <Download className="w-4 h-4" /> Download CSV
                 </button>
               )}
@@ -525,13 +527,13 @@ export default function DailySalesReportPage() {
             </div>
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <button onClick={handleGenerate} disabled={queryLoading}
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
+                className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm w-full sm:w-auto">
                 {queryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
                 {queryLoading ? 'Generating…' : 'Generate Last Month Report'}
               </button>
               {showReport && raw?.success && (
                 <button onClick={handleCSV}
-                  className="inline-flex items-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition shadow-sm">
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition shadow-sm w-full sm:w-auto">
                   <Download className="w-4 h-4" /> Download CSV
                 </button>
               )}
@@ -542,7 +544,7 @@ export default function DailySalesReportPage() {
         {/* Custom range controls */}
         {mode === 'custom' && (
           <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[180px] max-w-[220px]" ref={calFromRef}>
+            <div className="w-full sm:flex-1 sm:min-w-[180px] sm:max-w-[220px]" ref={calFromRef}>
               <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">From date</label>
               <div className="relative">
                 <button type="button" onClick={() => { setCalFromOpen((o) => !o); setCalToOpen(false); }}
@@ -567,7 +569,7 @@ export default function DailySalesReportPage() {
                 </AnimatePresence>
               </div>
             </div>
-            <div className="flex-1 min-w-[180px] max-w-[220px]" ref={calToRef}>
+            <div className="w-full sm:flex-1 sm:min-w-[180px] sm:max-w-[220px]" ref={calToRef}>
               <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">To date</label>
               <div className="relative">
                 <button type="button" onClick={() => { setCalToOpen((o) => !o); setCalFromOpen(false); }}
@@ -593,13 +595,13 @@ export default function DailySalesReportPage() {
               </div>
             </div>
             <button onClick={handleGenerate} disabled={queryLoading}
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm">
+              className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition disabled:opacity-50 shadow-sm w-full sm:w-auto">
               {queryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
               {queryLoading ? 'Generating…' : 'Generate Report'}
             </button>
             {showReport && raw?.success && (
               <button onClick={handleCSV}
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition shadow-sm">
+                className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 transition shadow-sm w-full sm:w-auto">
                 <Download className="w-4 h-4" /> Download CSV
               </button>
             )}
@@ -791,7 +793,7 @@ export default function DailySalesReportPage() {
                   />
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="table-scroll-wrap">
                 <table className="w-full">
                   <thead>
                     <tr className="bg-slate-50/80 dark:bg-slate-900/50 sticky top-0 z-10">
@@ -885,7 +887,7 @@ export default function DailySalesReportPage() {
                     className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="table-scroll-wrap">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50/80 dark:bg-slate-900/50 sticky top-0 z-10">
@@ -937,13 +939,13 @@ export default function DailySalesReportPage() {
               </div>
               {/* Pagination controls */}
               {totalItemPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-700">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-slate-100 dark:border-slate-700">
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     Showing {((itemPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(itemPage * ITEMS_PER_PAGE, sortedItems.length)} of {sortedItems.length}
                   </p>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 flex-wrap">
                     <button onClick={() => setItemPage(1)} disabled={itemPage === 1}
-                      className="px-2 py-1 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                      className="hidden sm:inline-flex px-2 py-1 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition">
                       First
                     </button>
                     <button onClick={() => setItemPage((p) => Math.max(1, p - 1))} disabled={itemPage === 1}
@@ -976,7 +978,7 @@ export default function DailySalesReportPage() {
                       <ChevronRight className="w-4 h-4" />
                     </button>
                     <button onClick={() => setItemPage(totalItemPages)} disabled={itemPage === totalItemPages}
-                      className="px-2 py-1 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                      className="hidden sm:inline-flex px-2 py-1 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition">
                       Last
                     </button>
                   </div>

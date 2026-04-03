@@ -353,12 +353,12 @@ const CategoryHeader = memo(({ category }: { category: Category }) => {
   const Icon = m.icon;
   const count = REPORTS.filter(r => r.category === category).length;
   return (
-    <div className="flex items-center gap-3 mb-5">
+    <div className="flex items-center gap-3 mb-4 sm:mb-5">
       <div className={`h-9 w-9 rounded-lg bg-gradient-to-br ${m.gradient} flex items-center justify-center flex-shrink-0`}>
         <Icon className="w-[18px] h-[18px] text-white" strokeWidth={2} />
       </div>
       <div className="min-w-0">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 leading-tight">{category}</h2>
+        <h2 className="text-base sm:text-lg 2xl:text-xl font-semibold text-slate-900 dark:text-slate-100 leading-tight">{category}</h2>
         <p className="text-xs text-slate-400 dark:text-slate-500">{count} report{count !== 1 ? 's' : ''}</p>
       </div>
       <div className="flex-1 h-px bg-slate-200/70 dark:bg-slate-700/50 ml-2" />
@@ -388,15 +388,15 @@ const ReportCard = memo(({
                   shadow-sm hover:shadow-md dark:hover:shadow-slate-900/40
                   transition-all duration-200 hover:-translate-y-0.5 flex flex-col`}
     >
-      <div className="p-6 flex flex-col flex-1">
+      <div className="p-4 sm:p-6 2xl:p-7 flex flex-col flex-1">
         {/* Row 1: icon + title + badges + fav */}
-        <div className="flex items-start gap-4 mb-3">
+        <div className="flex items-start gap-3 sm:gap-4 mb-3">
           <div className={`h-11 w-11 rounded-xl ${m.bg} flex items-center justify-center flex-shrink-0`}>
             <report.icon className={`w-5 h-5 ${m.color}`} strokeWidth={1.8} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1.5">
-              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 leading-snug group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+              <h3 className="text-sm sm:text-base 2xl:text-lg font-semibold text-slate-900 dark:text-slate-100 leading-snug group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                 {report.title}
               </h3>
               <FrequencyBadge frequency={report.frequency} />
@@ -503,7 +503,7 @@ const ReportsSection = memo(({
   return (
     <section>
       <CategoryHeader category={category} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
         {reports.map(r => (
           <ReportCard
             key={r.id}
@@ -596,19 +596,19 @@ export default function ReportsHub() {
   }, []);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-0 page-section-gap">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+      <div>
+        <h1 className="text-xl sm:text-2xl lg:text-3xl 2xl:text-4xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
           Reports & Analytics
         </h1>
-        <p className="mt-1.5 text-sm text-slate-400 dark:text-slate-500 max-w-xl">
+        <p className="mt-1.5 text-sm sm:text-base text-slate-400 dark:text-slate-500 max-w-xl">
           {REPORTS.length} reports across {ALL_CATEGORIES.length} categories. Find, favourite, and open any report.
         </p>
       </div>
 
       {/* Category Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {ALL_CATEGORIES.map(cat => {
           const m = CATEGORY_META[cat];
           const Icon = m.icon;
@@ -645,8 +645,8 @@ export default function ReportsHub() {
       </div>
 
       {/* Search Bar */}
-      <div className="mb-8">
-        <div className="relative max-w-xl">
+      <div>
+        <div className="relative w-full max-w-xl">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" strokeWidth={2} />
           <input
             value={search}
@@ -685,9 +685,9 @@ export default function ReportsHub() {
       </div>
 
       {/* Content */}
-      <div className="flex flex-col xl:flex-row gap-10">
+      <div className="flex flex-col xl:flex-row gap-6 xl:gap-10">
         {/* Main: grouped category sections */}
-        <div className="flex-1 min-w-0 space-y-10">
+        <div className="flex-1 min-w-0 space-y-7 sm:space-y-10">
           <AnimatePresence mode="popLayout">
             {visibleCategories.length > 0 ? (
               visibleCategories.map(cat => (
@@ -707,7 +707,7 @@ export default function ReportsHub() {
         </div>
 
         {/* Sidebar */}
-        <aside className="xl:w-72 flex-shrink-0 space-y-5">
+        <aside className="xl:w-72 2xl:w-80 flex-shrink-0 space-y-5">
           <SidebarPanel
             icon={<Star className="w-4 h-4 text-amber-400 fill-amber-400" strokeWidth={1.8} />}
             title="Favorites"

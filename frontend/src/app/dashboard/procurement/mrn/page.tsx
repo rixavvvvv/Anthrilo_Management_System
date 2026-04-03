@@ -43,8 +43,8 @@ export default function MRNPage() {
     <div className="space-y-6">
       <PageHeader title="Materials Receipt Note" description="Record incoming material quality & quantity" action={{ label: '+ New MRN', onClick: () => setModalOpen(true) }} />
 
-      <div className="flex gap-3">
-        <select className="input w-40" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+      <div className="flex flex-wrap gap-3">
+        <select className="input w-full sm:w-44" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="">All Status</option>
           {['DRAFT', 'CONFIRMED'].map(s => <option key={s} value={s}>{s}</option>)}
         </select>
@@ -59,7 +59,7 @@ export default function MRNPage() {
 
       {!isLoading && mrns && mrns.length > 0 && (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll-wrap">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -162,7 +162,7 @@ function MRNForm({ suppliers, onSubmit, loading }: { suppliers: Supplier[]; onSu
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <div>
           <label className="label">MRN Date *</label>
           <input className="input" type="date" required value={form.mrn_date} onChange={e => setForm(p => ({ ...p, mrn_date: e.target.value }))} />
@@ -202,7 +202,7 @@ function MRNForm({ suppliers, onSubmit, loading }: { suppliers: Supplier[]; onSu
           <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Items</h3>
           <button type="button" onClick={addItem} className="text-sm text-primary-600 hover:text-primary-700 font-medium">+ Add Row</button>
         </div>
-        <div className="overflow-x-auto">
+        <div className="table-scroll-wrap">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -248,7 +248,7 @@ function MRNForm({ suppliers, onSubmit, loading }: { suppliers: Supplier[]; onSu
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <div>
           <label className="label">Freight ₹</label>
           <input className="input" type="number" step="0.01" value={form.freight_amount} onChange={e => setForm(p => ({ ...p, freight_amount: parseFloat(e.target.value) || 0 }))} />
@@ -264,7 +264,7 @@ function MRNForm({ suppliers, onSubmit, loading }: { suppliers: Supplier[]; onSu
       </div>
 
       <div className="flex justify-end pt-2">
-        <button type="submit" disabled={loading || form.supplier_id === 0} className="btn btn-primary">
+        <button type="submit" disabled={loading || form.supplier_id === 0} className="btn btn-primary w-full sm:w-auto">
           {loading ? 'Creating…' : 'Create MRN (Draft)'}
         </button>
       </div>

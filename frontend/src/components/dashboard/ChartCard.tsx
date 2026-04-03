@@ -58,7 +58,7 @@ export function ChartCard({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: 'easeOut' }}
-      className={`rounded-2xl p-6 border transition-all duration-200
+      className={`rounded-2xl p-4 sm:p-5 lg:p-6 2xl:p-7 border transition-all duration-200
         ${glass
           ? 'bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)]'
           : 'bg-white dark:bg-slate-900 border-slate-200/60 dark:border-slate-800'
@@ -66,11 +66,11 @@ export function ChartCard({
         shadow-[var(--shadow-soft)] ${className}`}
     >
       {/* Header */}
-      <div className="flex items-start justify-between mb-5">
+      <div className="flex items-start justify-between mb-4 sm:mb-5">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{title}</h3>
+          <h3 className="text-sm 2xl:text-base font-semibold text-slate-900 dark:text-white">{title}</h3>
           {subtitle && (
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{subtitle}</p>
+            <p className="text-xs 2xl:text-sm text-slate-400 dark:text-slate-500 mt-0.5">{subtitle}</p>
           )}
         </div>
         <div className="flex items-center gap-1">

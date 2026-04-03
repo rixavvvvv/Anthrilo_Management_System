@@ -246,62 +246,78 @@ export default function BundleSalesAnalysisPage() {
   ];
 
   return (
-    <div>
+    <div className="page-section-gap">
       <PageHeader
         title="Bundle Sales Analysis"
         description="Revenue, quantity & performance insights — derived by reverse-mapping component SKUs to bundle definitions"
       />
 
       {/* Global Date Range */}
-      <div className="flex flex-wrap items-center gap-2 mb-6">
-        {([
-          { key: 'daily' as ReportDateMode, label: 'Daily' },
-          { key: 'weekly' as ReportDateMode, label: 'Weekly' },
-          { key: 'monthly' as ReportDateMode, label: 'Monthly' },
-          { key: 'custom' as ReportDateMode, label: 'Custom' },
-        ]).map((p) => (
+      <div className="mb-6 space-y-3">
+        <div className="tab-strip">
+          {([
+            { key: 'daily' as ReportDateMode, label: 'Daily' },
+            { key: 'weekly' as ReportDateMode, label: 'Weekly' },
+            { key: 'monthly' as ReportDateMode, label: 'Monthly' },
+            { key: 'custom' as ReportDateMode, label: 'Custom' },
+          ]).map((p) => (
+            <button
+              key={p.key}
+              onClick={() => handleDateMode(p.key)}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${dateMode === p.key
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-900/40'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600'
+                }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
+          {dateMode === 'daily' && (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full lg:w-auto">
+              <span className="text-sm text-slate-500 dark:text-slate-400">Report Date</span>
+              <input
+                type="date"
+                value={anchorDate}
+                onChange={e => setAnchorDate(e.target.value)}
+                className="input text-sm px-3 py-1.5 w-full sm:w-auto"
+              />
+            </div>
+          )}
+
+          {dateMode === 'custom' && (
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-2 w-full lg:w-auto">
+              <input
+                type="date"
+                value={fromDate}
+                onChange={e => setFromDate(e.target.value)}
+                className="input text-sm px-3 py-1.5 w-full"
+              />
+              <span className="text-slate-400 self-center text-center">→</span>
+              <input
+                type="date"
+                value={toDate}
+                onChange={e => setToDate(e.target.value)}
+                className="input text-sm px-3 py-1.5 w-full"
+              />
+            </div>
+          )}
+
+          <div className="text-xs text-slate-500 dark:text-slate-400 lg:ml-1">{effectiveRange.label}</div>
+
           <button
-            key={p.key}
-            onClick={() => handleDateMode(p.key)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${dateMode === p.key
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-900/40'
-              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600'
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className={`w-full lg:w-auto lg:ml-auto px-4 py-2 rounded-xl text-sm font-medium transition-colors ${isFetching
+              ? 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
+              : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
               }`}
           >
-            {p.label}
+            {isFetching ? 'Analysing...' : 'Refresh'}
           </button>
-        ))}
-
-        {dateMode === 'daily' && (
-          <div className="flex items-center gap-2 ml-2">
-            <span className="text-sm text-slate-500 dark:text-slate-400">Report Date</span>
-            <input type="date" value={anchorDate} onChange={e => setAnchorDate(e.target.value)}
-              className="input text-sm px-3 py-1.5" />
-          </div>
-        )}
-
-        {dateMode === 'custom' && (
-          <div className="flex items-center gap-2 ml-2">
-            <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
-              className="input text-sm px-3 py-1.5" />
-            <span className="text-slate-400">→</span>
-            <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
-              className="input text-sm px-3 py-1.5" />
-          </div>
-        )}
-
-        <div className="text-xs text-slate-500 dark:text-slate-400 ml-2">{effectiveRange.label}</div>
-
-        <button
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className={`ml-auto px-4 py-2 rounded-xl text-sm font-medium transition-colors ${isFetching
-            ? 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
-            : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
-            }`}
-        >
-          {isFetching ? 'Analysing…' : '🔄 Refresh'}
-        </button>
+        </div>
       </div>
 
       {/* Loading / Error */}
@@ -466,7 +482,9 @@ export default function BundleSalesAnalysisPage() {
                       </Pie>
                       <Tooltip content={<PieTooltip />} />
                       <Legend
-                        layout="vertical" align="right" verticalAlign="middle"
+                        layout="horizontal"
+                        align="center"
+                        verticalAlign="bottom"
                         formatter={(value: string) => (
                           <span className="text-xs text-slate-600 dark:text-slate-400">
                             {value.length > 18 ? value.slice(0, 18) + '…' : value}
@@ -481,7 +499,7 @@ export default function BundleSalesAnalysisPage() {
           </div>
 
           {/* Comparison Cards Row */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             {/* Top Channel */}
             <div className="card">
               <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-3">Top Channel</h3>
@@ -589,15 +607,15 @@ export default function BundleSalesAnalysisPage() {
 
           {/* Top Bundles Table */}
           <div className="card">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
                 Top Bundle SKUs by Sales
               </h2>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                 <input
                   type="text"
                   placeholder="Search SKU, name, category…"
-                  className="input w-64 text-sm"
+                  className="input w-full sm:w-64 text-sm"
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(0); }}
                 />
@@ -616,7 +634,7 @@ export default function BundleSalesAnalysisPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex justify-between items-center mt-4">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mt-4">
               <button disabled={page === 0} onClick={() => setPage(page - 1)}
                 className="btn btn-secondary disabled:opacity-40">
                 ← Previous

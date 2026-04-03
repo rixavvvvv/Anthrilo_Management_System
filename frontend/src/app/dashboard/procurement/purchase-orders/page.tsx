@@ -50,11 +50,11 @@ export default function PurchaseOrdersPage() {
       <PageHeader title="Purchase Orders" description="Create and manage purchase orders" action={{ label: '+ New PO', onClick: () => setModalOpen(true) }} />
 
       <div className="flex flex-wrap gap-3">
-        <select className="input w-40" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+        <select className="input w-full sm:w-44" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="">All Status</option>
           {['OPEN', 'PARTIAL', 'COMPLETED', 'CANCELLED'].map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select className="input w-40" value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+        <select className="input w-full sm:w-44" value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
           <option value="">All Depts</option>
           {['YARN', 'FABRIC', 'ACCESSORIES', 'PACKING'].map(d => <option key={d} value={d}>{d}</option>)}
         </select>
@@ -69,7 +69,7 @@ export default function PurchaseOrdersPage() {
 
       {!isLoading && orders && orders.length > 0 && (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll-wrap">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -160,7 +160,7 @@ function POForm({ suppliers, onSubmit, loading }: { suppliers: Supplier[]; onSub
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <div>
           <label className="label">PO Date *</label>
           <input className="input" type="date" required value={form.po_date} onChange={e => setForm(p => ({ ...p, po_date: e.target.value }))} />
@@ -198,7 +198,7 @@ function POForm({ suppliers, onSubmit, loading }: { suppliers: Supplier[]; onSub
           <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Line Items</h3>
           <button type="button" onClick={addItem} className="text-sm text-primary-600 hover:text-primary-700 font-medium">+ Add Row</button>
         </div>
-        <div className="overflow-x-auto">
+        <div className="table-scroll-wrap">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -252,7 +252,7 @@ function POForm({ suppliers, onSubmit, loading }: { suppliers: Supplier[]; onSub
       </div>
 
       <div className="flex justify-end pt-2">
-        <button type="submit" disabled={loading || form.supplier_id === 0} className="btn btn-primary">
+        <button type="submit" disabled={loading || form.supplier_id === 0} className="btn btn-primary w-full sm:w-auto">
           {loading ? 'Creating…' : 'Create Purchase Order'}
         </button>
       </div>

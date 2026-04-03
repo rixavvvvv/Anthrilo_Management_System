@@ -9,7 +9,7 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
   /** Minimum roles allowed. If empty, any authenticated user. */
   allowedRoles?: UserRole[];
-  /** Only user id=1 (HeilKnights) can access */
+  /** Only the Developer (HeilKnights) account can access. */
   ownerOnly?: boolean;
 }
 
@@ -20,6 +20,7 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, allowedRoles, ownerOnly }: ProtectedRouteProps) {
   const { user, isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
+  const isDeveloperOwner = user?.role === 'developer' && user?.is_developer !== false;
 
   useEffect(() => {
     if (isLoading) return;
@@ -28,7 +29,7 @@ export function ProtectedRoute({ children, allowedRoles, ownerOnly }: ProtectedR
       return;
     }
 
-    if (ownerOnly && user?.id !== '1') {
+    if (ownerOnly && !isDeveloperOwner) {
       router.replace('/dashboard');
       return;
     }
@@ -38,7 +39,7 @@ export function ProtectedRoute({ children, allowedRoles, ownerOnly }: ProtectedR
         router.replace('/dashboard');
       }
     }
-  }, [isLoading, isAuthenticated, user, allowedRoles, ownerOnly, router]);
+  }, [isLoading, isAuthenticated, isDeveloperOwner, user, allowedRoles, ownerOnly, router]);
 
   if (isLoading) {
     return (
@@ -49,7 +50,7 @@ export function ProtectedRoute({ children, allowedRoles, ownerOnly }: ProtectedR
   }
 
   if (!isAuthenticated) return null;
-  if (ownerOnly && user?.id !== '1') return null;
+  if (ownerOnly && !isDeveloperOwner) return null;
   if (allowedRoles?.length && user && !allowedRoles.includes(user.role)) return null;
 
   return <>{children}</>;

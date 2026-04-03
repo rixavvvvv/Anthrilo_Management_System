@@ -29,9 +29,9 @@ export function ComparisonCard({
 }: ComparisonCardProps) {
   if (loading) {
     return (
-      <div className="rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+      <div className="rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5 lg:p-6 2xl:p-7">
         <div className="skeleton h-5 w-40 mb-5" />
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
           {[...Array(3)].map((_, i) => (
             <div key={i} className="text-center space-y-2">
               <div className="skeleton h-3 w-16 mx-auto" />
@@ -51,11 +51,11 @@ export function ComparisonCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: 'easeOut' }}
       className="rounded-2xl border border-slate-200/60 dark:border-slate-800
-        bg-white dark:bg-slate-900 shadow-[var(--shadow-soft)] p-6"
+        bg-white dark:bg-slate-900 shadow-[var(--shadow-soft)] p-4 sm:p-5 lg:p-6 2xl:p-7"
     >
-      <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-5">{title}</h3>
+      <h3 className="text-sm 2xl:text-base font-semibold text-slate-900 dark:text-white mb-4 sm:mb-5">{title}</h3>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
         {metrics.map((metric, i) => {
           const fmt = metric.formatter || defaultFormatter;
           const change = metric.yesterday > 0
@@ -75,7 +75,7 @@ export function ComparisonCard({
               <p className="text-xs font-medium text-slate-400 dark:text-slate-500 mb-2">
                 {metric.label}
               </p>
-              <p className="text-xl font-bold text-slate-900 dark:text-white">
+              <p className="text-lg sm:text-xl 2xl:text-2xl font-bold text-slate-900 dark:text-white">
                 {fmt(metric.today)}
               </p>
               <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{leftLabel}</p>

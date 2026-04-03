@@ -49,12 +49,12 @@ export default function KnitOrdersPage() {
       <PageHeader title="Knit Orders" description="Yarn planning & knitting order management" action={{ label: '+ New Knit Order', onClick: () => setModalOpen(true) }} />
 
       <div className="flex flex-wrap gap-3">
-        <select className="input w-40" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+        <select className="input w-full sm:w-44" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="">All Status</option>
           {['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <button onClick={() => setYarnIssueOpen(true)} className="btn btn-primary text-sm">Issue Yarn</button>
-        <button onClick={() => setGreyReceiptOpen(true)} className="btn btn-primary text-sm">Receive Grey Fabric</button>
+        <button onClick={() => setYarnIssueOpen(true)} className="btn btn-primary text-sm w-full sm:w-auto">Issue Yarn</button>
+        <button onClick={() => setGreyReceiptOpen(true)} className="btn btn-primary text-sm w-full sm:w-auto">Receive Grey Fabric</button>
       </div>
 
       {error && <ErrorPanel message={(error as Error).message} />}
@@ -66,7 +66,7 @@ export default function KnitOrdersPage() {
 
       {!isLoading && orders && orders.length > 0 && (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll-wrap">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -130,7 +130,7 @@ function KnitOrderForm({ suppliers, onSubmit, loading }: { suppliers: Supplier[]
 
   return (
     <form onSubmit={e => { e.preventDefault(); onSubmit({ ...form, target_date: form.target_date || undefined }); }} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">Order Date *</label>
           <input className="input" type="date" required value={form.order_date} onChange={e => set('order_date', e.target.value)} />
@@ -168,7 +168,7 @@ function KnitOrderForm({ suppliers, onSubmit, loading }: { suppliers: Supplier[]
         <textarea className="input" rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} />
       </div>
       <div className="flex justify-end pt-2">
-        <button type="submit" disabled={loading || !form.knitter_supplier_id || !form.fabric_id} className="btn btn-primary">
+        <button type="submit" disabled={loading || !form.knitter_supplier_id || !form.fabric_id} className="btn btn-primary w-full sm:w-auto">
           {loading ? 'Creating…' : 'Create Knit Order'}
         </button>
       </div>
@@ -186,7 +186,7 @@ function YarnIssueForm({ orders, onSubmit, loading }: { orders: KnitOrder[]; onS
 
   return (
     <form onSubmit={e => { e.preventDefault(); onSubmit({ ...form, items }); }} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">Issue Date *</label>
           <input className="input" type="date" required value={form.issue_date} onChange={e => setForm(p => ({ ...p, issue_date: e.target.value }))} />
@@ -205,19 +205,19 @@ function YarnIssueForm({ orders, onSubmit, loading }: { orders: KnitOrder[]; onS
           <button type="button" onClick={addItem} className="text-sm text-primary-600 font-medium">+ Add</button>
         </div>
         {items.map((it, i) => (
-          <div key={i} className="grid grid-cols-5 gap-2 mb-2">
+          <div key={i} className="grid grid-cols-1 sm:grid-cols-5 gap-2 mb-2">
             <input className="input text-xs" type="number" placeholder="Yarn ID" value={it.yarn_id || ''} onChange={e => updateItem(i, 'yarn_id', parseInt(e.target.value) || 0)} required />
             <input className="input text-xs" placeholder="Lot #" value={it.lot_number} onChange={e => updateItem(i, 'lot_number', e.target.value)} />
             <input className="input text-xs" type="number" step="0.01" placeholder="Qty" value={it.qty || ''} onChange={e => updateItem(i, 'qty', parseFloat(e.target.value) || 0)} required />
             <select className="input text-xs" value={it.unit} onChange={e => updateItem(i, 'unit', e.target.value)}>
               {['KGS', 'MTR'].map(u => <option key={u} value={u}>{u}</option>)}
             </select>
-            {items.length > 1 && <button type="button" onClick={() => removeItem(i)} className="text-rose-500 text-xs self-center">✕</button>}
+            {items.length > 1 && <button type="button" onClick={() => removeItem(i)} className="text-rose-500 text-xs self-center sm:justify-self-center">✕</button>}
           </div>
         ))}
       </div>
       <div className="flex justify-end pt-2">
-        <button type="submit" disabled={loading || !form.knit_order_id} className="btn btn-primary">
+        <button type="submit" disabled={loading || !form.knit_order_id} className="btn btn-primary w-full sm:w-auto">
           {loading ? 'Issuing…' : 'Issue Yarn'}
         </button>
       </div>
@@ -231,7 +231,7 @@ function GreyFabricReceiptForm({ orders, onSubmit, loading }: { orders: KnitOrde
 
   return (
     <form onSubmit={e => { e.preventDefault(); onSubmit(form); }} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">Receipt Date *</label>
           <input className="input" type="date" required value={form.receipt_date} onChange={e => set('receipt_date', e.target.value)} />
@@ -269,7 +269,7 @@ function GreyFabricReceiptForm({ orders, onSubmit, loading }: { orders: KnitOrde
         <textarea className="input" rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} />
       </div>
       <div className="flex justify-end pt-2">
-        <button type="submit" disabled={loading || !form.knit_order_id || !form.fabric_id} className="btn btn-primary">
+        <button type="submit" disabled={loading || !form.knit_order_id || !form.fabric_id} className="btn btn-primary w-full sm:w-auto">
           {loading ? 'Recording…' : 'Record Receipt'}
         </button>
       </div>
